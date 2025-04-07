@@ -132,6 +132,38 @@ In the summer of 2024, this process took less than 5 hours to bin all 170 GB of 
 
 ### Mapping
 
+#### Required Environment Variables
+
+The `map_binned_s3_logs_to_dandisets` command requires two environment variables to be:
+1. IPINFO_CREDENTIALS: An access token for the ipinfo.io service
+2. IP_HASH_SALT: A salt value for hashing IP addresses
+
+To set `IPINFO_CREDENTIALS`:
+1. Register at [ipinfo.io](https://ipinfo.io/) to get an API access token
+2. After registration, obtain your access token from your account dashboard
+3. Set the `IPINFO_CREDENTIALS` environment variable to this value
+
+```bash
+export IPINFO_CREDENTIALS="your_token_here"
+```
+
+To set `IP_HASH_SALT`:
+1. Use the built-in `get_hash_salt` function (requires access to the original raw log files)
+
+```python
+from dandi_s3_log_parser.testing._helpers import get_hash_salt
+
+# Path to the folder containing the raw log files
+raw_logs_path = "/path/to/raw/logs"
+salt = get_hash_salt(base_raw_s3_log_folder_path=raw_logs_path)
+print(f"Generated IP_HASH_SALT: {salt}")
+```
+2. Set the `IP_HASH_SALT` environment variable to this generated value
+
+```bash
+export IP_HASH_SALT="hash_salt_here"
+```
+
 To map:
 
 ```bash
