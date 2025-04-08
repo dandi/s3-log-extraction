@@ -134,9 +134,14 @@ In the summer of 2024, this process took less than 5 hours to bin all 170 GB of 
 
 #### Required Environment Variables
 
-The `map_binned_s3_logs_to_dandisets` command requires two environment variables to be:
-1. IPINFO_CREDENTIALS: An access token for the ipinfo.io service
-2. IP_HASH_SALT: A salt value for hashing IP addresses
+The `map_binned_s3_logs_to_dandisets` command requires two environment variables to be set:
+
+1. **IPINFO_CREDENTIALS**: An access token for the ipinfo.io service
+  - We use this service to extract general geographic region information (not exact physical addresses) for anonymized geographic statistics
+  - We extract country/region information (e.g. "US/California"), while also specially categorizing requests from known services (GitHub, AWS, GCP, VPN).
+2. **IP_HASH_SALT**: A salt value for hashing IP addresses
+  - We use hashing to anonymize IP addresses in the logs while still allowing for unique identification
+- The hashed values are used as keys in our caching system to track regions without storing actual IP addresses
 
 To set `IPINFO_CREDENTIALS`:
 1. Register at [ipinfo.io](https://ipinfo.io/) to get an API access token
