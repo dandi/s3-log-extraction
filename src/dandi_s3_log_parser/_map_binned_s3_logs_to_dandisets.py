@@ -261,6 +261,12 @@ def _map_binned_logs_to_dandiset(
         total_bytes_per_asset_path=total_bytes_across_versions_by_asset, file_path=dandiset_summary_by_asset_file_path
     )
 
+    dandiset_summary_by_ip_file_path = dandiset_log_folder_path / "dandiset_summary_by_ip.tsv"
+    _write_aggregated_activity_by_ip(
+        reduced_s3_logs_per_day=all_reduced_s3_logs_per_blob_id_aggregated_by_ip.values(),
+        file_path=dandiset_summary_by_ip_file_path,
+    )
+
     return None
 
 
@@ -328,6 +334,14 @@ def _write_aggregated_activity_by_day(
 ) -> None:
     aggregated_activity_by_day = _aggregate_activity_by_day(reduced_s3_logs_per_day=reduced_s3_logs_per_day)
     aggregated_activity_by_day.to_csv(path_or_buf=file_path, mode="w", sep="\t", header=True, index=False)
+
+    return None
+
+def _write_aggregated_activity_by_ip(
+    reduced_s3_logs_per_day: Iterable[pandas.DataFrame], file_path: pathlib.Path
+) -> None:
+    aggregated_activity_by_ip = _aggregate_activity_by_ip(reduced_s3_logs_per_day=reduced_s3_logs_per_day)
+    aggregated_activity_by_ip.to_csv(path_or_buf=file_path, mode="w", sep="\t", header=True, index=False)
 
     return None
 
