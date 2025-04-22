@@ -180,10 +180,10 @@ def _map_binned_logs_to_dandiset(
                 for ip_address in reduced_s3_log_binned_by_blob_id["ip_address"]
             ]
 
-            reordered_reduced_s3_log = reduced_s3_log_binned_by_blob_id.reindex(
-                columns=("timestamp", "bytes_sent", "region")
+            reordered_reduced_s3_log = reduced_s3_log_binned_by_blob_id.sort_values(
+                by="timestamp",
+                key=natsort.natsort_keygen(),
             )
-            reordered_reduced_s3_log.sort_values(by="timestamp", key=natsort.natsort_keygen(), inplace=True)
             reordered_reduced_s3_log.index = range(len(reordered_reduced_s3_log))
 
             dandiset_version_log_folder_path.mkdir(parents=True, exist_ok=True)
