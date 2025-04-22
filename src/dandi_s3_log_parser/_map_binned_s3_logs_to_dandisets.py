@@ -113,6 +113,8 @@ def _map_binned_logs_to_dandiset(
 
     all_reduced_s3_logs_per_blob_id_aggregated_by_day = dict()
     all_reduced_s3_logs_per_blob_id_aggregated_by_region = dict()
+    all_reduced_s3_logs_per_blob_id_aggregated_by_ip = dict()
+
     blob_id_to_asset_path = dict()
     total_bytes_across_versions_by_blob_id = dict()
     dandiset_versions = list(dandiset.get_versions())
@@ -205,6 +207,9 @@ def _map_binned_logs_to_dandiset(
             all_reduced_s3_logs_aggregated_by_region_for_version.append(aggregated_activity_by_region)
             all_reduced_s3_logs_per_blob_id_aggregated_by_region[blob_id] = aggregated_activity_by_region
 
+            aggregated_activity_by_ip = _aggregate_activity_by_ip_per_asset(reduced_s3_logs_per_asset=reordered_reduced_s3_log)
+            all_reduced_s3_logs_per_blob_id_aggregated_by_ip[blob_id] = aggregated_activity_by_ip
+
             total_bytes = sum(reduced_s3_log_binned_by_blob_id["bytes_sent"])
             total_bytes_per_asset_path[asset.path] = total_bytes
 
@@ -293,6 +298,29 @@ def _aggregate_activity_by_asset(total_bytes_per_asset_path: dict[str, int]) -> 
     aggregated_activity_by_asset.sort_values(by="bytes_sent", ascending=False, inplace=True)
 
     return aggregated_activity_by_asset
+
+
+def _aggregate_activity_by_ip_per_asset(reduced_s3_logs_per_asset: pandas.DataFrame) -> pandas.DataFrame:
+    reduced_s3_logs_clipped = reduced_s3_logs_per_asset.reindex(columns=("date", "ip_address"))
+    pre_aggregated = reduced_s3_logs_clipped.groupby(by="date", as_index=False)["ip_address"].agg([list, "nunique"])
+    pre_aggregated.rename(columns={"nunique": "num_unique_access"}, inplace=True)
+    pre_aggregated.sort_values(by="date", key=natsort.natsort_keygen(), inplace=True)
+    aggregated_activity_by_ip = pre_aggregated.reindex(columns=("date", "num_unique_access"))
+
+    return aggregated_activity_by_ip
+
+
+def _aggregate_activity_by_ip(reduced_s3_logs_per_day: Iterable[pandas.DataFrame]) -> pandas.DataFrame:
+    all_reduced_s3_logs = pandas.concat(objs=reduced_s3_logs_per_day, ignore_index=True)
+    all_reduced_s3_logs_clipped = all_reduced_s3_logs.reindex(columns=("date", "num_unique_access"))
+
+    pre_aggregated = all_reduced_s3_logs_clipped.groupby(by="date", as_index=False)["num_unique_access"].agg([list, "sum"])
+    pre_aggregated.rename(columns={"sum": "num_unique_access"}, inplace=True)
+    pre_aggregated.sort_values(by="date", key=natsort.natsort_keygen(), inplace=True)
+
+    aggregated_activity_by_ip = pre_aggregated.reindex(columns=("date", "num_unique_access"))
+
+    return aggregated_activity_by_ip
 
 
 def _write_aggregated_activity_by_day(
