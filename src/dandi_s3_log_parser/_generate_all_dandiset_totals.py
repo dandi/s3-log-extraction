@@ -18,14 +18,17 @@ def generate_all_dandiset_totals(
     mapped_s3_logs_folder_path = pathlib.Path(mapped_s3_logs_folder_path)
 
     all_dandiset_totals = {}
-    for dandiset_id in mapped_s3_logs_folder_path.iterdir():
-        summary_file_path = mapped_s3_logs_folder_path / dandiset_id / "dandiset_summary_by_region.tsv"
+    for dandiset_id_folder_path in mapped_s3_logs_folder_path.iterdir():
+        if not dandiset_id_folder_path.is_dir():
+            continue  # TODO: use better structure for separating mapped activity from summaries
+        dandiset_id = dandiset_id_folder_path.name
 
+        summary_file_path = mapped_s3_logs_folder_path / dandiset_id / "dandiset_summary_by_region.tsv"
         summary = pandas.read_table(filepath_or_buffer=summary_file_path)
 
         unique_countries = {}
         for region in summary["region"]:
-            if region == "VPN":
+            if region in ["VPN", "GitHub", "unknown"]:
                 continue
 
             country_code, region_name = region.split("/")
@@ -37,7 +40,7 @@ def generate_all_dandiset_totals(
         number_of_unique_regions = len(summary["region"])
         number_of_unique_countries = len(unique_countries)
         all_dandiset_totals[dandiset_id] = {
-            "total_bytes_sent": summary["bytes_sent"].sum(),
+            "total_bytes_sent": int(summary["bytes_sent"].sum()),
             "number_of_unique_regions": number_of_unique_regions,
             "number_of_unique_countries": number_of_unique_countries,
         }
