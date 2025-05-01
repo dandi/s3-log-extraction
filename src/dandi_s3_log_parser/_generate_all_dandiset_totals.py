@@ -15,6 +15,8 @@ def generate_all_dandiset_totals(
     mapped_s3_logs_folder_path : pathlib.Path
         Path to the folder containing the mapped S3 logs.
     """
+    mapped_s3_logs_folder_path = pathlib.Path(mapped_s3_logs_folder_path)
+
     all_dandiset_totals = {}
     for dandiset_id in mapped_s3_logs_folder_path.iterdir():
         summary_file_path = mapped_s3_logs_folder_path / dandiset_id / "dandiset_summary_by_region.tsv"
