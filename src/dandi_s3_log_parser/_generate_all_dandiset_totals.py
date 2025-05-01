@@ -25,8 +25,10 @@ def generate_all_dandiset_totals(
 
         unique_countries = {}
         for region in summary["region"]:
-            country_code, region_name = region.split("/")
+            if region == "VPN":
+                continue
 
+            country_code, region_name = region.split("/")
             if "AWS" in country_code:
                 country_code = region_name.split("-")[0].upper()
 
