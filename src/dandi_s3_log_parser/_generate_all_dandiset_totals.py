@@ -1,6 +1,8 @@
-import pathlib
-import pandas
 import json
+import pathlib
+
+import pandas
+
 
 def generate_all_dandiset_totals(
     mapped_s3_logs_folder_path: pathlib.Path,

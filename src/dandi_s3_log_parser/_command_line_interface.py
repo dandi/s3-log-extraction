@@ -9,8 +9,9 @@ from ._bin_all_reduced_s3_logs_by_object_key import bin_all_reduced_s3_logs_by_o
 from ._dandi_s3_log_file_reducer import (
     reduce_all_dandi_raw_s3_logs,
 )
+from ._generate_all_dandiset_totals import generate_all_dandiset_totals
 from ._map_binned_s3_logs_to_dandisets import map_binned_s3_logs_to_dandisets
-from ._generate_top_level_summaries import generate_all_dandiset_totals
+
 
 @click.command(name="reduce_all_dandi_raw_s3_logs")
 @click.option(
@@ -187,6 +188,7 @@ def _generate_dandiset_summaries_cli(
 ) -> None:
     raise NotImplementedError("This function is not implemented yet.")
 
+
 @click.command(name="generate_all_dandiset_totals")
 @click.option(
     "--mapped_s3_logs_folder_path",
@@ -194,7 +196,5 @@ def _generate_dandiset_summaries_cli(
     required=True,
     type=click.Path(writable=False),
 )
-def _generate_top_level_summaries_cli(
-    mapped_s3_logs_folder_path: pathlib.Path
-) -> None:
+def _generate_all_dandiset_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
     generate_all_dandiset_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
