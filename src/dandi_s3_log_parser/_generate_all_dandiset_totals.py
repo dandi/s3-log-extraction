@@ -21,7 +21,7 @@ def generate_all_dandiset_totals(
     for dandiset_id in mapped_s3_logs_folder_path.iterdir():
         summary_file_path = mapped_s3_logs_folder_path / dandiset_id / "dandiset_summary_by_region.tsv"
 
-        summary = pandas.read_table(filepath_or_buffer=summary_file_path, index_col=0)
+        summary = pandas.read_table(filepath_or_buffer=summary_file_path)
 
         unique_countries = {}
         for region in summary["region"]:
