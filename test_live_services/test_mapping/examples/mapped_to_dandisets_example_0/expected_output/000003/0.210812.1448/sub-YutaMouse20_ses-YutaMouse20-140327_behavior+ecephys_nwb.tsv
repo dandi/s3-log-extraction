@@ -1,3 +1,4 @@
 	timestamp	bytes_sent	region
 0	2022-03-16T02:21:12	512	unknown
 1	2022-05-04T05:06:35	512	GCP/us-central1
+2	2022-05-04T05:07:35	1024	GCP/us-central1

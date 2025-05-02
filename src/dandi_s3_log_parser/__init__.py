@@ -25,6 +25,8 @@ from ._ip_utils import get_region_from_ip_address
 from ._map_binned_s3_logs_to_dandisets import map_binned_s3_logs_to_dandisets
 from ._bin_all_reduced_s3_logs_by_object_key import bin_all_reduced_s3_logs_by_object_key
 from ._generate_all_dandiset_totals import generate_all_dandiset_totals
+from ._generate_archive_summaries import generate_archive_summaries
+from ._generate_archive_totals import generate_archive_totals
 
 __all__ = [
     "DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH",
@@ -32,6 +34,8 @@ __all__ = [
     "BufferedTextReader",
     "reduce_all_dandi_raw_s3_logs",
     "generate_all_dandiset_totals",
+    "generate_archive_summaries",
+    "generate_archive_totals",
     "get_region_from_ip_address",
     "map_binned_s3_logs_to_dandisets",
     "bin_all_reduced_s3_logs_by_object_key",

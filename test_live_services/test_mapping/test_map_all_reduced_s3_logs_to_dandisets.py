@@ -23,6 +23,8 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
         mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path,
     )
 
+    dandi_s3_log_parser.generate_archive_summaries(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
+
     test_file_paths = {
         path.relative_to(test_mapped_s3_logs_folder_path): path
         for path in test_mapped_s3_logs_folder_path.rglob("*.tsv")
@@ -60,3 +62,15 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
         expected_all_dandiset_totals = json.load(fp=io)
 
     assert test_all_dandiset_totals == expected_all_dandiset_totals
+
+    # TODO: make a standalone test case (requires setting up expected test output example outside live services)
+    dandi_s3_log_parser.generate_archive_totals(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
+
+    test_archive_totals_file_path = test_mapped_s3_logs_folder_path / "archive_totals.json"
+    expected_all_dandiset_totals_file_path = expected_output_folder_path / "archive_totals.json"
+    with test_archive_totals_file_path.open(mode="r") as io:
+        test_archive_totals = json.load(fp=io)
+    with expected_all_dandiset_totals_file_path.open(mode="r") as io:
+        expected_archive_totals = json.load(fp=io)
+
+    assert test_archive_totals == expected_archive_totals

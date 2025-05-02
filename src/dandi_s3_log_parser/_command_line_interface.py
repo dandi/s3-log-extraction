@@ -10,6 +10,8 @@ from ._dandi_s3_log_file_reducer import (
     reduce_all_dandi_raw_s3_logs,
 )
 from ._generate_all_dandiset_totals import generate_all_dandiset_totals
+from ._generate_archive_summaries import generate_archive_summaries
+from ._generate_archive_totals import generate_archive_totals
 from ._map_binned_s3_logs_to_dandisets import map_binned_s3_logs_to_dandisets
 
 
@@ -198,3 +200,25 @@ def _generate_dandiset_summaries_cli(
 )
 def _generate_all_dandiset_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
     generate_all_dandiset_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+
+
+@click.command(name="generate_archive_summaries")
+@click.option(
+    "--mapped_s3_logs_folder_path",
+    help="",
+    required=True,
+    type=click.Path(writable=False),
+)
+def _generate_archive_summaries_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
+    generate_archive_summaries(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+
+
+@click.command(name="generate_archive_totals")
+@click.option(
+    "--mapped_s3_logs_folder_path",
+    help="",
+    required=True,
+    type=click.Path(writable=False),
+)
+def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
+    generate_archive_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)

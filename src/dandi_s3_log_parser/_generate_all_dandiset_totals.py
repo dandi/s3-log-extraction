@@ -5,7 +5,7 @@ import pandas
 
 
 def generate_all_dandiset_totals(
-    mapped_s3_logs_folder_path: pathlib.Path,
+    mapped_s3_logs_folder_path: str | pathlib.Path,
 ) -> None:
     """
     Generate top-level totals of the summaries for all dandisets from the mapped S3 logs.
