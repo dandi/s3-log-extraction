@@ -24,12 +24,14 @@ from ._dandi_s3_log_file_reducer import reduce_all_dandi_raw_s3_logs
 from ._ip_utils import get_region_from_ip_address
 from ._map_binned_s3_logs_to_dandisets import map_binned_s3_logs_to_dandisets
 from ._bin_all_reduced_s3_logs_by_object_key import bin_all_reduced_s3_logs_by_object_key
+from ._generate_all_dandiset_totals import generate_all_dandiset_totals
 
 __all__ = [
     "DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH",
     "reduce_raw_s3_log",
     "BufferedTextReader",
     "reduce_all_dandi_raw_s3_logs",
+    "generate_all_dandiset_totals",
     "get_region_from_ip_address",
     "map_binned_s3_logs_to_dandisets",
     "bin_all_reduced_s3_logs_by_object_key",

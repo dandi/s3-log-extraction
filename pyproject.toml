@@ -40,6 +40,16 @@ classifiers = [
 reduce_all_dandi_raw_s3_logs = "dandi_s3_log_parser._command_line_interface:_reduce_all_dandi_raw_s3_logs_cli"
 bin_all_reduced_s3_logs_by_object_key = "dandi_s3_log_parser._command_line_interface:_bin_all_reduced_s3_logs_by_object_key_cli"
 map_binned_s3_logs_to_dandisets = "dandi_s3_log_parser._command_line_interface:_map_binned_s3_logs_to_dandisets_cli"
+generate_dandiset_summaries = "dandi_s3_log_parser._command_line_interface:_generate_dandiset_summaries_cli"
+generate_all_dandiset_totals = "dandi_s3_log_parser._command_line_interface:_generate_all_dandiset_totals_cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov",
+    "ipython<9.0.0",  # coloriaze error in pycharm
+    "pre-commit",
+]
+all = ["dandi_s3_log_parser[dev]"]
 
 
 
