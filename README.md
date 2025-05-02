@@ -205,6 +205,13 @@ In the summer of 2024, this took less than 15 hours to complete.
 
 The mapping process can theoretically be designed to work in parallel (and thus much faster), but this would take some effort to design. If interested, please open an issue to request this feature.
 
+To then generate summaries and totals (for ease and efficiency of frontend reporting tools):
+
+```bash
+generate_all_dandiset_totals --mapped_s3_logs_folder_path < mapped Dandiset logs folder >
+generate_archive_summaries --mapped_s3_logs_folder_path < mapped Dandiset logs folder >
+```
+
 
 
 ## Submit line decoding errors
