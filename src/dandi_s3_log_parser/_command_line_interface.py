@@ -224,7 +224,6 @@ def _generate_archive_summaries_cli(mapped_s3_logs_folder_path: pathlib.Path) ->
 def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
     generate_archive_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
 
-
 @click.command(name="update_region_codes_to_coordinates")
 @click.option(
     "--mapped_s3_logs_folder_path",
