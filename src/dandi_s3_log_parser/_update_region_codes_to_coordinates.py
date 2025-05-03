@@ -194,10 +194,8 @@ def _get_coordinates_from_opencage(*, region_code: str, opencage_api_key: str) -
         )
         raise ValueError(message)
 
-    matching_feature = matching_features[0]["geometry"]["coordinates"]
-    latitude = matching_feature["geometry"]["coordinates"][
-        1
-    ]  # Remember to use correct order for latitude and longitude
+    matching_feature = matching_features[0]
+    latitude = matching_feature["geometry"]["coordinates"][1]  # Remember to use corrected order latitude and longitude
     longitude = matching_feature["geometry"]["coordinates"][0]
     coordinates = {"latitude": latitude, "longitude": longitude}
 
