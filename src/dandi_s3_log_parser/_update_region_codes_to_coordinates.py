@@ -134,7 +134,7 @@ def _get_service_coordinates_from_ipinfo(
     handler = ipinfo.getHandler(access_token=ipinfo_api_key)
 
     ip_address = subregion_to_cidr_address[subregion].split("/")[0]
-    details = handler.getDetails(ip_address=ip_address)
+    details = handler.getDetails(ip_address=ip_address).details
     latitude = details["latitude"]
     longitude = details["longitude"]
     coordinates = {"latitude": latitude, "longitude": longitude}
