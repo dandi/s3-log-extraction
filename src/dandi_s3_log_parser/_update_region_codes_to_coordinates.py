@@ -270,10 +270,6 @@ def _match_features_to_code(
                 ),
                 None,
             )
-            # TODO: Temp
-            for feature in features:
-                print(f"{(feature["properties"]["components"].get("state", "") == region_code)=}")
-                print(f"{(feature["properties"]["components"].get("city", "") == region_code)=}")
 
     if matching_feature is not None:
         return matching_feature
