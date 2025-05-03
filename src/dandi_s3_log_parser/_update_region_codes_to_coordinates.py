@@ -225,15 +225,14 @@ def _match_features_to_code(
     dict[str, typing.Any] | None
         The matching feature or None if no match is found.
     """
+    matching_feature = None
     number_of_matches = len(features)
-
     match number_of_matches:
         case 0:
             message = f"Could not find a match for region code: {country_code}/{region_code}"
             raise ValueError(message)
         case 1:
             matching_feature = features[0]
-            return matching_feature
         case 2:
             # Common situation is that a name is both the same as its city and the region that city is in
             # E.g., Buenos Aires, Buenos Aires, AR
@@ -243,21 +242,29 @@ def _match_features_to_code(
             ]
             if features_with_city[0][1] is not features_with_city[1][1]:
                 matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
-                return matching_feature
         case _:
             # Heuristic for finding exact match among list of possibilities, starting with state then trying city
-            for field in ["state", "city"]:
-                matching_feature = next(
-                    (
-                        feature
-                        for feature in features
-                        if feature["properties"]["components"].get(field, "") == region_code
-                    ),
-                    None,
-                )
+            matching_feature = next(
+                (
+                    next(
+                        (
+                            feature
+                            for feature in features
+                            if feature["properties"]["components"].get(field, "") == region_code
+                        ),
+                        None,
+                    )
+                    for field in ["state", "city"]
+                ),
+                None,
+            )
+            # TODO: Temp
+            for feature in features:
+                print(f"{(feature["properties"]["components"].get("state", "") == region_code)=}")
+                print(f"{(feature["properties"]["components"].get("city", "") == region_code)=}")
 
-            if matching_feature is not None:
-                return matching_feature
+    if matching_feature is not None:
+        return matching_feature
 
     message = (
         f"\nMultiple matching features found for region code: {country_code}/{region_code}\n\n"
