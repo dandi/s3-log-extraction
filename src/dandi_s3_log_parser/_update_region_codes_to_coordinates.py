@@ -249,10 +249,9 @@ def _match_features_to_code(
             for field in ["state", "city"]:
                 matching_feature = next(
                     (
-                        feature in features
+                        feature
                         for feature in features
-                        if (value := feature["properties"]["components"].get(field, None)) is not None
-                        and value == region_code
+                        if feature["properties"]["components"].get(field, "") == region_code
                     ),
                     None,
                 )
