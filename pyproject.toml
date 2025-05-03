@@ -44,6 +44,7 @@ generate_dandiset_summaries = "dandi_s3_log_parser._command_line_interface:_gene
 generate_all_dandiset_totals = "dandi_s3_log_parser._command_line_interface:_generate_all_dandiset_totals_cli"
 generate_archive_summaries = "dandi_s3_log_parser._command_line_interface:_generate_archive_summaries_cli"
 generate_archive_totals = "dandi_s3_log_parser._command_line_interface:_generate_archive_totals_cli"
+update_region_codes_to_coordinates = "dandi_s3_log_parser._command_line_interface:_update_region_codes_to_coordinates_cli"
 
 [project.optional-dependencies]
 dev = [

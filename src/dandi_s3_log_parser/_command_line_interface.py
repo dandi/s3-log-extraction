@@ -13,6 +13,7 @@ from ._generate_all_dandiset_totals import generate_all_dandiset_totals
 from ._generate_archive_summaries import generate_archive_summaries
 from ._generate_archive_totals import generate_archive_totals
 from ._map_binned_s3_logs_to_dandisets import map_binned_s3_logs_to_dandisets
+from ._update_region_codes_to_coordinates import update_region_codes_to_coordinates
 
 
 @click.command(name="reduce_all_dandi_raw_s3_logs")
@@ -222,3 +223,14 @@ def _generate_archive_summaries_cli(mapped_s3_logs_folder_path: pathlib.Path) ->
 )
 def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
     generate_archive_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+
+
+@click.command(name="update_region_codes_to_coordinates")
+@click.option(
+    "--mapped_s3_logs_folder_path",
+    help="",
+    required=True,
+    type=click.Path(writable=False),
+)
+def _update_region_codes_to_coordinates_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
+    update_region_codes_to_coordinates(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)

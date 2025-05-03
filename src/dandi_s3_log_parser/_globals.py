@@ -107,3 +107,36 @@ _FullLogLine = collections.namedtuple("FullLogLine", _S3_LOG_FIELDS)
 _S3_LOG_REGEX = re.compile(pattern=r'"([^"]+)"|\[([^]]+)]|([^ ]+)')
 
 _KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "VPN")  # Azure has problems; see _ip_utils.py for more info
+
+# TODO: look up all these data centers
+_DEFAULT_REGION_CODES_TO_COORDINATES = {
+    "AWS/ap-east-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/ap-northeast-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/ap-northeast-2": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/ap-southeast-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/ap-southeast-2": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/ca-central-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/eu-central-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/eu-central-2": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/eu-west-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/eu-west-2": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/eu-west-3": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/sa-east-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/us-east-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/us-east-2": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/us-west-1": {"latitude": 0.0, "longitude": 0.0},
+    "AWS/us-west-2": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/asia-east1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/asia-southeast1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/europe-west1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/europe-west4": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/northamerica-northeast1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/us-central1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/us-east1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/us-east4": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/us-west1": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/us-west3": {"latitude": 0.0, "longitude": 0.0},
+    "GCP/us-west4": {"latitude": 0.0, "longitude": 0.0},
+    "VPN": {"latitude": None, "longitude": None},
+    "unknown": {"latitude": None, "longitude": None},
+}
