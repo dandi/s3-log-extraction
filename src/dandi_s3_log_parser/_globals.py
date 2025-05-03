@@ -109,8 +109,12 @@ _S3_LOG_REGEX = re.compile(pattern=r'"([^"]+)"|\[([^]]+)]|([^ ]+)')
 _KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "VPN")  # Azure has problems; see _ip_utils.py for more info
 
 _DEFAULT_REGION_CODES_TO_COORDINATES = {
-    "AWS/us-east-2": {"latitude": 39.9612, "longitude": -82.9988},  # Included for testing/demo purposes
-    "GCP/us-central1": {"latitude": 41.2619, "longitude": -95.8608},  # Included for testing/demo purposes
+    # Included for testing/demo purposes
+    "AWS/us-east-2": {"latitude": 39.9612, "longitude": -82.9988},
+    "GCP/us-central1": {"latitude": 41.2619, "longitude": -95.8608},
+    # Custom/tricky ones
+    # "AR/Buenos Aires F.D.": {"latitude": -34.61, "longitude": -58.38},
+    # Unknowable skip entries
     "GitHub": {"latitude": None, "longitude": None},
     "VPN": {"latitude": None, "longitude": None},
     "unknown": {"latitude": None, "longitude": None},

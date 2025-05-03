@@ -13,7 +13,10 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 
 def update_region_codes_to_coordinates(
-    *, mapped_s3_logs_folder_path: str | pathlib.Path, cache_directory: str | pathlib.Path | None = None
+    *,
+    mapped_s3_logs_folder_path: str | pathlib.Path,
+    cache_directory: str | pathlib.Path | None = None,
+    maximum_iterations: int | None = None,
 ) -> None:
     """
     Update the `region_codes_to_coordinates.json` file in the cache directory.
@@ -25,6 +28,10 @@ def update_region_codes_to_coordinates(
     cache_directory : path-like, optional
         Path to the directory where the cache files will be stored.
         Defaults to `~/.cache/dandi_s3_log_parser/`.
+    maximum_iterations : int, optional
+        Maximum number of region codes to update.
+        If None, all region codes will be updated.
+        Defaults to None.
     """
     opencage_api_key = os.environ.get("OPENCAGE_API_KEY", None)
     ipinfo_api_key = os.environ.get("IPINFO_CREDENTIALS", None)
@@ -51,7 +58,10 @@ def update_region_codes_to_coordinates(
             previous_region_codes_to_coordinates = json.load(io)
             region_codes_to_coordinates.update(previous_region_codes_to_coordinates)
 
-    for _, row in archive_summary_by_region.iterrows():
+    for count, (_, row) in enumerate(archive_summary_by_region.iterrows()):
+        if maximum_iterations is not None and count >= maximum_iterations:
+            break
+
         region_code = row["region"]
         if region_codes_to_coordinates.get(region_code, None) is None:
             # TODO: look into batch processing or async requests here
@@ -99,7 +109,9 @@ def _get_coordinates(
             log_parser_cache_directory=log_parser_cache_directory,
         )
     else:
-        coordinates = _get_coordinates_from_opencage(region_code=region_code, opencage_api_key=opencage_api_key)
+        coordinates = _get_coordinates_from_opencage(
+            country_and_region_code=region_code, opencage_api_key=opencage_api_key
+        )
 
     return coordinates
 
@@ -155,7 +167,7 @@ def _save_service_coordinates_cache(
         json.dump(obj=service_coordinates, fp=io)
 
 
-def _get_coordinates_from_opencage(*, region_code: str, opencage_api_key: str) -> dict[str, float]:
+def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api_key: str) -> dict[str, float]:
     """
     Use the OpenCage API to get the coordinates (in decimal degrees form) for a ISO 3166 country/region code.
 
@@ -163,54 +175,93 @@ def _get_coordinates_from_opencage(*, region_code: str, opencage_api_key: str) -
     Also note that the order of latitude and longitude are reversed in the response, which is corrected in this output.
     """
     response = requests.get(
-        url=f"https://api.opencagedata.com/geocode/v1/geojson?q={region_code}&key={opencage_api_key}"
+        url=f"https://api.opencagedata.com/geocode/v1/geojson?q={country_and_region_code}&key={opencage_api_key}"
     )
 
     # TODO: add retries logic, more robust code handling, etc.?
     if response.status_code != 200:
-        message = f"Failed to fetch coordinates for region code: {region_code}"
+        message = f"Failed to fetch coordinates for region code: {country_and_region_code}"
         raise ValueError(message)
 
     info = response.json()
     features = info["features"]
 
-    country_code = region_code.split("/")[0].lower()
+    country_and_region_code_split = country_and_region_code.split("/")
+    country_code = country_and_region_code_split[0].lower()
+    region_code = country_and_region_code_split[1] if len(country_and_region_code_split) > 1 else None
     matching_features = [
         feature for feature in features if feature["properties"]["components"]["country_code"] == country_code
     ]
-    number_of_matches = len(matching_features)
-
-    match number_of_matches:
-        case 0:
-            message = f"Could not find a match for region code: {region_code}"
-            raise ValueError(message)
-        case 1:
-            matching_feature = matching_features[0]
-        case 2:
-            # Common situation is that a name is both the same as its city and the region that city is in
-            # E.g., Buenos Aires, Buenos Aires, AR
-
-            features_with_city: dict[bool, dict[str, typing.Any]] = [
-                (feature, feature["properties"]["components"].get("city", None) is not None)
-                for feature in matching_features
-            ]
-            if all(feature_with_city[1] for feature_with_city in features_with_city):
-                message = (
-                    f"\nMultiple matching features found for region code: {region_code}\n\n"
-                    f"{json.dumps(matching_features, indent=2)}\n"
-                )
-                raise ValueError(message)
-
-            matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
-        case _:
-            message = (
-                f"\nMultiple matching features found for region code: {region_code}\n\n"
-                f"{json.dumps(matching_features, indent=2)}\n"
-            )
-            raise ValueError(message)
+    matching_feature = _match_features_to_code(
+        features=matching_features,
+        country_code=country_code,
+        region_code=region_code,
+    )
 
     latitude = matching_feature["geometry"]["coordinates"][1]  # Remember to use corrected order latitude and longitude
     longitude = matching_feature["geometry"]["coordinates"][0]
     coordinates = {"latitude": latitude, "longitude": longitude}
 
     return coordinates
+
+
+def _match_features_to_code(
+    *, features: list[dict[str, typing.Any]], country_code: str, region_code: str | None = None
+) -> dict[str, typing.Any] | None:
+    """
+    Match the features to the region code.
+
+    Parameters
+    ----------
+    features : list[dict[str, typing.Any]]
+        The list of features to match.
+    country_code : str
+        The country code to match.
+    region_code : str
+        The region code to match.
+
+    Returns
+    -------
+    dict[str, typing.Any] | None
+        The matching feature or None if no match is found.
+    """
+    number_of_matches = len(features)
+
+    match number_of_matches:
+        case 0:
+            message = f"Could not find a match for region code: {country_code}/{region_code}"
+            raise ValueError(message)
+        case 1:
+            matching_feature = features[0]
+            return matching_feature
+        case 2:
+            # Common situation is that a name is both the same as its city and the region that city is in
+            # E.g., Buenos Aires, Buenos Aires, AR
+
+            features_with_city: list[tuple[dict[str, typing.Any]], bool] = [
+                (feature, feature["properties"]["components"].get("city", None) is not None) for feature in features
+            ]
+            if features_with_city[0][1] is not features_with_city[1][1]:
+                matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
+                return matching_feature
+        case _:
+            # Heuristic for finding exact match among list of possibilities, starting with state then trying city
+            for field in ["state", "city"]:
+                matching_feature = next(
+                    (
+                        feature in features
+                        for feature in features
+                        if (value := feature["properties"]["components"].get(field, None)) is not None
+                        and value == region_code
+                    ),
+                    None,
+                )
+
+            if matching_feature is not None:
+                return matching_feature
+
+    message = (
+        f"\nMultiple matching features found for region code: {country_code}/{region_code}\n\n"
+        f"{json.dumps(features, indent=2)}\n"
+    )
+    raise ValueError(message)

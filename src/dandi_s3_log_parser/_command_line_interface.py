@@ -224,6 +224,7 @@ def _generate_archive_summaries_cli(mapped_s3_logs_folder_path: pathlib.Path) ->
 def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
     generate_archive_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
 
+
 @click.command(name="update_region_codes_to_coordinates")
 @click.option(
     "--mapped_s3_logs_folder_path",
@@ -231,5 +232,16 @@ def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> No
     required=True,
     type=click.Path(writable=False),
 )
-def _update_region_codes_to_coordinates_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
-    update_region_codes_to_coordinates(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+@click.option(
+    "--maximum_iterations",
+    help="Maximum number of region codes to update.",
+    required=False,
+    type=int,
+    default=None,
+)
+def _update_region_codes_to_coordinates_cli(
+    mapped_s3_logs_folder_path: pathlib.Path, maximum_iterations: int | None = None
+) -> None:
+    update_region_codes_to_coordinates(
+        mapped_s3_logs_folder_path=mapped_s3_logs_folder_path, maximum_iterations=maximum_iterations
+    )
