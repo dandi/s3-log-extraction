@@ -2,7 +2,7 @@ import functools
 import json
 import os
 import pathlib
-import time
+import typing
 
 import ipinfo
 import pandas
@@ -62,9 +62,6 @@ def update_region_codes_to_coordinates(
                 log_parser_cache_directory=log_parser_cache_directory,
             )
             region_codes_to_coordinates[region_code] = coordinates
-
-            print(f"Retrieved coordinates for {region_code}: {coordinates}")  # TODO: just testing
-            time.sleep(5)  # TODO: just testing
 
     with region_codes_to_coordinates_file_path.open(mode="w") as io:
         json.dump(obj=region_codes_to_coordinates, fp=io)
@@ -183,18 +180,35 @@ def _get_coordinates_from_opencage(*, region_code: str, opencage_api_key: str) -
     ]
     number_of_matches = len(matching_features)
 
-    if number_of_matches == 0:
-        message = f"Could not find a match for region code: {region_code}"
-        raise ValueError(message)
+    match number_of_matches:
+        case 0:
+            message = f"Could not find a match for region code: {region_code}"
+            raise ValueError(message)
+        case 1:
+            matching_feature = matching_features[0]
+        case 2:
+            # Common situation is that a name is both the same as its city and the region that city is in
+            # E.g., Buenos Aires, Buenos Aires, AR
 
-    if number_of_matches > 1:
-        message = (
-            f"\nMultiple matching features found for region code: {region_code}\n\n"
-            f"{json.dumps(matching_features, indent=2)}\n"
-        )
-        raise ValueError(message)
+            feature_has_city: dict[str, dict[str, typing.Any]] = {
+                feature: feature["properties"]["components"].get("city", None) is not None
+                for feature in matching_features
+            }
+            if all(feature_has_city):
+                message = (
+                    f"\nMultiple matching features found for region code: {region_code}\n\n"
+                    f"{json.dumps(matching_features, indent=2)}\n"
+                )
+                raise ValueError(message)
 
-    matching_feature = matching_features[0]
+            matching_feature = next(feature for feature, has_city in feature_has_city.items() if has_city is True)
+        case _:
+            message = (
+                f"\nMultiple matching features found for region code: {region_code}\n\n"
+                f"{json.dumps(matching_features, indent=2)}\n"
+            )
+            raise ValueError(message)
+
     latitude = matching_feature["geometry"]["coordinates"][1]  # Remember to use corrected order latitude and longitude
     longitude = matching_feature["geometry"]["coordinates"][0]
     coordinates = {"latitude": latitude, "longitude": longitude}
