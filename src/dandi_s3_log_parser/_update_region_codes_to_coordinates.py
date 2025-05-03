@@ -78,7 +78,11 @@ def update_region_codes_to_coordinates(
                 )
                 region_codes_to_coordinates[region_code] = coordinates
             except Exception as exception:
-                error_file_path = error_directory / f"{region_code.replace("/", "_")}.json"
+                error_file_path = error_directory / f"{region_code.replace("/", "_")}.txt"
+
+                if error_file_path.exists():
+                    continue
+
                 with error_file_path.open(mode="w") as io:
                     io.write(f"{type(exception)}: {str(exception)}\n\n{traceback.format_exc()}")
 
