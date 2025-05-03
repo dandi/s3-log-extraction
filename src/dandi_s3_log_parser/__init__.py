@@ -27,6 +27,7 @@ from ._bin_all_reduced_s3_logs_by_object_key import bin_all_reduced_s3_logs_by_o
 from ._generate_all_dandiset_totals import generate_all_dandiset_totals
 from ._generate_archive_summaries import generate_archive_summaries
 from ._generate_archive_totals import generate_archive_totals
+from ._update_region_codes_to_coordinates import update_region_codes_to_coordinates
 
 __all__ = [
     "DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH",
@@ -39,4 +40,5 @@ __all__ = [
     "get_region_from_ip_address",
     "map_binned_s3_logs_to_dandisets",
     "bin_all_reduced_s3_logs_by_object_key",
+    "update_region_codes_to_coordinates",
 ]

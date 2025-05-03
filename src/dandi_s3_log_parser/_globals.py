@@ -107,3 +107,13 @@ _FullLogLine = collections.namedtuple("FullLogLine", _S3_LOG_FIELDS)
 _S3_LOG_REGEX = re.compile(pattern=r'"([^"]+)"|\[([^]]+)]|([^ ]+)')
 
 _KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "VPN")  # Azure has problems; see _ip_utils.py for more info
+
+_DEFAULT_REGION_CODES_TO_COORDINATES = {
+    # Included for testing/demo purposes
+    "AWS/us-east-2": {"latitude": 39.9612, "longitude": -82.9988},
+    "GCP/us-central1": {"latitude": 41.2619, "longitude": -95.8608},
+    # Skip unknowable entries
+    "GitHub": {"latitude": None, "longitude": None},
+    "VPN": {"latitude": None, "longitude": None},
+    "unknown": {"latitude": None, "longitude": None},
+}

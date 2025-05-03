@@ -210,6 +210,7 @@ To then generate summaries and totals (for ease and efficiency of frontend repor
 ```bash
 generate_all_dandiset_totals --mapped_s3_logs_folder_path < mapped Dandiset logs folder >
 generate_archive_summaries --mapped_s3_logs_folder_path < mapped Dandiset logs folder >
+update_region_codes_to_coordinates --mapped_s3_logs_folder_path < mapped Dandiset logs folder >
 ```
 
 
