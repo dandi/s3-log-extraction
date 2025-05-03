@@ -190,18 +190,18 @@ def _get_coordinates_from_opencage(*, region_code: str, opencage_api_key: str) -
             # Common situation is that a name is both the same as its city and the region that city is in
             # E.g., Buenos Aires, Buenos Aires, AR
 
-            feature_has_city: dict[str, dict[str, typing.Any]] = {
-                feature: feature["properties"]["components"].get("city", None) is not None
+            features_with_city: dict[bool, dict[str, typing.Any]] = [
+                (feature, feature["properties"]["components"].get("city", None) is not None)
                 for feature in matching_features
-            }
-            if all(feature_has_city):
+            ]
+            if all(feature_with_city[1] for feature_with_city in features_with_city):
                 message = (
                     f"\nMultiple matching features found for region code: {region_code}\n\n"
                     f"{json.dumps(matching_features, indent=2)}\n"
                 )
                 raise ValueError(message)
 
-            matching_feature = next(feature for feature, has_city in feature_has_city.items() if has_city is True)
+            matching_feature = next(feature for feature, has_city in features_with_city.items() if has_city is True)
         case _:
             message = (
                 f"\nMultiple matching features found for region code: {region_code}\n\n"
