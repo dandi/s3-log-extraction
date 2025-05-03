@@ -201,7 +201,7 @@ def _get_coordinates_from_opencage(*, region_code: str, opencage_api_key: str) -
                 )
                 raise ValueError(message)
 
-            matching_feature = next(feature for feature, has_city in features_with_city.items() if has_city is True)
+            matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
         case _:
             message = (
                 f"\nMultiple matching features found for region code: {region_code}\n\n"
