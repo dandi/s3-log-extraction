@@ -2,6 +2,7 @@ import functools
 import json
 import os
 import pathlib
+import traceback
 import typing
 
 import ipinfo
@@ -65,13 +66,21 @@ def update_region_codes_to_coordinates(
         region_code = row["region"]
         if region_codes_to_coordinates.get(region_code, None) is None:
             # TODO: look into batch processing or async requests here
-            coordinates = _get_coordinates(
-                region_code=region_code,
-                opencage_api_key=opencage_api_key,
-                ipinfo_api_key=ipinfo_api_key,
-                log_parser_cache_directory=log_parser_cache_directory,
-            )
-            region_codes_to_coordinates[region_code] = coordinates
+            error_directory = log_parser_cache_directory / "region_codes_to_coordinates_errors"
+            error_directory.mkdir(exist_ok=True)
+
+            try:
+                coordinates = _get_coordinates(
+                    region_code=region_code,
+                    opencage_api_key=opencage_api_key,
+                    ipinfo_api_key=ipinfo_api_key,
+                    log_parser_cache_directory=log_parser_cache_directory,
+                )
+                region_codes_to_coordinates[region_code] = coordinates
+            except Exception as exception:
+                error_file_path = error_directory / f"{region_code}.json"
+                with error_file_path.open(mode="w") as io:
+                    io.write(f"{type(exception)}: {str(exception)}\n\n{traceback.format_exc()}")
 
     with region_codes_to_coordinates_file_path.open(mode="w") as io:
         json.dump(obj=region_codes_to_coordinates, fp=io)
