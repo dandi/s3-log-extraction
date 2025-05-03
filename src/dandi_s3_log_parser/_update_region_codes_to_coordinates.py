@@ -13,7 +13,7 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 
 def update_region_codes_to_coordinates(
-    *, mapped_s3_logs_folder_path: str | pathlib.Path, cache_directory: str | pathlib.Path | None
+    *, mapped_s3_logs_folder_path: str | pathlib.Path, cache_directory: str | pathlib.Path | None = None
 ) -> None:
     """
     Update the `region_codes_to_coordinates.json` file in the cache directory.
