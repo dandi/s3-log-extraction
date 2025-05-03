@@ -190,7 +190,10 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
     country_code = country_and_region_code_split[0].lower()
     region_code = country_and_region_code_split[1] if len(country_and_region_code_split) > 1 else None
     matching_features = [
-        feature for feature in features if feature["properties"]["components"]["country_code"] == country_code
+        feature
+        for feature in features
+        if feature["properties"]["components"]["country_code"] == country_code
+        and feature["properties"]["components"]["_category"] == "place"  # Remove things like rivers, lakes, etc.
     ]
     matching_feature = _match_features_to_code(
         features=matching_features,
