@@ -7,6 +7,7 @@ import traceback
 import typing
 
 import ipinfo
+import natsort
 import pandas
 import requests
 import scipy.spatial.distance
@@ -89,7 +90,11 @@ def update_region_codes_to_coordinates(
                     io.write(f"{type(exception)}: {str(exception)}\n\n{traceback.format_exc()}")
 
     with region_codes_to_coordinates_file_path.open(mode="w") as io:
-        json.dump(obj=region_codes_to_coordinates, fp=io, indent=1)
+        region_codes_to_coordinates_ordered = {
+            key: region_codes_to_coordinates[key] for key in natsort.natsorted(seq=region_codes_to_coordinates.keys())
+        }
+
+        json.dump(obj=region_codes_to_coordinates_ordered, fp=io, indent=1)
 
 
 def _get_coordinates(
