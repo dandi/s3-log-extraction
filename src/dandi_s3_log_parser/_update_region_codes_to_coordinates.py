@@ -1,3 +1,4 @@
+import copy
 import functools
 import json
 import os
@@ -8,6 +9,7 @@ import typing
 import ipinfo
 import pandas
 import requests
+import scipy.spatial.distance
 
 from ._globals import _DEFAULT_REGION_CODES_TO_COORDINATES, _KNOWN_SERVICES
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
@@ -282,8 +284,22 @@ def _match_features_to_code(
     if matching_feature is not None:
         return matching_feature
 
+    # Last resort is to see if they are all 'sufficiently' close to each other to just take the center of all
+    coordinates = [
+        (feature["geometry"]["coordinates"][1], feature["geometry"]["coordinates"][0]) for feature in features
+    ]
+    distance_matrix = scipy.spatial.distance.squareform(
+        X=scipy.spatial.distance.pdist(X=coordinates, metric="euclidean")
+    )
+    if distance_matrix.max() < 1.0:  # Threshold of 1.0 chosen based on experimentation
+        aggregate_feature = copy.deepcopy(features[0])
+        aggregate_feature["geometry"]["coordinates"] = [
+            sum(coordinate) / number_of_matches for coordinate in zip(*coordinates)
+        ]
+        return aggregate_feature
+
     message = (
-        f"\nMultiple matching features found for region code: {country_code}/{region_code}\n\n"
+        f"\nMultiple incompatible matching features found for region code: {country_code}/{region_code}\n\n"
         f"{json.dumps(features, indent=2)}\n"
     )
     raise ValueError(message)
