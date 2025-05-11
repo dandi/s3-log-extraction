@@ -274,5 +274,5 @@ def _check_for_errors(cache_directory: str | pathlib.Path | None) -> int:
     region_code_to_coordinates_error_directory.mkdir(exist_ok=True)
 
     if len(list(region_code_to_coordinates_error_directory.iterdir())) > 0:
-        click.echo("Region code to coordinate process resulted in errors - please investigate.")
+        click.echo(message="Region code to coordinate process resulted in errors - please investigate.", err=True)
         return SystemExit(1)
