@@ -189,8 +189,9 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
     Note that multiple results might be returned by the query, and some may not correctly correspond to the country.
     Also note that the order of latitude and longitude are reversed in the response, which is corrected in this output.
     """
+    country_and_region_code_text = country_and_region_code.replace(" ", "%20")  # Replace spaces with URL character
     response = requests.get(
-        url=f"https://api.opencagedata.com/geocode/v1/geojson?q={country_and_region_code}&key={opencage_api_key}"
+        url=f"https://api.opencagedata.com/geocode/v1/geojson?q={country_and_region_code_text}&key={opencage_api_key}"
     )
 
     # TODO: add retries logic, more robust code handling, etc.?
@@ -208,8 +209,7 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
         feature
         for feature in features
         if feature["properties"]["components"]["country_code"] == country_code
-        and feature["properties"]["components"].get("_category", "")
-        == "place"  # Remove things like rivers, lakes, etc.
+        and feature["properties"]["components"].get("_category", "") == "place"  # Remove rivers, lakes, etc.
         and feature["properties"]["components"].get("_type", "") != "county"  # Ignoring counties for now
     ]
     matching_feature = _match_features_to_code(
@@ -247,49 +247,46 @@ def _match_features_to_code(
     dict[str, typing.Any] | None
         The matching feature or None if no match is found.
     """
-    matching_feature = None
     number_of_matches = len(features)
-    match number_of_matches:
-        case 0:
-            message = f"Could not find a match for region code: {country_code}/{region_code}"
-            raise ValueError(message)
-        case 1:
-            matching_feature = features[0]
-            return matching_feature
-        case 2:
-            # Common situation is that a name is both the same as its city and the region that city is in
-            # So use coordinates of city
-            # E.g., Buenos Aires, Buenos Aires, AR
 
-            features_with_city: list[tuple[dict[str, typing.Any]], bool] = [
-                (feature, feature["properties"]["components"].get("city", None) is not None) for feature in features
-            ]
-            if features_with_city[0][1] is not features_with_city[1][1]:
-                matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
-                return matching_feature
-        case _:
-            # Attempt to match exact region code at either state or city level
-            # If only one found then return those coordinates
-            matching_feature = next(
-                (
-                    next(
-                        (
-                            feature
-                            for feature in features
-                            if feature["properties"]["components"].get(field, "") == region_code
-                        ),
-                        None,
-                    )
-                    for field in ["state", "city"]
-                ),
+    # Case 0: No matches found, raise an error
+    if number_of_matches == 0:
+        message = f"Could not find a match for region code: {country_code}/{region_code}"
+        raise ValueError(message)
+
+    # Case 1: Ideal situation - only one match found, so return it
+    if number_of_matches == 1:
+        matching_feature = features[0]
+        return matching_feature
+
+    # Case 2: Exactly two matches found - one is a city, the other is not, so use the city
+    # Results from a common situation where a name is both the same as its city and the region that city is in
+    # Good example: Buenos Aires, Buenos Aires, AR
+    features_with_city: list[tuple[dict[str, typing.Any]], bool] = [
+        (feature, feature["properties"]["components"].get("city", None) is not None) for feature in features
+    ]
+    if number_of_matches == 2 and (features_with_city[0][1] is not features_with_city[1][1]):
+        matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
+        return matching_feature
+
+    # Case 3: More than two matches found (or at least two cities) - check if any are exact matches to region code
+    # starting by state
+    matching_feature = next(
+        (
+            next(
+                (feature for feature in features if feature["properties"]["components"].get(field, "") == region_code),
                 None,
             )
+            for field in ["state", "city"]
+        ),
+        None,
+    )
 
-            if matching_feature is not None:
-                return matching_feature
+    if matching_feature is not None:
+        return matching_feature
 
-    # Next-to-last resort: see if all results are 'sufficiently' close to each other to just take the center of all
-    # Good example: JP/Niigata, which all roughly match to the same basic area
+    # Case 4: See if all results are 'sufficiently' close to each other to just take the center of all
+    # Good example: JP/Niigata, where all results roughly match to the same basic area
     coordinates = [
         (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1]) for feature in features
     ]
@@ -299,9 +296,9 @@ def _match_features_to_code(
         aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
         return aggregate_feature
 
-    # Last resort: ignore city features under assumption IPInfo region name defaults to coarser-grained reference
+    # Case 5: Ignore city features under assumption IPInfo region name defaults to coarser-grained reference
     # Good example: JP/Ibaraki, which matches both the city in Osaka as well as the prefecture
-    # Caused by the fact that the Romaji are the same while the Kanji are different
+    # (Caused by the fact that the Romaji are the same while the Kanji are not)
     features_without_city = [
         feature for feature in features if feature["properties"]["components"].get("city", None) is None
     ]
@@ -315,6 +312,8 @@ def _match_features_to_code(
         aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
         return aggregate_feature
 
+    # No heuristics worked, so raise error
+    # Best solution is to resolve manually and add values to default mapping
     message = (
         f"\nMultiple incompatible matching features found for region code: {country_code}/{region_code}\n\n"
         f"{json.dumps(features, indent=2)}\n"
