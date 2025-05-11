@@ -121,7 +121,7 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     # "FR/Grand Est": {"latitude": 41.2619, "longitude": -95.8608},
     # "NO/Vestland": {"latitude": 41.2619, "longitude": -95.8608},
     # "PR/San Juan": {"latitude": 41.2619, "longitude": -95.8608},
-    "CN/Hainan": {"latitude": 41.2619, "longitude": -95.8608},
+    "CN/Hainan": {"latitude": 19.2000001, "longitude": 109.5999999},
     # Skip unknowable entries
     "GitHub": {"latitude": None, "longitude": None},
     "VPN": {"latitude": None, "longitude": None},
