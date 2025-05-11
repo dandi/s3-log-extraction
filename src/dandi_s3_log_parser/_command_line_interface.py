@@ -273,6 +273,6 @@ def _check_for_errors(cache_directory: str | pathlib.Path | None) -> int:
     region_code_to_coordinates_error_directory = log_parser_cache_directory / "region_codes_to_coordinates_errors"
     region_code_to_coordinates_error_directory.mkdir(exist_ok=True)
 
-    if len(region_code_to_coordinates_error_directory.iterdir()) > 0:
+    if len(len(region_code_to_coordinates_error_directory.iterdir())) > 0:
         click.echo("Region code to coordinate process resulted in errors - please investigate.")
         return 1
