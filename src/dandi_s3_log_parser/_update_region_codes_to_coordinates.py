@@ -206,7 +206,9 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
         feature
         for feature in features
         if feature["properties"]["components"]["country_code"] == country_code
-        and feature["properties"]["components"]["_category"] == "place"  # Remove things like rivers, lakes, etc.
+        and feature["properties"]["components"].get("_category", "")
+        == "place"  # Remove things like rivers, lakes, etc.
+        and feature["properties"]["components"].get("_type", "") != "county"  # Ignoring counties for now
     ]
     matching_feature = _match_features_to_code(
         features=matching_features,
@@ -226,6 +228,8 @@ def _match_features_to_code(
 ) -> dict[str, typing.Any] | None:
     """
     Match the features to the region code.
+
+    Uses sequences of heuristics.
 
     Parameters
     ----------
