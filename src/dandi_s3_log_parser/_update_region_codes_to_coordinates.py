@@ -89,7 +89,7 @@ def update_region_codes_to_coordinates(
                     io.write(f"{type(exception)}: {str(exception)}\n\n{traceback.format_exc()}")
 
     with region_codes_to_coordinates_file_path.open(mode="w") as io:
-        json.dump(obj=region_codes_to_coordinates, fp=io)
+        json.dump(obj=region_codes_to_coordinates, fp=io, indent=1)
 
 
 def _get_coordinates(
