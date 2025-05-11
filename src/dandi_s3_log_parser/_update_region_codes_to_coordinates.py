@@ -196,7 +196,7 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
 
     # TODO: add retries logic, more robust code handling, etc.?
     if response.status_code != 200:
-        message = f"Failed to fetch coordinates for region code: {country_and_region_code}"
+        message = f"Failed to fetch coordinates for region code: {country_and_region_code_text}"
         raise ValueError(message)
 
     info = response.json()
@@ -205,15 +205,9 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
     country_and_region_code_split = country_and_region_code.split("/")
     country_code = country_and_region_code_split[0].lower()
     region_code = country_and_region_code_split[1] if len(country_and_region_code_split) > 1 else None
-    matching_features = [
-        feature
-        for feature in features
-        if feature["properties"]["components"]["country_code"] == country_code
-        and feature["properties"]["components"].get("_category", "") == "place"  # Remove rivers, lakes, etc.
-        and feature["properties"]["components"].get("_type", "") != "county"  # Ignoring counties for now
-    ]
+
     matching_feature = _match_features_to_code(
-        features=matching_features,
+        features=features,
         country_code=country_code,
         region_code=region_code,
     )
