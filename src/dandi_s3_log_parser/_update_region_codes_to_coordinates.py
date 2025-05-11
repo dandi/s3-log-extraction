@@ -346,7 +346,7 @@ def _match_features_to_code(
 def _average_coordinates_if_close(
     *,
     coordinates: list[tuple[float, float]],
-    distance_threshold: float = 1.0,
+    distance_threshold: float = 2.5,
 ) -> list[float, float] | None:
     """
     Average the coordinates if they are close enough to each other.
@@ -358,7 +358,7 @@ def _average_coordinates_if_close(
         Note this order maintains the IPInfo convention of (longitude, latitude).
     distance_threshold : float
         The distance threshold to use for averaging.
-        Value chosen based on experimentation.
+        Default value was chosen based on experimentation.
 
     Returns
     -------
