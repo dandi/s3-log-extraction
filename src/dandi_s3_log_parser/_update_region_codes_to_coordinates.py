@@ -255,8 +255,10 @@ def _match_features_to_code(
             raise ValueError(message)
         case 1:
             matching_feature = features[0]
+            return matching_feature
         case 2:
             # Common situation is that a name is both the same as its city and the region that city is in
+            # So use coordinates of city
             # E.g., Buenos Aires, Buenos Aires, AR
 
             features_with_city: list[tuple[dict[str, typing.Any]], bool] = [
@@ -264,8 +266,10 @@ def _match_features_to_code(
             ]
             if features_with_city[0][1] is not features_with_city[1][1]:
                 matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
+                return matching_feature
         case _:
-            # Heuristic for finding exact match among list of possibilities, starting with state then trying city
+            # Attempt to match exact region code at either state or city level
+            # If only one found then return those coordinates
             matching_feature = next(
                 (
                     next(
@@ -281,21 +285,34 @@ def _match_features_to_code(
                 None,
             )
 
-    if matching_feature is not None:
-        return matching_feature
+            if matching_feature is not None:
+                return matching_feature
 
-    # Last resort is to see if they are all 'sufficiently' close to each other to just take the center of all
+    # Next-to-last resort: see if all results are 'sufficiently' close to each other to just take the center of all
+    # Good example: JP/Niigata, which all roughly match to the same basic area
     coordinates = [
-        (feature["geometry"]["coordinates"][1], feature["geometry"]["coordinates"][0]) for feature in features
+        (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1]) for feature in features
     ]
-    distance_matrix = scipy.spatial.distance.squareform(
-        X=scipy.spatial.distance.pdist(X=coordinates, metric="euclidean")
-    )
-    if distance_matrix.max() < 1.0:  # Threshold of 1.0 chosen based on experimentation
-        aggregate_feature = copy.deepcopy(features[0])
-        aggregate_feature["geometry"]["coordinates"] = [
-            sum(coordinate) / number_of_matches for coordinate in zip(*coordinates)
-        ]
+    average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
+    if average_coordinate is not None:
+        aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
+        aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
+        return aggregate_feature
+
+    # Last resort: ignore city features under assumption IPInfo region name defaults to coarser-grained reference
+    # Good example: JP/Ibaraki, which matches both the city in Osaka as well as the prefecture
+    # Caused by the fact that the Romaji are the same while the Kanji are different
+    features_without_city = [
+        feature for feature in features if feature["properties"]["components"].get("city", None) is None
+    ]
+    coordinates = [
+        (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
+        for feature in features_without_city
+    ]
+    average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
+    if average_coordinate is not None:
+        aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
+        aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
         return aggregate_feature
 
     message = (
@@ -303,3 +320,34 @@ def _match_features_to_code(
         f"{json.dumps(features, indent=2)}\n"
     )
     raise ValueError(message)
+
+
+def _average_coordinates_if_close(
+    *,
+    coordinates: list[tuple[float, float]],
+    distance_threshold: float = 1.0,
+) -> list[float, float] | None:
+    """
+    Average the coordinates if they are close enough to each other.
+
+    Parameters
+    ----------
+    coordinates : list[tuple[float, float]]
+        The list of coordinates to average.
+        Note this order maintains the IPInfo convention of (longitude, latitude).
+    distance_threshold : float
+        The distance threshold to use for averaging.
+        Value chosen based on experimentation.
+
+    Returns
+    -------
+    tuple[float, float] | None
+        The averaged coordinates or None if they are not close enough.
+    """
+    distance_matrix = scipy.spatial.distance.squareform(
+        X=scipy.spatial.distance.pdist(X=coordinates, metric="euclidean")
+    )
+
+    number_of_coordinates = len(coordinates)
+    if distance_matrix.max() < distance_threshold:
+        return list(sum(coordinate) / number_of_coordinates for coordinate in zip(*coordinates))
