@@ -290,15 +290,27 @@ def _match_features_to_code(
         aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
         return aggregate_feature
 
-    # Case 5: Ignore city features under assumption IPInfo region name defaults to coarser-grained reference
+    # Case 5: Ignore city and other features under assumption IPInfo region name defaults to coarser-grained reference
     # Good example: JP/Ibaraki, which matches both the city in Osaka as well as the prefecture
     # (Caused by the fact that the Romaji are the same while the Kanji are not)
     features_without_city = [
         feature for feature in features if feature["properties"]["components"].get("city", None) is None
     ]
+    features_without_other_types = [
+        feature
+        for feature in features_without_city
+        if (_type := feature["properties"]["components"].get("_type", None)) is not None and _type not in ["river"]
+    ]
+    features_without_other_categories = [
+        feature
+        for feature in features_without_other_types
+        if (_category := feature["properties"]["components"].get("_category", None)) is not None
+        and _category not in ["natural/water"]
+    ]
+
     coordinates = [
         (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
-        for feature in features_without_city
+        for feature in features_without_other_categories
     ]
     average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
     if average_coordinate is not None:

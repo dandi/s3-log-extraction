@@ -112,6 +112,16 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     # Included for testing/demo purposes
     "AWS/us-east-2": {"latitude": 39.9612, "longitude": -82.9988},
     "GCP/us-central1": {"latitude": 41.2619, "longitude": -95.8608},
+    # Explicit entries that fail heuristic matching
+    # "AR/Rio Negro": {"latitude": 41.2619, "longitude": -95.8608},
+    # "ES/Castille and León": {"latitude": 41.2619, "longitude": -95.8608},
+    # "NI/Managua Department": {"latitude": 41.2619, "longitude": -95.8608},
+    # "PL/Subcarpathia": {"latitude": 41.2619, "longitude": -95.8608},
+    # "BO/La Paz Department": {"latitude": 41.2619, "longitude": -95.8608},
+    # "FR/Grand Est": {"latitude": 41.2619, "longitude": -95.8608},
+    # "NO/Vestland": {"latitude": 41.2619, "longitude": -95.8608},
+    # "PR/San Juan": {"latitude": 41.2619, "longitude": -95.8608},
+    "CN/Hainan": {"latitude": 41.2619, "longitude": -95.8608},
     # Skip unknowable entries
     "GitHub": {"latitude": None, "longitude": None},
     "VPN": {"latitude": None, "longitude": None},
