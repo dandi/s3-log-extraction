@@ -2,6 +2,7 @@
 
 import collections
 import pathlib
+import sys
 
 import click
 
@@ -275,4 +276,4 @@ def _check_for_errors(cache_directory: str | pathlib.Path | None) -> int:
 
     if len(list(region_code_to_coordinates_error_directory.iterdir())) > 0:
         click.echo(message="Region code to coordinate process resulted in errors - please investigate.", err=True)
-        return SystemExit(1)
+        return sys.exit(status=1)
