@@ -133,7 +133,7 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     "PR/San Juan": {"latitude": 18.384239, "longitude": -66.05344},
     "RU/Rostov": {"latitude": 57.2012699, "longitude": 39.4221813},
     "TW/Takao": {"latitude": 22.6226696, "longitude": 120.2764261},
-    # "UY/Montevideo Department": {"latitude": -34.9058916, "longitude": -56.1913095},
+    "UY/Montevideo Department": {"latitude": -34.9058916, "longitude": -56.1913095},
     # Skip unknowable entries
     "GitHub": {"latitude": None, "longitude": None},
     "VPN": {"latitude": None, "longitude": None},
