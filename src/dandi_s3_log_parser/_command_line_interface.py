@@ -2,6 +2,7 @@
 
 import collections
 import pathlib
+import sys
 
 import click
 
@@ -233,6 +234,12 @@ def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> No
     type=click.Path(writable=False),
 )
 @click.option(
+    "--cache_directory",
+    help="",
+    required=False,
+    type=click.Path(writable=True),
+)
+@click.option(
     "--maximum_iterations",
     help="Maximum number of region codes to update.",
     required=False,
@@ -240,8 +247,33 @@ def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> No
     default=None,
 )
 def _update_region_codes_to_coordinates_cli(
-    mapped_s3_logs_folder_path: pathlib.Path, maximum_iterations: int | None = None
+    mapped_s3_logs_folder_path: str,
+    cache_directory: str | None = None,
+    maximum_iterations: int | None = None,
 ) -> None:
     update_region_codes_to_coordinates(
-        mapped_s3_logs_folder_path=mapped_s3_logs_folder_path, maximum_iterations=maximum_iterations
+        mapped_s3_logs_folder_path=mapped_s3_logs_folder_path,
+        cache_directory=cache_directory,
+        maximum_iterations=maximum_iterations,
     )
+
+
+@click.command(name="check_for_errors")
+@click.option(
+    "--cache_directory",
+    help="",
+    required=False,
+    type=click.Path(writable=True),
+)
+def _check_for_errors(cache_directory: str | pathlib.Path | None) -> int:
+    cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else pathlib.Path.home() / ".cache"
+    cache_directory.mkdir(exist_ok=True)
+    log_parser_cache_directory = cache_directory / "dandi_s3_log_parser"
+    log_parser_cache_directory.mkdir(exist_ok=True)
+
+    region_code_to_coordinates_error_directory = log_parser_cache_directory / "region_codes_to_coordinates_errors"
+    region_code_to_coordinates_error_directory.mkdir(exist_ok=True)
+
+    if len(list(region_code_to_coordinates_error_directory.iterdir())) > 0:
+        click.echo(message="Region code to coordinate process resulted in errors - please investigate.", err=True)
+        return sys.exit(1)

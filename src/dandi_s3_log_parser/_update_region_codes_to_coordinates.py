@@ -1,3 +1,4 @@
+import copy
 import functools
 import json
 import os
@@ -6,8 +7,10 @@ import traceback
 import typing
 
 import ipinfo
+import natsort
 import pandas
 import requests
+import scipy.spatial.distance
 
 from ._globals import _DEFAULT_REGION_CODES_TO_COORDINATES, _KNOWN_SERVICES
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
@@ -87,7 +90,11 @@ def update_region_codes_to_coordinates(
                     io.write(f"{type(exception)}: {str(exception)}\n\n{traceback.format_exc()}")
 
     with region_codes_to_coordinates_file_path.open(mode="w") as io:
-        json.dump(obj=region_codes_to_coordinates, fp=io)
+        region_codes_to_coordinates_ordered = {
+            key: region_codes_to_coordinates[key] for key in natsort.natsorted(seq=region_codes_to_coordinates.keys())
+        }
+
+        json.dump(obj=region_codes_to_coordinates_ordered, fp=io, indent=1)
 
 
 def _get_coordinates(
@@ -187,13 +194,14 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
     Note that multiple results might be returned by the query, and some may not correctly correspond to the country.
     Also note that the order of latitude and longitude are reversed in the response, which is corrected in this output.
     """
+    country_and_region_code_text = country_and_region_code.replace(" ", "%20")  # Replace spaces with URL character
     response = requests.get(
-        url=f"https://api.opencagedata.com/geocode/v1/geojson?q={country_and_region_code}&key={opencage_api_key}"
+        url=f"https://api.opencagedata.com/geocode/v1/geojson?q={country_and_region_code_text}&key={opencage_api_key}"
     )
 
     # TODO: add retries logic, more robust code handling, etc.?
     if response.status_code != 200:
-        message = f"Failed to fetch coordinates for region code: {country_and_region_code}"
+        message = f"Failed to fetch coordinates for region code: {country_and_region_code_text}"
         raise ValueError(message)
 
     info = response.json()
@@ -202,14 +210,9 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
     country_and_region_code_split = country_and_region_code.split("/")
     country_code = country_and_region_code_split[0].lower()
     region_code = country_and_region_code_split[1] if len(country_and_region_code_split) > 1 else None
-    matching_features = [
-        feature
-        for feature in features
-        if feature["properties"]["components"]["country_code"] == country_code
-        and feature["properties"]["components"]["_category"] == "place"  # Remove things like rivers, lakes, etc.
-    ]
+
     matching_feature = _match_features_to_code(
-        features=matching_features,
+        features=features,
         country_code=country_code,
         region_code=region_code,
     )
@@ -227,6 +230,8 @@ def _match_features_to_code(
     """
     Match the features to the region code.
 
+    Uses sequences of heuristics.
+
     Parameters
     ----------
     features : list[dict[str, typing.Any]]
@@ -241,45 +246,134 @@ def _match_features_to_code(
     dict[str, typing.Any] | None
         The matching feature or None if no match is found.
     """
-    matching_feature = None
     number_of_matches = len(features)
-    match number_of_matches:
-        case 0:
-            message = f"Could not find a match for region code: {country_code}/{region_code}"
-            raise ValueError(message)
-        case 1:
-            matching_feature = features[0]
-        case 2:
-            # Common situation is that a name is both the same as its city and the region that city is in
-            # E.g., Buenos Aires, Buenos Aires, AR
 
-            features_with_city: list[tuple[dict[str, typing.Any]], bool] = [
-                (feature, feature["properties"]["components"].get("city", None) is not None) for feature in features
-            ]
-            if features_with_city[0][1] is not features_with_city[1][1]:
-                matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
-        case _:
-            # Heuristic for finding exact match among list of possibilities, starting with state then trying city
-            matching_feature = next(
-                (
-                    next(
-                        (
-                            feature
-                            for feature in features
-                            if feature["properties"]["components"].get(field, "") == region_code
-                        ),
-                        None,
-                    )
-                    for field in ["state", "city"]
-                ),
+    # Case 0: No matches found, raise an error
+    if number_of_matches == 0:
+        message = f"Could not find a match for region code: {country_code}/{region_code}"
+        raise ValueError(message)
+
+    # Case 1: Ideal situation - only one match found, so return it
+    if number_of_matches == 1:
+        matching_feature = features[0]
+        return matching_feature
+
+    # Case 2: Exactly two matches found - one is a city, the other is not, so use the city
+    # Results from a common situation where a name is both the same as its city and the region that city is in
+    # Good example: Buenos Aires, Buenos Aires, AR
+    features_with_city: list[tuple[dict[str, typing.Any]], bool] = [
+        (feature, feature["properties"]["components"].get("city", None) is not None) for feature in features
+    ]
+    if number_of_matches == 2 and (features_with_city[0][1] is not features_with_city[1][1]):
+        matching_feature = next(feature for feature, has_city in features_with_city if has_city is True)
+        return matching_feature
+
+    # Case 3: More than two matches found (or at least two cities) - check if any are exact matches to region code
+    # starting by state
+    matching_feature = next(
+        (
+            next(
+                (feature for feature in features if feature["properties"]["components"].get(field, "") == region_code),
                 None,
             )
+            for field in ["state", "city"]
+        ),
+        None,
+    )
 
     if matching_feature is not None:
         return matching_feature
 
+    # Case 4: See if all results are 'sufficiently' close to each other to just take the center of all
+    # Good example: JP/Niigata, where all results roughly match to the same basic area
+    coordinates = [
+        (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1]) for feature in features
+    ]
+    average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
+    if average_coordinate is not None:
+        aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
+        aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
+        return aggregate_feature
+
+    # Case 5: Constrain to features of the country code
+    features_in_country = [
+        feature for feature in features if feature["properties"]["components"]["country_code"] == country_code
+    ]
+    try:
+        matching_feature = _match_features_to_code(
+            features=features_in_country,
+            country_code=country_code,
+            region_code=region_code,
+        )
+    finally:  # Skip any sub-errors from this recursive call
+        pass  # Final outer raise will deliver error message
+
+    if matching_feature is not None:
+        return matching_feature
+
+    # Case 6: Ignore city and other features under assumption IPInfo region name defaults to coarser-grained reference
+    # Good example: JP/Ibaraki, which matches both the city in Osaka as well as the prefecture
+    # (Caused by the fact that the Romaji are the same while the Kanji are not)
+    features_without_city = [
+        feature for feature in features if feature["properties"]["components"].get("city", None) is None
+    ]
+    features_without_other_types = [
+        feature
+        for feature in features_without_city
+        if (_type := feature["properties"]["components"].get("_type", None)) is not None and _type not in ["river"]
+    ]
+    features_without_other_categories = [
+        feature
+        for feature in features_without_other_types
+        if (_category := feature["properties"]["components"].get("_category", None)) is not None
+        and _category not in ["natural/water"]
+    ]
+
+    coordinates = [
+        (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
+        for feature in features_without_other_categories
+    ]
+    average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
+    if average_coordinate is not None:
+        aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
+        aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
+        return aggregate_feature
+
+    # No heuristics worked, so raise error
+    # Best solution is to resolve manually and add values to default mapping
     message = (
-        f"\nMultiple matching features found for region code: {country_code}/{region_code}\n\n"
+        f"\nMultiple incompatible matching features found for region code: {country_code}/{region_code}\n\n"
         f"{json.dumps(features, indent=2)}\n"
     )
     raise ValueError(message)
+
+
+def _average_coordinates_if_close(
+    *,
+    coordinates: list[tuple[float, float]],
+    distance_threshold: float = 2.5,
+) -> list[float, float] | None:
+    """
+    Average the coordinates if they are close enough to each other.
+
+    Parameters
+    ----------
+    coordinates : list[tuple[float, float]]
+        The list of coordinates to average.
+        Note this order maintains the IPInfo convention of (longitude, latitude).
+    distance_threshold : float
+        The distance threshold to use for averaging.
+        Default value was chosen based on experimentation.
+
+    Returns
+    -------
+    tuple[float, float] | None
+        The averaged coordinates or None if they are not close enough.
+    """
+    distance_matrix = scipy.spatial.distance.squareform(
+        X=scipy.spatial.distance.pdist(X=coordinates, metric="euclidean")
+    )
+
+    number_of_coordinates = len(coordinates)
+    if distance_matrix.max() < distance_threshold:
+        return list(sum(coordinate) / number_of_coordinates for coordinate in zip(*coordinates))
