@@ -6,6 +6,9 @@
 /**/__pycache__/
 *.py[cod]
 
+# C extensions via Cython
+*.c
+
 # Distribution / packaging
 .Python
 build/
