@@ -28,6 +28,7 @@ from ._generate_all_dandiset_totals import generate_all_dandiset_totals
 from ._generate_archive_summaries import generate_archive_summaries
 from ._generate_archive_totals import generate_archive_totals
 from ._update_region_codes_to_coordinates import update_region_codes_to_coordinates
+from ._s3_log_reader import process_file
 
 __all__ = [
     "DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH",
@@ -41,4 +42,5 @@ __all__ = [
     "map_binned_s3_logs_to_dandisets",
     "bin_all_reduced_s3_logs_by_object_key",
     "update_region_codes_to_coordinates",
+    "process_file",
 ]

@@ -1,6 +1,14 @@
+#[build-system]
+#requires = ["hatchling", "hatch-vcs"]
+#build-backend = "hatchling.build"
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
+requires = ["setuptools", "wheel", "cython"]
+build-backend = "setuptools.build_meta"
+
+# Need to call `pip install build`
+# Followed by python -m build
+#[tool.setuptools.extension]
+#cython_module = {sources = ["src/dandi_s3_log_parser/_s3_log.pyx"]}
 
 [tool.hatch.version]
 source = "vcs"

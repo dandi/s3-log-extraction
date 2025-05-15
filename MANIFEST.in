@@ -1,0 +1,1 @@
+include src/dandi_s3_log_parser/_s3_log_reader/_s3_log_reader_c.pyx
