@@ -19,3 +19,40 @@ TODO: determine if /mnt/backup is SSD
 
 
 # How to make mapping step iterable?
+
+- 1.0: for each known dandiset (somehow cache if there are new dandisets added)
+  - for each published version
+    - for each ID, cache asset IDs
+      
+    - for each asset ID
+      - make softlink or note for ID, move ID to outer flat cache of blob IDs (since Zarr assets have scattered blob IDs per 'asset')
+      - make manifest (cache) of the versions asset IDs
+        
+- 2.0: for all assets found in 1.0, count the number of occurences across DANDISETS (not versions within dandiset)
+- 3.0: for all assets found in 1.0, count the number of occurences across versions within dandisets
+  
+- for all dandisets
+  - for all versions
+    - for all assets associated with that version; if result from 2.0 is 1 and 3.0 is 1
+      - softlink to asset ID access data
+      - use in calculating version summary
+    - for all assets associated with that version; if result from 2.0 is 1 and 3.0 is greater than 1
+      - under subfolder of dandiset, 'undetermined_version', softlink to asset ID access data
+      - calculate undetermined summary
+        
+- for all dandisets
+  - for all version summaries (including 'undetermined_version')
+    - calculate dandiset summary
+    
+- for all dandisets
+  - for all versions
+    - for all assets
+      - if result from 2.0 is greater than 1, under global subfolder 'undetermined_dandset'
+        - softlink to asset ID access data
+        - calculate undetermined summary
+       
+TODO: eventually, use URI to help determine the undetermined version/dandiset (no version may have to incorporate datetime and current default version state at that point in time)
+
+TODO: eventually, use audit to find any asset IDs that weren't published but were uniquely associated with dandisets (draft)
+  - if their filenames match existing filenames, incorporate activity into same 'asset notion'
+
