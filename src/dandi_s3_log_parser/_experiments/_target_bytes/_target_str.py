@@ -10,7 +10,7 @@ def seek_and_read(text_io: typing.TextIO, pos: int, amount: int) -> str:
 
 
 def get_ip(text_io: typing.TextIO, pos: int) -> str:
-    str_input = seek_and_read(text_io=text_io, pos=pos + 106, amount=16)
+    str_input = seek_and_read(text_io=text_io, pos=pos + 107, amount=16)
     without_space = str_input.split(" ")[0]
     return without_space
 
@@ -19,7 +19,7 @@ def target_str(filename: str, offsets: list[int]) -> None:
     with open(filename, "r") as text_io:
         all_ips = [get_ip(text_io=text_io, pos=pos) for pos in offsets]
 
-    print(all_ips[:3])
+    print(all_ips[:5])
 
 
 if __name__ == "__main__":
