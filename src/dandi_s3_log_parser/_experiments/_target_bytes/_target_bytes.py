@@ -11,9 +11,9 @@ def seek_and_read(io, pos: int, amount: int) -> bytes:
 
 def target_bytes(filename: str, ranges: list[int]) -> None:
     with open(filename, "rb") as io:
-        all_data = [seek_and_read(io=io, pos=range, amount=15) for range in ranges]
+        all_data = [seek_and_read(io=io, pos=range + 107, amount=15) for range in ranges]
 
-    print(all_data[:3])
+    print(all_data[:5])
 
 
 if __name__ == "__main__":
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     # > /mnt/backup/dandi/dandiarchive-logs-cody/test/test_ranges.txt
     range_file = "/mnt/backup/dandi/dandiarchive-logs-cody/test/test_ranges.txt"
     with open(range_file, "r") as io:
-        lengths = [int(line.strip()) for line in io.readlines()]
+        lengths = [int(line.strip()) + 1 for line in io.readlines()]
     lengths.insert(0, 0)
     ranges = numpy.cumsum(lengths)
 
