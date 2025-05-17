@@ -1,7 +1,7 @@
 import typing
 
 
-def seek_and_read(text_io: typing.TextIO, pos: int, amount: int) -> str:
+def seek_and_read(io: typing.TextIO, pos: int, amount: int) -> str:
     """
     Seek to a position in the file and read a specified amount of bytes.
     """
@@ -9,15 +9,15 @@ def seek_and_read(text_io: typing.TextIO, pos: int, amount: int) -> str:
     return io.read(amount)
 
 
-def get_ip(text_io: typing.TextIO, pos: int) -> str:
-    str_input = seek_and_read(text_io=text_io, pos=pos + 107, amount=16)
+def get_ip(io: typing.TextIO, pos: int) -> str:
+    str_input = seek_and_read(io=io, pos=pos + 107, amount=16)
     without_space = str_input.split(" ")[0]
     return without_space
 
 
 def target_str(filename: str, offsets: list[int]) -> None:
-    with open(filename, "r") as text_io:
-        all_ips = [get_ip(text_io=text_io, pos=pos) for pos in offsets]
+    with open(filename, "r") as io:
+        all_ips = [get_ip(io=io, pos=pos) for pos in offsets]
 
     print(all_ips[:5])
 

@@ -3,7 +3,7 @@ import typing
 SPACE_BYTE = b" "[0]
 
 
-def seek_and_read(binary_io: typing.BinaryIO, pos: int, amount: int) -> bytes:
+def seek_and_read(io: typing.BinaryIO, pos: int, amount: int) -> bytes:
     """
     Seek to a position in the file and read a specified amount of bytes.
     """
@@ -19,15 +19,15 @@ def strip_space(byte_input: bytes) -> bytes:
             return byte_input[:counter]
 
 
-def get_ip(binary_io: typing.BinaryIO, pos: int) -> str:
-    byte_input = seek_and_read(binary_io=binary_io, pos=pos + 107, amount=16)
+def get_ip(io: typing.BinaryIO, pos: int) -> str:
+    byte_input = seek_and_read(io=io, pos=pos + 107, amount=16)
     without_space = strip_space(byte_input=byte_input)
     return without_space.decode(encoding="utf-8")
 
 
 def target_bytes(filename: str, offsets: list[int]) -> None:
-    with open(filename, "rb") as binary_io:
-        all_ips = [get_ip(binary_io=binary_io, pos=pos) for pos in offsets]
+    with open(filename, "rb") as io:
+        all_ips = [get_ip(io=io, pos=pos) for pos in offsets]
 
     print(all_ips[:5])
 
