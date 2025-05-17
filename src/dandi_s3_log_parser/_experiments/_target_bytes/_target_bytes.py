@@ -22,7 +22,7 @@ def strip_space(byte_input: bytes) -> bytes:
 
 def get_ip(io: typing.BinaryIO, pos: int) -> str:
     first_character = byte_input = seek_and_read(io=io, pos=pos + 107, amount=1)
-    if first_character == DASH_BYTE:
+    if first_character[0] == DASH_BYTE:
         return first_character
 
     byte_input = seek_and_read(io=io, pos=pos + 107, amount=16)
