@@ -1,5 +1,8 @@
 import typing
 
+DASH = "-"
+SPACE = " "
+
 
 def seek_and_read(io: typing.TextIO, pos: int, amount: int) -> str:
     """
@@ -10,8 +13,12 @@ def seek_and_read(io: typing.TextIO, pos: int, amount: int) -> str:
 
 
 def get_ip(io: typing.TextIO, pos: int) -> str:
+    first_character = seek_and_read(io=io, pos=pos + 107, amount=1)
+    if first_character == DASH:
+        return first_character
+
     str_input = seek_and_read(io=io, pos=pos + 107, amount=16)
-    without_space = str_input.split(" ")[0]
+    without_space = str_input.split(SPACE)[0]
     return without_space
 
 
