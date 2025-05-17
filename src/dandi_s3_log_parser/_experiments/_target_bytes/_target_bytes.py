@@ -21,13 +21,16 @@ def strip_space(byte_input: bytes) -> bytes:
 
 
 def get_ip(io: typing.BinaryIO, pos: int) -> str:
-    first_character = byte_input = seek_and_read(io=io, pos=pos + 107, amount=1)
-    if first_character[0] == DASH_BYTE:
-        return first_character
+    try:
+        first_character = byte_input = seek_and_read(io=io, pos=pos + 107, amount=1)
+        if first_character[0] == DASH_BYTE:
+            return first_character
 
-    byte_input = seek_and_read(io=io, pos=pos + 107, amount=16)
-    without_space = strip_space(byte_input=byte_input)
-    return without_space.decode(encoding="utf-8")
+        byte_input = seek_and_read(io=io, pos=pos + 107, amount=16)
+        without_space = strip_space(byte_input=byte_input)
+        return without_space.decode(encoding="utf-8")
+    except:
+        print(f"{first_character=}, {byte_input=}, {pos=}")
 
 
 def target_bytes(filename: str, offsets: list[int]) -> None:
@@ -42,7 +45,7 @@ if __name__ == "__main__":
     #   | awk 'BEGIN {s=0} {s+=$1; print s}' > /mnt/backup/dandi/dandiarchive-logs-cody/test/test_ranges.txt
     range_file = "/mnt/backup/dandi/dandiarchive-logs-cody/test/test_ranges.txt"
     with open(range_file, "r") as io:
-        offsets = [int(line.strip()) for line in io.readlines()]
+        offsets = [int(line.strip()) for line in io.readlines()[:-2]]
 
     filename = "/mnt/backup/dandi/dandiarchive-logs/2021/10/04.log"
     target_bytes(filename=filename, offsets=offsets)
