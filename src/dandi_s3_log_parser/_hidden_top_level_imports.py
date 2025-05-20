@@ -4,4 +4,8 @@ Including these directly within the top-level `__init__.py` makes them visible t
 But we only want the imports to trigger, not for them to actually be exposed.
 """
 
+from .encryption import get_key
+from .extraction import S3LogAccessExtractor
+from .validation import BaseValidator
+
 _hide = True
