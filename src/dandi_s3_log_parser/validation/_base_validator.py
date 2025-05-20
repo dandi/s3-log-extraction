@@ -22,11 +22,8 @@ class BaseValidator(abc.ABC):
         if not self.validator_record_file.exists():
             return
 
-        with open(file=self.validator_record_file, mode="r") as file_stream:
-            record_lines = file_stream.readlines()
-
-        for line in record_lines:
-            self.record[line] = True
+        with self.validator_record_file.open(mode="r") as file_stream:
+            self.record = {line: True for line in file_stream.readlines()}
 
     @abc.abstractmethod
     def _run_validation(self, file_path: pathlib.Path) -> None:
@@ -48,7 +45,7 @@ class BaseValidator(abc.ABC):
 
     def _record_success(self, file_path: pathlib.Path) -> None:
         """To avoid needlessly rerunning the validation process, we record the file path in a cache file."""
-        with open(file=self.validator_record_file, mode="a") as file_stream:
+        with self.validator_record_file.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
 
     def validate_file(self, file_path: str | pathlib.Path) -> None:
