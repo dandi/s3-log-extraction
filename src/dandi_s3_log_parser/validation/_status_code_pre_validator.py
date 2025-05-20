@@ -2,7 +2,8 @@ import pathlib
 import subprocess
 
 from ._base_validator import BaseValidator
-from .._regex import DROGON_IP_REGEX
+from .._regex import DROGON_IP_REGEX_ENCRYPTED
+from ..encryption import decrypt_bytes
 
 
 class StatusCodePreValidator(BaseValidator):
@@ -20,6 +21,8 @@ class StatusCodePreValidator(BaseValidator):
     # TODO: parallelize
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
+        DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+
         awk_script = (
             "awk - F'\"' '{"
             'split($1, pre_uri_fields, " ");'
