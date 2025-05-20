@@ -42,3 +42,6 @@ __all__ = [
     "bin_all_reduced_s3_logs_by_object_key",
     "update_region_codes_to_coordinates",
 ]
+
+# Trigger import of hidden submodule elements (only need to import one item to trigger the rest)
+from ._hidden_top_level_imports import _hide
