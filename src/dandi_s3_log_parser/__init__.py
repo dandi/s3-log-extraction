@@ -17,7 +17,6 @@ The reduced information is then additionally mapped to currently available asset
 versions and current drafts, which only comprise around 100 MB of the original data.
 """
 
-from .config import DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH
 from ._s3_log_file_reducer import reduce_raw_s3_log
 from ._buffered_text_reader import BufferedTextReader
 from ._dandi_s3_log_file_reducer import reduce_all_dandi_raw_s3_logs
@@ -30,7 +29,6 @@ from ._generate_archive_totals import generate_archive_totals
 from ._update_region_codes_to_coordinates import update_region_codes_to_coordinates
 
 __all__ = [
-    "DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH",
     "reduce_raw_s3_log",
     "BufferedTextReader",
     "reduce_all_dandi_raw_s3_logs",
@@ -41,6 +39,12 @@ __all__ = [
     "map_binned_s3_logs_to_dandisets",
     "bin_all_reduced_s3_logs_by_object_key",
     "update_region_codes_to_coordinates",
+    # Public submodules
+    "config",
+    "encryption",
+    "extraction",
+    "testing",
+    "validation",
 ]
 
 # Trigger import of hidden submodule elements (only need to import one item to trigger the rest)
