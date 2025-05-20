@@ -19,17 +19,19 @@ class StatusCodePreValidator(BaseValidator):
     tqdm_description = "Pre-validating status codes: "
 
     # TODO: parallelize
+    def __init__(self):
+        super().__init__()
+
+        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
-        DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
-
         awk_script = (
             "awk - F'\"' '{"
             'split($1, pre_uri_fields, " ");'
             ""
             # Pre-URI fields like this should be unaffected
             "ip = pre_uri_fields[5];"
-            f"is_ip_drogon = ip ~ / {DROGON_IP_REGEX} /"
+            f"is_ip_drogon = ip ~ / {self.DROGON_IP_REGEX} /"
             "if (is_ip_drogon) {next}"
             ""
             "request_type = pre_uri_fields[8];"
