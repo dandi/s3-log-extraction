@@ -60,10 +60,10 @@ class BaseValidator(abc.ABC):
         file_path : path-like
             The file path to validate.
         """
+        file_path = pathlib.Path(file_path)
         absolute_path = str(file_path.absolute())
         if self.record.get(absolute_path, False) is False:
             return
-        file_path = pathlib.Path(file_path)
 
         self._run_validation(file_path=file_path)
 
