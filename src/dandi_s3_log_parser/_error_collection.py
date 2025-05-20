@@ -1,7 +1,7 @@
 import datetime
 import importlib.metadata
 
-from ._config import DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH
+from .config import DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH
 
 
 def _collect_error(message: str, error_type: str, task_id: str | None = None) -> None:

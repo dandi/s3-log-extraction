@@ -3,7 +3,7 @@ import pathlib
 import shutil
 import subprocess
 
-from dandi_s3_log_parser.config._config import get_cache_directory
+from ..config import get_cache_directory
 
 
 class S3LogAccessExtractor:

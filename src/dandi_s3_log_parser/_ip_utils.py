@@ -11,12 +11,12 @@ import ipinfo
 import requests
 import yaml
 
-from ._config import (
+from ._error_collection import _collect_error
+from ._globals import _KNOWN_SERVICES
+from .config._globals import (
     _IP_HASH_NOT_IN_SERVICES_FILE_PATH,
     _IP_HASH_TO_REGION_FILE_PATH,
 )
-from ._error_collection import _collect_error
-from ._globals import _KNOWN_SERVICES
 
 
 def get_region_from_ip_address(

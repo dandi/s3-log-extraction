@@ -10,7 +10,7 @@ import tqdm
 from pydantic import DirectoryPath, FilePath, validate_call
 
 from .._buffered_text_reader import BufferedTextReader
-from .._config import REQUEST_TYPES
+from ..config import REQUEST_TYPES
 
 
 def find_random_example_line(

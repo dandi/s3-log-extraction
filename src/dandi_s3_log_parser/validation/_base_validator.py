@@ -2,7 +2,7 @@ import abc
 import hashlib
 import pathlib
 
-from dandi_s3_log_parser.config._config import get_validation_directory
+from ..config import get_validation_directory
 
 
 class BaseValidator:
