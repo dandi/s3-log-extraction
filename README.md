@@ -21,13 +21,6 @@ Developed for the [DANDI Archive](https://dandiarchive.org/).
 
 Read more about [S3 logging on AWS](https://web.archive.org/web/20240807191829/https://docs.aws.amazon.com/AmazonS3/latest/userguide/LogFormat.html).
 
-A few summary facts as of 2024:
-
-- A single line of a raw S3 log file can be between 400-1000+ bytes.
-- Some of the busiest daily logs on the archive can have around 5,014,386 lines.
-- There are more than 6 TB of log files collected in total.
-- This parser reduces that total to less than 25 GB of final essential information on NWB assets (Zarr size TBD).
-
 
 
 ## Installation
@@ -218,3 +211,12 @@ update_region_codes_to_coordinates --mapped_s3_logs_folder_path < mapped Dandise
 ## Submit line decoding errors
 
 Please email line decoding errors collected from your local config file (located in `~/.dandi_s3_log_parser/errors`) to the core maintainer before raising issues or submitting PRs contributing them as examples, to more easily correct any aspects that might require anonymization.
+
+
+## Notes
+
+Throughout the codebase, various processes are referred to in the following ways:
+
+- parallelized: The process can be run in parallel across multiple workers, which increases throughput.
+- interruptible: The process can be safely interrupted (`ctrl+C` or `pkill`) with only a very low chance of causing corruption. For parallelized interruption you may have to either `pkill` the main dispatch process or spam `ctrl+C` multiple times.
+- resumable: The process can be resumed from the last checkpoint without losing any progress. It can also be run fresh at different times, such as on a CRON cycle, and it will only interact with unprocessed data.

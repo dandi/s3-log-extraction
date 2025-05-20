@@ -8,7 +8,14 @@ from .._regex import DROGON_IP_REGEX
 class StatusCodePreValidator(BaseValidator):
     """
     This is an independent pre-check that ensures our fast extraction heuristic does not miss unintended lines.
+
+    This validator is:
+      - not parallelized (planned).
+      - interruptible
+      - resumable
     """
+
+    # TODO: parallelize
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
         awk_script = (
