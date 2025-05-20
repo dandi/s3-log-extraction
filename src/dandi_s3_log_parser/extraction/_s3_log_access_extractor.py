@@ -1,8 +1,10 @@
 import os
+import pathlib
 import shutil
 import subprocess
 
 from dandi_s3_log_parser.config._config import get_cache_directory
+
 
 class S3LogAccessExtractor:
     def __init__(self, log_directory: str | pathlib.Path) -> None:
@@ -32,7 +34,7 @@ class S3LogAccessExtractor:
 
         self.cache_directory = get_cache_directory()
 
-        self.extraction_directory = cache_directory / "extraction"
+        self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.blobs_directory = self.extraction_directory / "blobs"
         self.blobs_directory.mkdir(exist_ok=True)
@@ -40,7 +42,7 @@ class S3LogAccessExtractor:
         self.zarr_directory.mkdir(exist_ok=True)
 
         # TODO: might have to be done inside subfunction used by other parallel processes
-        self.temporary_directory = cache_directory / "tmp" / os.getgid()
+        self.temporary_directory = self.cache_directory / "tmp" / os.getgid()
         self.temporary_directory.parent.mkdir(exist_ok=True)
         self.temporary_directory.mkdir(exist_ok=True)
 
@@ -60,21 +62,21 @@ class S3LogAccessExtractor:
             "awk -F'\" '{"
             '    split($1, pre_uri_fields, " ");'
             '    split($3, post_uri_fields, " ");'
-            ''
-            '    timestamp = pre_uri_fields[3];'
-            '    ip = pre_uri_fields[5];'
-            '    request_type = pre_uri_fields[8];'
-            '    object_key = pre_uri_fields[9];'
-            '    status = post_uri_fields[1];'
-            '    bytes_sent = post_uri_fields[3];'
-            ''
+            ""
+            "    timestamp = pre_uri_fields[3];"
+            "    ip = pre_uri_fields[5];"
+            "    request_type = pre_uri_fields[8];"
+            "    object_key = pre_uri_fields[9];"
+            "    status = post_uri_fields[1];"
+            "    bytes_sent = post_uri_fields[3];"
+            ""
             '    if (request_type == "REST.GET.OBJECT" & substr(status, 1, 1) == "2") {'
             f'       print timestamp > "{self.timestamp_file_path}";'
             f'       print ip > "{self.ip_file_path}";'
             f'       print object_key > "{self.object_key_file_path}";'
             f'       print bytes_sent > "{self.bytes_file_path}";'
-            '    }'
-            f"}} {log_file_path}"
+            "    }"
+            # f"}} {log_file_path}"
         )
 
     def extract(self) -> None:
@@ -104,18 +106,18 @@ class S3LogAccessExtractor:
             raise RuntimeError(message)
 
         # This part not parallelized
-        with open(file=self.timestamp_file_path, mode="r") as file_stream:
-            timestamps = file_stream.readlines()
-        with open(file=self.ip_file_path, mode="r") as file_stream:
-            ips = file_stream.readlines()
-        with open(file=self.object_key_file_path, mode="rb") as file_stream:
-            object_keys = [self._sanitize_object_key(object_key=object_key) for object_key in file_stream.readlines()]
-        with open(file=self.bytes_file_path, mode="r") as file_stream:
-            bytes_sent = file_stream.readlines()
+        # with open(file=self.timestamp_file_path, mode="r") as file_stream:
+        #     timestamps = file_stream.readlines()
+        # with open(file=self.ip_file_path, mode="r") as file_stream:
+        #     ips = file_stream.readlines()
+        # with open(file=self.object_key_file_path, mode="rb") as file_stream:
+        #     object_keys = [self._sanitize_object_key(object_key=object_key) for object_key in file_stream.readlines()]
+        # with open(file=self.bytes_file_path, mode="r") as file_stream:
+        #     bytes_sent = file_stream.readlines()
 
-        unique_object_keys = set(object_keys) - {""}
-        for object_key in unique_object_keys:
-            extraction_file_path
+        # unique_object_keys = set(object_keys) - {""}
+        # for object_key in unique_object_keys:
+        #     extraction_file_path
 
         record_file_path.touch()
         shutil.rmtree(self.temporary_directory)

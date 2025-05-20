@@ -1,8 +1,9 @@
+import base64
+import hashlib
 import os
 
 import cryptography.fernet
-import base64
-import hashlib
+
 
 def get_key() -> bytes:
     """Parse the full byte key for the given password."""
@@ -11,11 +12,12 @@ def get_key() -> bytes:
         message = "Environment variable `S3_LOG_EXTRACTION_PASSWORD` is not set - unable to run encryption tools."
         raise EnvironmentError(message)
 
-    password_bytes = password.encode(encoding='utf-8')
+    password_bytes = password.encode(encoding="utf-8")
     hexcode = hashlib.sha256(password_bytes).digest()
 
     key = base64.urlsafe_b64encode(hexcode)
     return key
+
 
 def encrypt_bytes(data: bytes) -> bytes:
     key = get_key()

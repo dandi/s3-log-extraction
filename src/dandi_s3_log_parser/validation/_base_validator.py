@@ -1,10 +1,13 @@
 import abc
 import hashlib
+import pathlib
 
 from dandi_s3_log_parser.config._config import get_validation_directory
 
+
 class BaseValidator:
     """Base class for all log validators."""
+
     def __init__(self) -> None:
         self.validation_directory = get_validation_directory()
 

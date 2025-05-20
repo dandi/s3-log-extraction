@@ -2,17 +2,10 @@ import json
 import pathlib
 import typing
 
-DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH = pathlib.Path.home() / ".s3-log-extractor"
-DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH.mkdir(exist_ok=True)
+from ._globals import DANDI_S3_LOG_PARSER_CONFIG_FILE_PATH
 
-DEFAULT_CACHE_DIRECTORY = pathlib.Path.home() / ".s3-log-extractor-cache"
 
-_IP_HASH_TO_REGION_FILE_PATH = DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "ip-hash-to-region.yaml"
-_IP_HASH_NOT_IN_SERVICES_FILE_PATH = DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "ip-hash-not-in-services.yaml"
-
-DANDI_S3_LOG_PARSER_CONFIG_FILE_PATH = DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "config.yaml"
-
-def save_config(config: Dict[str, typing.Any]) -> None:
+def save_config(config: dict[str, typing.Any]) -> None:
     """
     Save the configuration for the DANDI S3 log parser.
 
@@ -28,7 +21,8 @@ def save_config(config: Dict[str, typing.Any]) -> None:
     with open(file=DANDI_S3_LOG_PARSER_CONFIG_FILE_PATH, mode="w") as file_stream:
         json.dump(obj=config, fp=file_stream)
 
-def get_config() -> Dict[str, typing.Any]:
+
+def get_config() -> dict[str, typing.Any]:
     """
     Get the configuration for the DANDI S3 log parser.
 
@@ -47,6 +41,7 @@ def get_config() -> Dict[str, typing.Any]:
 
     return config
 
+
 def set_cache_directory(directory: str | pathlib.Path) -> None:
     cache_directory = pathlib.Path(directory)
     cache_directory.mkdir(exist_ok=True)
@@ -54,6 +49,7 @@ def set_cache_directory(directory: str | pathlib.Path) -> None:
     config = get_config()
     config["cache_directory"] = str(directory)
     save_config(config=config)
+
 
 def get_cache_directory() -> pathlib.Path:
     """
@@ -87,4 +83,4 @@ def get_validation_directory() -> pathlib.Path:
     validation_directory = cache_directory / "validation_records"
     validation_directory.mkdir(exist_ok=True)
 
-    return directory
+    return validation_directory
