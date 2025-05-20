@@ -15,6 +15,8 @@ class StatusCodePreValidator(BaseValidator):
       - resumable
     """
 
+    tqdm_description = "Pre-validating status codes: "
+
     # TODO: parallelize
 
     def _run_validation(self, file_path: pathlib.Path) -> None:

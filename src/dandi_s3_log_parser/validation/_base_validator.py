@@ -2,11 +2,15 @@ import abc
 import hashlib
 import pathlib
 
+import tqdm
+
 from ..config import get_validation_directory
 
 
 class BaseValidator(abc.ABC):
     """Base class for all log validators."""
+
+    tqdm_description = "Validating log files: "
 
     def __init__(self) -> None:
         self.validation_directory = get_validation_directory()
@@ -85,5 +89,7 @@ class BaseValidator(abc.ABC):
         unvalidated_files = all_log_files - set(self.record.keys())
 
         files_to_validate = list(unvalidated_files)[:limit] if limit is not None else unvalidated_files
-        for file_path in files_to_validate:
+        for file_path in tqdm.tqdm(
+            iterable=files_to_validate, desc=self.tqdm_description, total=len(files_to_validate), unit="files"
+        ):
             self.validate_file(file_path=file_path)
