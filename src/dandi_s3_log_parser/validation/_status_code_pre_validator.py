@@ -11,9 +11,9 @@ class StatusCodePreValidator(BaseValidator):
     This is an independent pre-check that ensures our fast extraction heuristic does not miss unintended lines.
 
     This validator is:
-      - not parallelized (planned).
-      - interruptible
-      - resumable
+      - is not parallelized
+      - is interruptible
+      - is resumable
     """
 
     tqdm_description = "Pre-validating status codes: "
