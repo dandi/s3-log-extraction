@@ -1,4 +1,4 @@
-from ._s3_access_log_extractor import S3AccessLogExtractor
+from ._s3_log_access_extractor import S3LogAccessExtractor
 
 __all__ = [
     "S3LogAccessExtractor",
