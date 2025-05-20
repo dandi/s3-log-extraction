@@ -28,6 +28,7 @@ dependencies = [
     "natsort",
     "dandi",
     "scipy",
+    "cryptography",
 ]
 classifiers = [
     "Programming Language :: Python",
