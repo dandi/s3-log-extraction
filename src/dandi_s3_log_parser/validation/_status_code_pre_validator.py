@@ -30,8 +30,10 @@ class StatusCodePreValidator(BaseValidator):
         absolute_script_path = str(relative_script_path.absolute())
         log_file_path = str(file_path.absolute())
 
+        awk_command = f"awk --file {absolute_script_path} {log_file_path}"
+        print(awk_command)
         result = subprocess.run(
-            args=["awk", "--file", absolute_script_path, log_file_path],
+            args=awk_command,
             shell=True,
             capture_output=True,
             text=True,
