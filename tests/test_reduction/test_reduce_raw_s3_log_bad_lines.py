@@ -10,7 +10,7 @@ def test_reduce_raw_s3_log_example_bad_lines_fast_case(tmpdir: py.path.local) ->
     tmpdir = pathlib.Path(tmpdir)
 
     # Count initial error folder contents
-    error_folder = dandi_s3_log_parser.DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "errors"
+    error_folder = dandi_s3_log_parser.config.DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "errors"
     error_folder_contents = list(error_folder.iterdir()) if error_folder.exists() else list()
     initial_number_of_error_folder_contents = len(error_folder_contents)
 
@@ -48,7 +48,7 @@ def test_reduce_raw_s3_log_example_bad_lines_basic_case(tmpdir: py.path.local) -
     tmpdir = pathlib.Path(tmpdir)
 
     # Count initial error folder contents
-    error_folder = dandi_s3_log_parser.DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "errors"
+    error_folder = dandi_s3_log_parser.config.DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH / "errors"
     error_folder_contents = list(error_folder.iterdir()) if error_folder.exists() else list()
     initial_number_of_error_folder_contents = len(error_folder_contents)
 
