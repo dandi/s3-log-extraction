@@ -1,8 +1,10 @@
-#!/usr/bin/awk -f
-
-BEGIN { FS = '"' }
+BEGIN { FS = "\"" }
 
 {
+    if (!("DROGON_IP_REGEX" in ENVIRON)) {
+        print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
+        exit 1
+    }
     drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
 
     split($1, pre_uri_fields, " ");
@@ -10,7 +12,7 @@ BEGIN { FS = '"' }
     # Pre-URI fields like this should be unaffected
     ip = pre_uri_fields[5];
 
-    if (ip ~ / drogon_ip_regex /) {next}
+    if (ip ~ drogon_ip_regex) {next}
 
     request_type = pre_uri_fields[8];
     if (request_type != "REST.GET.OBJECT") {next}
