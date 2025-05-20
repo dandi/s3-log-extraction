@@ -1,4 +1,6 @@
 {
+    drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
+
     split($1, pre_uri_fields, " ");
 
     # Pre-URI fields like this should be unaffected

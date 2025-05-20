@@ -83,10 +83,11 @@ class StatusCodePreValidator(BaseValidator):
         awk_script_path = str(pathlib.Path(__file__).absolute())
         log_file_path = str(file_path.absolute())
         result = subprocess.run(
-            args=["awk", "-v", f"drogon_ip_regex={self.DROGON_IP_REGEX}", "-f", awk_script_path, log_file_path],
+            args=["awk", "-f", awk_script_path, log_file_path],
             shell=True,
             capture_output=True,
             text=True,
+            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX},
         )
         if result.returncode != 0:
             message = (
