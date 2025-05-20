@@ -1,3 +1,7 @@
+#!/usr/bin/awk -f
+
+BEGIN { FS = '"' }
+
 {
     drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
 
