@@ -17,7 +17,7 @@ The reduced information is then additionally mapped to currently available asset
 versions and current drafts, which only comprise around 100 MB of the original data.
 """
 
-from ._config import DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH
+from .config import DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH
 from ._s3_log_file_reducer import reduce_raw_s3_log
 from ._buffered_text_reader import BufferedTextReader
 from ._dandi_s3_log_file_reducer import reduce_all_dandi_raw_s3_logs
@@ -28,7 +28,7 @@ from ._generate_all_dandiset_totals import generate_all_dandiset_totals
 from ._generate_archive_summaries import generate_archive_summaries
 from ._generate_archive_totals import generate_archive_totals
 from ._update_region_codes_to_coordinates import update_region_codes_to_coordinates
-from ._extraction import S3AccessLogExtractor
+from .extraction import S3AccessLogExtractor
 
 __all__ = [
     "DANDI_S3_LOG_PARSER_BASE_FOLDER_PATH",
