@@ -86,6 +86,7 @@ class StatusCodePreValidator(BaseValidator):
             args=["awk", "-v", f"drogon_ip_regex={self.DROGON_IP_REGEX}", "-f", awk_script_path, log_file_path],
             shell=True,
             capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             message = (
