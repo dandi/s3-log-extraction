@@ -5,7 +5,7 @@ import pathlib
 from ..config import get_validation_directory
 
 
-class BaseValidator:
+class BaseValidator(abc.ABC):
     """Base class for all log validators."""
 
     def __init__(self) -> None:
