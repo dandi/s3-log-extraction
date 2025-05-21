@@ -34,7 +34,7 @@ BEGIN { FS = "\"" }
     }
     if (status_from_direct_rule !~ status_ip_regex) {
         print "Error with direct status code detection - line #" NR " of " FILENAME > "/dev/stderr"
-        print "Direct: " status_from_direct_rule > "/dev/stderr"
+        print "Direct: \"" status_from_direct_rule "\" (" typeof(status_from_direct_rule) ")" > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1
     }
