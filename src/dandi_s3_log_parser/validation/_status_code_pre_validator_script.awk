@@ -6,15 +6,16 @@ BEGIN { FS = "\"" }
         exit 1
     }
     drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
+    status_ip_regex = /^[1-5][0-9]{2}$/
 
-    split($1, pre_uri_fields, " ");
+    split($1, pre_uri_fields, " ")
 
     # Pre-URI fields like this should be unaffected
-    ip = pre_uri_fields[5];
+    ip = pre_uri_fields[5]
 
     if (ip ~ drogon_ip_regex) {next}
 
-    request_type = pre_uri_fields[8];
+    request_type = pre_uri_fields[8]
     if (request_type != "REST.GET.OBJECT") {next}
 
     # Use special rule to try to get reliable status, even in extreme cases
@@ -31,7 +32,7 @@ BEGIN { FS = "\"" }
         print $0 > "/dev/stderr"
         exit 1
     }
-    if (status_from_direct_rule !~ /^[1-5][0-9]{2}$/) {
+    if (status_from_direct_rule !~ status_ip_regex) {
         print "Error with direct status code detection - line #" NR " of " FILENAME > "/dev/stderr"
         print "Direct: " status_from_direct_rule > "/dev/stderr"
         print $0 > "/dev/stderr"
@@ -39,8 +40,16 @@ BEGIN { FS = "\"" }
     }
 
     # Post-URI fields are more likely to be affected
-    split($3, post_uri_fields, " ");
-    status_from_extraction_rule = post_uri_fields[1];
+    split($3, post_uri_fields, " ")
+    status_from_extraction_rule = post_uri_fields[1]
+
+    # Known issue: there can be some Heroku requests that include quotes around things like the filename in the URI
+    # Heuristic: just proceed to next level of top (quote) split and hopefully that resolves
+    if (status_from_extraction_rule !~ /^[1-5][0-9]{2}$/) {
+        split($4, post_uri_fields, " ")
+        status_from_extraction_rule = post_uri_fields[1]
+    }
+
     if (status_from_extraction_rule !~ /^[1-5][0-9]{2}$/ && substr(status_from_direct_rule,1,1) == "2") {
         print "A directly detected success status code was discovered while the extraction rule failed to detect at all - line #" NR " of " FILENAME > "/dev/stderr"
         print "Extraction: " status_from_extraction_rule > "/dev/stderr"

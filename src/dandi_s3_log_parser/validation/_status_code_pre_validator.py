@@ -12,7 +12,7 @@ class StatusCodePreValidator(BaseValidator):
     This is an independent pre-check that ensures our fast extraction heuristic does not miss unintended lines.
 
     This validator is:
-      - is not parallelized
+      - is not parallelized, but could be
       - is interruptible
       - is resumable
     """
