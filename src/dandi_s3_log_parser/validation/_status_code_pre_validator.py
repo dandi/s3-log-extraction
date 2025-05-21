@@ -1,3 +1,4 @@
+import hashlib
 import pathlib
 import subprocess
 
@@ -18,16 +19,24 @@ class StatusCodePreValidator(BaseValidator):
 
     tqdm_description = "Pre-validating status codes: "
 
+    def _get_code_checksum(self) -> str:
+        with self._relative_script_path.open("rb") as file_stream:
+            byte_content = file_stream.read()
+
+        validation_rule_checksum = hashlib.sha1(string=byte_content).hexdigest()
+        return validation_rule_checksum
+
     # TODO: parallelize
     def __init__(self):
+        self._relative_script_path = pathlib.Path(__file__).parent / "_status_code_pre_validator_script.awk"
+
         super().__init__()
 
         self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
         # TODO: will this hold after bundling?
-        relative_script_path = pathlib.Path(__file__).parent / "_status_code_pre_validator_script.awk"
-        absolute_script_path = str(relative_script_path.absolute())
+        absolute_script_path = str(self._relative_script_path.absolute())
         log_file_path = str(file_path.absolute())
 
         awk_command = f"awk --file {absolute_script_path} {log_file_path}"

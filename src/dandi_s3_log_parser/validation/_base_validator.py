@@ -12,10 +12,14 @@ class BaseValidator(abc.ABC):
 
     tqdm_description = "Validating log files: "
 
+    def _get_code_checksum(self) -> str:
+        validation_rule_checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
+        return validation_rule_checksum
+
     def __init__(self) -> None:
         self.validation_directory = get_validation_directory()
 
-        validation_rule_checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
+        validation_rule_checksum = self._get_code_checksum()
         self.validator_record_file = self.validation_directory / f"{validation_rule_checksum}.txt"
 
         self.record = {}
