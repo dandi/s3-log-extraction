@@ -12,9 +12,9 @@ class StatusCodePreValidator(BaseValidator):
     This is an independent pre-check that ensures our fast extraction heuristic does not miss unintended lines.
 
     This validator is:
-      - is not parallelized, but could be
-      - is interruptible
-      - is resumable
+      - not parallelized, but could be
+      - interruptible
+      - resumable
     """
 
     tqdm_description = "Pre-validating status codes: "
@@ -28,6 +28,7 @@ class StatusCodePreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
+        # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_status_code_pre_validator_script.awk"
 
         super().__init__()
@@ -35,7 +36,6 @@ class StatusCodePreValidator(BaseValidator):
         self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
-        # TODO: will this hold after bundling?
         absolute_script_path = str(self._relative_script_path.absolute())
         log_file_path = str(file_path.absolute())
 
@@ -50,7 +50,7 @@ class StatusCodePreValidator(BaseValidator):
         if result.returncode != 0:
             message = (
                 f"\nStatus code pre-check failed.\n "
-                f"Log file: {file_path}\n"
+                f"Log file: {log_file_path}\n"
                 f"Error code {result.returncode}\n\n"
                 f"stderr: {result.stderr}\n"
             )
