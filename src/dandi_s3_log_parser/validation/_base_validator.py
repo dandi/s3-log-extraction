@@ -10,7 +10,7 @@ from ..config import get_validation_directory
 class BaseValidator(abc.ABC):
     """Base class for all log validators."""
 
-    tqdm_description = "Validating log files: "
+    tqdm_description = "Validating log files"
 
     def __hash__(self) -> int:
         checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
