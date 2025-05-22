@@ -20,7 +20,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
     tqdm_description = "Pre-validating extraction heuristic:"
 
     def __hash__(self) -> int:
-        with self._relative_script_path.open("rb") as file_stream:
+        with self._relative_awk_script_path.open("rb") as file_stream:
             byte_content = file_stream.read()
 
         checksum = hashlib.sha1(string=byte_content).hexdigest()
