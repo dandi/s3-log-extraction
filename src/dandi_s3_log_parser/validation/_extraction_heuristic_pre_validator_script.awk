@@ -8,7 +8,7 @@ BEGIN { FS = "HTTP/" }
 
     # Check if "HTTP/" occurs more than once
     http_count = gsub(/HTTP\//, "&")
-    if (http_count != 1) {
+    if (http_count > 1) {
         print "Error: 'HTTP/' occurs " http_count " times - line #" NR " of " FILENAME > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1
