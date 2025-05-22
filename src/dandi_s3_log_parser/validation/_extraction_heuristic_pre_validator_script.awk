@@ -1,4 +1,4 @@
-BEGIN { FS = "\"" }
+BEGIN { FS = "HTTP/" }
 
 {
     if (!("DROGON_IP_REGEX" in ENVIRON)) {
@@ -12,13 +12,12 @@ BEGIN { FS = "\"" }
 
     # Pre-URI fields like this should be unaffected
     ip = pre_uri_fields[5]
-
     if (ip ~ drogon_ip_regex) {next}
 
     request_type = pre_uri_fields[8]
     if (request_type != "REST.GET.OBJECT") {next}
 
-    # Use special rule to try to get reliable status, even in extreme cases
+    # Use stronge validation rule to try to get reliable status, even in extreme cases
     if ($0 ~ /HTTP\/1\.1/) {
         split($0, direct_http_split, "HTTP/1.1")
         split(direct_http_split[2], direct_http_space_split, " ")
@@ -39,21 +38,9 @@ BEGIN { FS = "\"" }
         exit 1
     }
 
-    # Post-URI fields are more likely to be affected
-    split($0, http_split, "HTTP/")
-    print http_split[1]
-    print http_split[2]
+    # Post-URI fields are more likely to be affected by failures of the heuristic
     split(http_split[1], post_uri_fields, " ")
-    print post_uri_fields[1]
-    print post_uri_fields[2]
-    status_from_heuristic = post_uri_fields[1]
-
-    # Known issue: there can be some Heroku requests that include quotes around things like the filename in the URI
-    # Heuristic: just proceed to next level of top (quote) split and hopefully that resolves
-    if (status_from_heuristic !~ status_ip_regex) {
-        split($4, post_uri_fields, " ")
-        status_from_heuristic = post_uri_fields[1]
-    }
+    status_from_heuristic = post_uri_fields[2]
 
     if (status_from_heuristic !~ status_ip_regex && substr(status_from_direct_rule,1,1) == "2") {
         print "A directly detected success status code was discovered while the extraction rule failed to detect at all - line #" NR " of " FILENAME > "/dev/stderr"
