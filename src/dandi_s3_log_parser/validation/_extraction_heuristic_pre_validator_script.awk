@@ -40,26 +40,31 @@ BEGIN { FS = "\"" }
     }
 
     # Post-URI fields are more likely to be affected
-    split($3, post_uri_fields, " ")
-    status_from_extraction_rule = post_uri_fields[1]
+    split($0, http_split, "HTTP/")
+    print http_split[1]
+    print http_split[2]
+    split(http_split[1], post_uri_fields, " ")
+    print post_uri_fields[1]
+    print post_uri_fields[2]
+    status_from_heuristic = post_uri_fields[1]
 
     # Known issue: there can be some Heroku requests that include quotes around things like the filename in the URI
     # Heuristic: just proceed to next level of top (quote) split and hopefully that resolves
-    if (status_from_extraction_rule !~ /^[1-5][0-9]{2}$/) {
+    if (status_from_heuristic !~ status_ip_regex) {
         split($4, post_uri_fields, " ")
-        status_from_extraction_rule = post_uri_fields[1]
+        status_from_heuristic = post_uri_fields[1]
     }
 
-    if (status_from_extraction_rule !~ /^[1-5][0-9]{2}$/ && substr(status_from_direct_rule,1,1) == "2") {
+    if (status_from_heuristic !~ status_ip_regex && substr(status_from_direct_rule,1,1) == "2") {
         print "A directly detected success status code was discovered while the extraction rule failed to detect at all - line #" NR " of " FILENAME > "/dev/stderr"
-        print "Extraction: " status_from_extraction_rule > "/dev/stderr"
+        print "Extraction: " status_from_heuristic > "/dev/stderr"
         print "Direct: " status_from_direct_rule > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1
     }
-    if (status_from_extraction_rule != status_from_direct_rule && substr(status_from_direct_rule,1,1) == "2") {
+    if (status_from_heuristic != status_from_direct_rule && substr(status_from_direct_rule,1,1) == "2") {
         print "Both status codes were extracted as valid numbers, the direct extraction was successful, but the two did not match - line #" NR " of " FILENAME > "/dev/stderr"
-        print "Extraction: " status_from_extraction_rule > "/dev/stderr"
+        print "Extraction: " status_from_heuristic > "/dev/stderr"
         print "Direct: " status_from_direct_rule > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1

@@ -30,7 +30,9 @@ class ExtractionHeuristicPreValidator(BaseValidator):
     # TODO: parallelize
     def __init__(self):
         # TODO: does this hold after bundling?
-        self._relative_awk_script_path = pathlib.Path(__file__).parent / "_status_code_pre_validator_script.awk"
+        self._relative_awk_script_path = (
+            pathlib.Path(__file__).parent / "_extraction_heuristic_pre_validator_script.awk"
+        )
 
         super().__init__()
 
