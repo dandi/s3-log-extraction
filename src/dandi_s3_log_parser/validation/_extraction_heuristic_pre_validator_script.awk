@@ -39,7 +39,7 @@ BEGIN { FS = "HTTP/" }
     }
 
     # Post-URI fields are more likely to be affected by failures of the heuristic
-    split(http_split[1], post_uri_fields, " ")
+    split($2, post_uri_fields, " ")
     status_from_heuristic = post_uri_fields[2]
 
     if (status_from_heuristic !~ status_ip_regex && substr(status_from_direct_rule,1,1) == "2") {
