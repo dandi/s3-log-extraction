@@ -1,4 +1,4 @@
-BEGIN { FS = "HTTP/" }
+BEGIN { FS = "HTTP/1." }
 
 {
     if (!("DROGON_IP_REGEX" in ENVIRON)) {
@@ -7,7 +7,7 @@ BEGIN { FS = "HTTP/" }
     }
 
     # Check if "HTTP/" occurs more than once
-    http_count = gsub(/HTTP\//, "&")
+    http_count = gsub(/HTTP\/1./, "&")
     if (http_count > 1) {
         print "Error: 'HTTP/' occurs " http_count " times - line #" NR " of " FILENAME > "/dev/stderr"
         print $0 > "/dev/stderr"
