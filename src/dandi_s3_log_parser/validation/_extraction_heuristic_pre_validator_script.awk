@@ -5,6 +5,8 @@ BEGIN {
         print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
         exit 1
     }
+    drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
+    status_ip_regex = "^[1-5][0-9]{2}$"
 }
 
 {
@@ -18,12 +20,8 @@ BEGIN {
         exit 1
     }
 
-    drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
-    status_ip_regex = "^[1-5][0-9]{2}$"
-
-    split($1, pre_uri_fields, " ")
-
     # Pre-URI fields like this should be unaffected
+    split($1, pre_uri_fields, " ")
     ip = pre_uri_fields[5]
     if (ip ~ drogon_ip_regex) {next}
 
