@@ -1,10 +1,14 @@
-BEGIN { FS = "HTTP/1." }
+BEGIN {
+    FS = "HTTP/1."
 
-{
     if (!("DROGON_IP_REGEX" in ENVIRON)) {
         print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
         exit 1
     }
+}
+
+{
+    if (NF == 0) {next}
 
     # Check if "HTTP/" occurs more than once
     http_count = gsub(/HTTP\/1./, "&")
