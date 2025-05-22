@@ -12,21 +12,23 @@ class BaseValidator(abc.ABC):
 
     tqdm_description = "Validating log files: "
 
-    def _get_code_checksum(self) -> str:
-        validation_rule_checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
-        return validation_rule_checksum
+    def __hash__(self) -> int:
+        checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
+        checksum_int = int(checksum, 16)
+        return checksum_int
 
     def __init__(self) -> None:
         self.validation_directory = get_validation_directory()
 
-        validation_rule_checksum = self._get_code_checksum()
-        self.validator_record_file = self.validation_directory / f"{validation_rule_checksum}.txt"
+        # validation_rule_checksum = self._get_code_checksum()
+        record_file_name = f"{self.__class__.__name__}_{hex(hash(self))}.txt"
+        self.record_file_path = self.validation_directory / record_file_name
 
         self.record = {}
-        if not self.validator_record_file.exists():
+        if not self.record_file_path.exists():
             return
 
-        with self.validator_record_file.open(mode="r") as file_stream:
+        with self.record_file_path.open(mode="r") as file_stream:
             self.record = {line: True for line in file_stream.readlines()}
 
     @abc.abstractmethod
@@ -49,7 +51,7 @@ class BaseValidator(abc.ABC):
 
     def _record_success(self, file_path: pathlib.Path) -> None:
         """To avoid needlessly rerunning the validation process, we record the file path in a cache file."""
-        with self.validator_record_file.open(mode="a") as file_stream:
+        with self.record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
 
     def validate_file(self, file_path: str | pathlib.Path) -> None:
@@ -91,6 +93,10 @@ class BaseValidator(abc.ABC):
 
         files_to_validate = list(unvalidated_files)[:limit] if limit is not None else unvalidated_files
         for file_path in tqdm.tqdm(
-            iterable=files_to_validate, desc=self.tqdm_description, total=len(files_to_validate), unit="files"
+            iterable=files_to_validate,
+            desc=self.tqdm_description,
+            total=len(files_to_validate),
+            unit="file",
+            smoothing=0,
         ):
             self.validate_file(file_path=file_path)
