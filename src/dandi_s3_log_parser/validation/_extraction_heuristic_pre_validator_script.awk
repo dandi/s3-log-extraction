@@ -5,6 +5,15 @@ BEGIN { FS = "HTTP/" }
         print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
         exit 1
     }
+
+    # Check if "HTTP/" occurs more than once
+    http_count = gsub(/HTTP\//, "&")
+    if (http_count != 1) {
+        print "Error: 'HTTP/' occurs " http_count " times - line #" NR " of " FILENAME > "/dev/stderr"
+        print $0 > "/dev/stderr"
+        exit 1
+    }
+
     drogon_ip_regex = ENVIRON["DROGON_IP_REGEX"]
     status_ip_regex = "^[1-5][0-9]{2}$"
 
