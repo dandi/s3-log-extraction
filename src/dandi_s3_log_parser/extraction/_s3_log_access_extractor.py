@@ -45,7 +45,7 @@ class S3LogAccessExtractor:
         self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
         # TODO: does this hold after bundling?
-        self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extractor.awk"
+        self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
 
         self.cache_directory = get_cache_directory()
 
