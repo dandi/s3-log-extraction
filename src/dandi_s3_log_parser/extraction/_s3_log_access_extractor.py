@@ -58,7 +58,7 @@ class S3LogAccessExtractor:
 
         self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
         self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
-        self.bytes_sent_file_path = self.temporary_directory / "bytes.txt"
+        self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
         self.ips_file_path = self.temporary_directory / "ips.txt"
 
         self.record_directory = self.cache_directory / "extraction_records"
