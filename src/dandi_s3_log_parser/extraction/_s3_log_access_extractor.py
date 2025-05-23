@@ -95,25 +95,13 @@ class S3LogAccessExtractor:
             )
             raise RuntimeError(message)
 
-        # with open(file=self.object_keys_file_path, mode="r") as file_stream:
-        #     # object_keys = [
-        #     self._sanitize_object_key(object_key=object_key) for object_key in file_stream.readlines()
-        #     ]
-        #     object_keys = file_stream.readlines()
-        # with open(file=self.timestamps_file_path, mode="r") as file_stream:
-        #     timestamps = [datetime.datetime.strptime(line, "%d/%b/%Y:%H:%M:%S") for line in file_stream.readlines()]
-        # with open(file=self.bytes_sent_file_path, mode="rb") as file_stream:
-        #     all_bytes_sent = [int(line) for line in file_stream.readlines()]
-        # with open(file=self.ips_file_path, mode="rb") as file_stream:
-        #     ips = file_stream.readlines()
-
         object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
         with self.timestamps_file_path.open(mode="r") as file_stream:
             parsed_timestamps = [
                 datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S") for line in file_stream.readlines()
             ]
         timestamps = numpy.array(parsed_timestamps)
-        all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype=int)
+        all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
         ips = numpy.loadtxt(fname=self.ips_file_path, dtype=str)
 
         timestamps_per_object_key = collections.defaultdict(list)
@@ -147,32 +135,6 @@ class S3LogAccessExtractor:
 
         # TODO: re-enable cleanup when done testing
         # shutil.rmtree(self.temporary_directory)
-
-    # TODO: might want to remove; and just mirror whatever object structure happens to have been on the bucket
-    # @staticmethod
-    # def _sanitize_object_key(object_key_bytes: bytes) -> str | None:
-    #     """
-    #     Sanitize the raw bytes for the object key to remove any unwanted parts.
-    #
-    #     Parameters
-    #     ----------
-    #     object_key : bytes
-    #         The object key to be sanitized, in bytes.
-    #
-    #     Returns
-    #     -------
-    #     str or None
-    #         The sanitized object key, decoded as a string.
-    #         Returns None if the object key is neither 'zarr' nor 'blobs'.
-    #     """
-    #     if object_key_bytes[:4] == b"zarr":
-    #         object_key = object_key_bytes[:41].decode("utf-8")
-    #         return object_key
-    #     elif object_key_bytes[:5] == b"blobs":
-    #         object_key = (object_key_bytes[:6] + object_key_bytes[14:]).decode("utf-8")
-    #         return object_key
-    #
-    #     return None
 
     # TODO: shouldn't this be absolute file path (str)?
     def _record_success(self, file_path: pathlib.Path) -> None:
