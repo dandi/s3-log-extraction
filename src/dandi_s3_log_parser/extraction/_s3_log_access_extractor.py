@@ -87,7 +87,6 @@ class S3LogAccessExtractor:
             text=True,
             env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": self.absolute_temporary_directory},
         )
-        print(result.stdout)
         if result.returncode != 0:
             message = (
                 f"\nExtraction failed.\n "
