@@ -20,8 +20,7 @@ class BaseValidator(abc.ABC):
     def __init__(self) -> None:
         self.validation_directory = get_validation_directory()
 
-        # validation_rule_checksum = self._get_code_checksum()
-        record_file_name = f"{self.__class__.__name__}_{hex(hash(self))}.txt"
+        record_file_name = f"{self.__class__.__name__}_{hex(hash(self))[2:]}.txt"
         self.record_file_path = self.validation_directory / record_file_name
 
         self.record = {}
@@ -64,13 +63,13 @@ class BaseValidator(abc.ABC):
             The file path to validate.
         """
         file_path = pathlib.Path(file_path)
-        absolute_path = str(file_path.absolute())
-        if self.record.get(absolute_path, False) is True:
+        absolute_file_path = str(file_path.absolute())
+        if self.record.get(absolute_file_path, False) is True:
             return
 
         self._run_validation(file_path=file_path)
 
-        self.record[absolute_path] = True
+        self.record[absolute_file_path] = True
         self._record_success(file_path=file_path)
 
     def validate_directory(self, directory: str | pathlib.Path, limit: int | None = None) -> None:

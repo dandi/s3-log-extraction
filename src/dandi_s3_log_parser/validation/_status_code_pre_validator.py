@@ -29,14 +29,14 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
+        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
             pathlib.Path(__file__).parent / "_extraction_heuristic_pre_validator_script.awk"
         )
 
         super().__init__()
-
-        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
         absolute_awk_script_path = str(self._relative_awk_script_path.absolute())
