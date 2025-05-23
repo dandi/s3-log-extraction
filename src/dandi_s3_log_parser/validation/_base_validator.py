@@ -28,7 +28,7 @@ class BaseValidator(abc.ABC):
             return
 
         with self.record_file_path.open(mode="r") as file_stream:
-            self.record = {line: True for line in file_stream.readlines()}
+            self.record = {line.strip(): True for line in file_stream.readlines()}
 
     @abc.abstractmethod
     def _run_validation(self, file_path: pathlib.Path) -> None:
