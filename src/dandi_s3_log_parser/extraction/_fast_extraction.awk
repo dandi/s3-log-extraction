@@ -35,6 +35,7 @@ BEGIN {
     object_key = pre_uri_fields[9]
     timestamp = pre_uri_fields[3]
     bytes_sent = post_uri_fields[3]
+    print object_key
 
     print object_key > TEMPORARY_DIRECTORY "object_keys.txt"
     print substr(timestamp, 2, 21) > TEMPORARY_DIRECTORY "timestamps.txt"
