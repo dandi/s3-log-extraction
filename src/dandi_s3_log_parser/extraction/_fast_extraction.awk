@@ -7,6 +7,10 @@ BEGIN {
     }
     DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
     TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"]
+    print TEMPORARY_DIRECTORY
+
+    timestamps_file_path = TEMPORARY_DIRECTORY "object_keys.txt"
+    print timestamps_file_path
 }
 
 {

@@ -73,7 +73,7 @@ class S3LogAccessExtractor:
             return
 
         with self.record_file_path.open(mode="r") as file_stream:
-            self.record = {line: True for line in file_stream.readlines()}
+            self.record = {line.strip(): True for line in file_stream.readlines()}
 
     def _run_extraction(self, file_path: pathlib.Path) -> None:
         absolute_script_path = str(self._relative_script_path.absolute())
@@ -87,6 +87,7 @@ class S3LogAccessExtractor:
             text=True,
             env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": self.absolute_temporary_directory},
         )
+        print(result.stdout)
         if result.returncode != 0:
             message = (
                 f"\nExtraction failed.\n "
