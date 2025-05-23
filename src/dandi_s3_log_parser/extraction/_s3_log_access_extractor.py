@@ -135,7 +135,7 @@ class S3LogAccessExtractor:
 
             with mirror_file_path.open(mode="a") as file_stream:
                 file_stream.writelines(
-                    lines=[
+                    [
                         f"{timestamp}\t{bytes_sent}\t{ip}\n"
                         for timestamp, bytes_sent, ip in zip(
                             timestamps_per_object_key[object_key],
