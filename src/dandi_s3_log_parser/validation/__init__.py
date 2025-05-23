@@ -1,5 +1,5 @@
 from ._base_validator import BaseValidator
-from ._status_code_pre_validator import ExtractionHeuristicPreValidator
+from ._extraction_heuristic_pre_validator import ExtractionHeuristicPreValidator
 from ._http_split_count_pre_validator import HttpSplitCountPreValidator
 from ._http_empty_split_pre_validator import HttpEmptySplitPreValidator
 
