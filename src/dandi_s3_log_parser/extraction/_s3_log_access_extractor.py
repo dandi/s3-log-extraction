@@ -1,6 +1,5 @@
 import collections
 import datetime
-import os
 import pathlib
 import subprocess
 
@@ -53,7 +52,7 @@ class S3LogAccessExtractor:
         self.extraction_directory.mkdir(exist_ok=True)
 
         # TODO: might have to be done inside subfunction used by other parallel processes
-        self.temporary_directory = self.cache_directory / "tmp" / str(os.getgid())
+        self.temporary_directory = self.cache_directory / "tmp"
         self.temporary_directory.mkdir(parents=True, exist_ok=True)
         self.absolute_temporary_directory = f"{self.temporary_directory.absolute()!s}/"  # Slash is needed for AWK
 
