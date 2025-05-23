@@ -53,7 +53,7 @@ class S3LogAccessExtractor:
         self.extraction_directory.mkdir(exist_ok=True)
 
         # TODO: might have to be done inside subfunction used by other parallel processes
-        self.temporary_directory = self.cache_directory / "tmp" / os.getgid()
+        self.temporary_directory = self.cache_directory / "tmp" / str(os.getgid())
         self.temporary_directory.mkdir(parents=True, exist_ok=True)
 
         self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
