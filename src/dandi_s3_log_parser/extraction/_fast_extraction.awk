@@ -7,6 +7,7 @@ BEGIN {
     }
     DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
     TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"]
+    print TEMPORARY_DIRECTORY
 }
 
 {
@@ -28,8 +29,8 @@ BEGIN {
     timestamp = pre_uri_fields[3]
     bytes_sent = post_uri_fields[3]
 
-    print object_key >> TEMPORARY_DIRECTORY "/" "object_keys.txt"
-    print substr(timestamp, 2, 21) >> TEMPORARY_DIRECTORY "/" "timestamps.txt"
-    print bytes_sent >> TEMPORARY_DIRECTORY "/" "bytes_sent.txt"
-    print ip >> TEMPORARY_DIRECTORY "/" "ips.txt"
+    print object_key >> TEMPORARY_DIRECTORY "/object_keys.txt"
+    print substr(timestamp, 2, 21) >> TEMPORARY_DIRECTORY "/timestamps.txt"
+    print bytes_sent >> TEMPORARY_DIRECTORY "/bytes_sent.txt"
+    print ip >> TEMPORARY_DIRECTORY "/ips.txt"
 }

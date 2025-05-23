@@ -55,6 +55,7 @@ class S3LogAccessExtractor:
         # TODO: might have to be done inside subfunction used by other parallel processes
         self.temporary_directory = self.cache_directory / "tmp" / str(os.getgid())
         self.temporary_directory.mkdir(parents=True, exist_ok=True)
+        self.absolute_temporary_directory = str(self.temporary_directory.absolute())
 
         self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
         self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
@@ -84,7 +85,7 @@ class S3LogAccessExtractor:
             shell=True,
             capture_output=True,
             text=True,
-            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": self.temporary_directory},
+            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": self.absolute_temporary_directory},
         )
         if result.returncode != 0:
             message = (
