@@ -111,7 +111,7 @@ class S3LogAccessExtractor:
         timestamps = numpy.loadtxt(
             fname=self.timestamps_file_path,
             dtype=str,
-            converters={0: lambda line: datetime.datetime.strptime(line.decode("utf-8"), "%d/%b/%Y:%H:%M:%S")},
+            converters={0: lambda line: datetime.datetime.strptime(line.decode("utf-8").strip(), "%d/%b/%Y:%H:%M:%S")},
         )
         all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype=int)
         ips = numpy.loadtxt(fname=self.ips_file_path, dtype=str)
