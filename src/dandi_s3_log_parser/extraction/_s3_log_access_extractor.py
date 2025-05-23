@@ -130,8 +130,8 @@ class S3LogAccessExtractor:
 
         # TODO
         for object_key in timestamps_per_object_key.keys():
-            mirror_file_path = self.extraction_directory / f"{object_key}.txt"
-            mirror_file_path.mkdir(parents=True, exist_ok=True)
+            mirror_file_path = self.extraction_directory / f"{object_key}.tsv"
+            mirror_file_path.parent.mkdir(parents=True, exist_ok=True)
 
             with mirror_file_path.open(mode="a") as file_stream:
                 file_stream.writelines(
