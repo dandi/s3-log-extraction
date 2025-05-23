@@ -52,7 +52,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
         )
         if result.returncode != 0:
             message = (
-                f"\nStatus code pre-check failed.\n "
+                f"\nExtraction heuristic pre-check failed.\n "
                 f"Log file: {absolute_file_path}\n"
                 f"Error code {result.returncode}\n\n"
                 f"stderr: {result.stderr}\n"

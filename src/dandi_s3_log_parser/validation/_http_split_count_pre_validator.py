@@ -15,7 +15,7 @@ class HttpSplitCountPreValidator(BaseValidator):
       - resumable
     """
 
-    tqdm_description = "Pre-validating extraction heuristic"
+    tqdm_description = "Pre-validating 'HTTP/1.' split count"
 
     def __hash__(self) -> int:
         with self._relative_awk_script_path.open("rb") as file_stream:
