@@ -41,7 +41,7 @@ class S3LogAccessExtractor:
       - resumable
     """
 
-    def __init__(self, log_directory: str | pathlib.Path) -> None:
+    def __init__(self) -> None:
         self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
         # TODO: does this hold after bundling?
