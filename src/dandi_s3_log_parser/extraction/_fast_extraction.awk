@@ -14,18 +14,22 @@ BEGIN {
 }
 
 {
+    print NF
     if (NF == 0) {next}
 
     # Pre-URI fields like this should be unaffected
     split($1, pre_uri_fields, " ")
     ip = pre_uri_fields[5]
+    print ip
     if (ip ~ DROGON_IP_REGEX) {next}
 
     request_type = pre_uri_fields[8]
+    print request_type
     if (request_type != "REST.GET.OBJECT") {next}
 
     split($2, post_uri_fields, " ")
     status = post_uri_fields[1]
+    print status
     if (substr(status, 1, 1) != "2") {next}
 
     object_key = pre_uri_fields[9]
