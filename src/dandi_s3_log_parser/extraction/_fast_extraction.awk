@@ -1,11 +1,12 @@
 BEGIN {
     FS = "HTTP/1\\."
 
-    if (!("DROGON_IP_REGEX" in ENVIRON)) {
-        print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
+    if (!("IPS_TO_SKIP_REGEX" in ENVIRON)) {
+        print "Environment variable 'IPS_TO_SKIP_REGEX' is not set" > "/dev/stderr"
         exit 1
     }
-    DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
+    IPS_TO_SKIP_REGEX = ENVIRON["IPS_TO_SKIP_REGEX"]
+    OBJECT_KEYS_TO_EXTRACT_REGEX = ENVIRON["OBJECT_KEYS_TO_EXTRACT_REGEX"]
     TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"] "/"
 
     OBJECT_KEYS_FILE_PATH = TEMPORARY_DIRECTORY "object_keys.txt"
@@ -23,7 +24,7 @@ BEGIN {
     if (request_type != "REST.GET.OBJECT") {next}
 
     ip = pre_uri_fields[5]
-    if (ip ~ DROGON_IP_REGEX) {next}
+    if (ip ~ IPS_TO_SKIP_REGEX) {next}
 
     split($2, post_uri_fields, " ")
     status = post_uri_fields[2]
@@ -33,6 +34,14 @@ BEGIN {
     if (bytes_sent == "-") {next}  # Sometimes the total bytes of the object is zero, resulting in a dash here
 
     object_key = pre_uri_fields[9]
+    split(object_key, object_key_parts, "/")
+    if (object_key_parts[1] !~ OBJECT_KEYS_TO_EXTRACT_REGEX) {next}
+
+    # SPECIAL CASE: Limit Zarr stores to their top level to limit the number of files
+    if (object_key_parts[1] == "zarr") {
+        object_key = object_key_parts[1] "/" object_key_parts[2]
+    }
+
     timestamp = pre_uri_fields[3]
 
     print object_key > OBJECT_KEYS_FILE_PATH

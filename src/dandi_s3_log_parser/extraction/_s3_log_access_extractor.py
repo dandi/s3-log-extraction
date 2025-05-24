@@ -22,7 +22,7 @@ class S3LogAccessExtractor:
     information for reporting summaries of access.
 
     The `extraction` subdirectory within the cache directory will contain a mirror of the object structures
-    from the S3 bucket.
+    from the S3 bucket; except Zarr stores, which are abbreviated to their top-most level.
 
     This extractor is:
       - parallelized
@@ -36,7 +36,8 @@ class S3LogAccessExtractor:
     """
 
     def __init__(self) -> None:
-        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+        self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+        self.object_keys_to_extract_regex = "blobs|zarr"
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
@@ -93,7 +94,11 @@ class S3LogAccessExtractor:
             shell=True,
             capture_output=True,
             text=True,
-            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": absolute_temporary_directory},
+            env={
+                "IPS_TO_SKIP_REGEX": self.ips_to_skip_regex,
+                "TEMPORARY_DIRECTORY": absolute_temporary_directory,
+                "OBJECT_KEYS_TO_EXTRACT_REGEX": self.object_keys_to_extract_regex,
+            },
         )
         if result.returncode != 0:
             message = (
