@@ -138,6 +138,7 @@ class S3LogAccessExtractor:
 
         # These must be set per process
         self.temporary_directory = self.base_temporary_directory / str(os.getpid())
+        self.temporary_directory.mkdir(exist_ok=True)
         self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
         self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
         self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
