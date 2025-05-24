@@ -61,8 +61,9 @@ BEGIN {
     }
 
     bytes_sent = post_uri_fields[4]
-    if (bytes_sent !~ BYTES_SENT_REGEX) {
-        print "Bytes sent was not a valid number - line #" NR " of " FILENAME > "/dev/stderr"
+    total_bytes = post_uri_fields[5]
+    if (bytes_sent !~ BYTES_SENT_REGEX && total_bytes != 0) {
+        print "Bytes sent was not a valid number and total bytes was non-zero - line #" NR " of " FILENAME > "/dev/stderr"
         print "Bytes sent: \"" bytes_sent "\" (" typeof(bytes_sent) ")" > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1
