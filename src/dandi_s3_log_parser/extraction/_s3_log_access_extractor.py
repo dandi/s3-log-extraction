@@ -112,8 +112,7 @@ class S3LogAccessExtractor:
 
         for object_key in timestamps_per_object_key.keys():
             mirror_directory = self.extraction_directory / object_key
-            mirror_directory.parent.mkdir(parents=True, exist_ok=True)
-            print(mirror_directory)
+            mirror_directory.mkdir(parents=True, exist_ok=True)
 
             timestamps_mirror_file_path = mirror_directory / "timestamps.txt"
             with timestamps_mirror_file_path.open(mode="a") as file_stream:
