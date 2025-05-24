@@ -1,5 +1,7 @@
 import collections
+import concurrent.futures
 import datetime
+import os
 import pathlib
 import subprocess
 
@@ -19,25 +21,15 @@ class S3LogAccessExtractor:
     information for the DANDI Archive. The information is then reduced to a smaller storage size for further
     processing.
 
+    This extractor is:
+      - parallelized
+      - interruptible
+      - resumable
+
     Parameters
     ----------
     log_directory : path-like
         The directory containing the raw S3 log files to be processed.
-
-        Must follow the structure:
-
-        <directory>
-            ├── YYYY
-            │   ├── MM
-            │   │   ├── DD.log
-            │   │   └── ...
-            │   └── ...
-            └── ...
-
-    This extractor is:
-      - not parallelized, but could be (though interaction with IP cache could be problematic)
-      - interruptible
-      - resumable
     """
 
     def __init__(self) -> None:
@@ -51,40 +43,42 @@ class S3LogAccessExtractor:
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
 
-        # TODO: might have to be done inside subfunction used by other parallel processes
-        self.temporary_directory = self.cache_directory / "tmp"
-        self.temporary_directory.mkdir(parents=True, exist_ok=True)
-        self.absolute_temporary_directory = f"{self.temporary_directory.absolute()!s}/"  # Slash is needed for AWK
+        self.base_temporary_directory = self.cache_directory / "tmp"
+        self.base_temporary_directory.mkdir(exist_ok=True)
 
-        self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
-        self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
-        self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
-        self.ips_file_path = self.temporary_directory / "ips.txt"
+        self.extraction_record_directory = self.cache_directory / "extraction_records"
+        self.extraction_record_directory.mkdir(exist_ok=True)
 
-        self.record_directory = self.cache_directory / "extraction_records"
-        self.record_directory.mkdir(exist_ok=True)
+        self.file_copy_start_record_directory = self.cache_directory / "file_copy_start_records"
+        self.file_copy_start_record_directory.mkdir(exist_ok=True)
+
+        self.file_copy_end_record_directory = self.cache_directory / "file_copy_end_records"
+        self.file_copy_end_record_directory.mkdir(exist_ok=True)
 
         record_file_name = f"{self.__class__.__name__}.txt"  # NOTE: not hashing the code of the class here yet
-        self.record_file_path = self.record_directory / record_file_name  # (Clear cache and results as needed)
+        self.extraction_record_file_path = self.extraction_record_directory / record_file_name
+        self.file_copy_start_record_file_path = self.file_copy_start_record_directory / record_file_name
+        self.file_copy_end_record_file_path = self.file_copy_end_record_directory / record_file_name
 
-        self.record = {}
-        if not self.record_file_path.exists():
+        self.extraction_record = {}
+        if not self.extraction_record_file_path.exists():
             return
 
-        with self.record_file_path.open(mode="r") as file_stream:
-            self.record = {line.strip(): True for line in file_stream.readlines()}
+        with self.extraction_record_file_path.open(mode="r") as file_stream:
+            self.extraction_record = {line.strip(): True for line in file_stream.readlines()}
 
     def _run_extraction(self, file_path: pathlib.Path) -> None:
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
+        absolute_temporary_directory = str(self.temporary_directory.absolute())
         awk_command = f"awk --file {absolute_script_path} {absolute_file_path}"
         result = subprocess.run(
             args=awk_command,
             shell=True,
             capture_output=True,
             text=True,
-            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": self.absolute_temporary_directory},
+            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX, "TEMPORARY_DIRECTORY": absolute_temporary_directory},
         )
         if result.returncode != 0:
             message = (
@@ -109,29 +103,26 @@ class S3LogAccessExtractor:
         ips_per_object_key = collections.defaultdict(list)
 
         for object_key, timestamp, bytes_sent, ip in zip(object_keys, timestamps, all_bytes_sent, ips):
-            timestamps_per_object_key[object_key].append(timestamp.strftime("%y%m%d%H%M%S"))
+            timestamps_per_object_key[object_key].append(timestamp.isoformat())
             bytes_sent_per_object_key[object_key].append(bytes_sent)
             ips_per_object_key[object_key].append(ip)
 
-        # Coregister IPs with anonymized IDs
-        # (and somehow randomize to avoid biases based on usage patterns)
+        with self.file_copy_start_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(f"{file_path}\n")
 
-        # TODO
         for object_key in timestamps_per_object_key.keys():
-            mirror_file_path = self.extraction_directory / f"{object_key}.tsv"
-            mirror_file_path.parent.mkdir(parents=True, exist_ok=True)
+            mirror_directory = self.extraction_directory / object_key
+            mirror_directory.parent.mkdir(parents=True, exist_ok=True)
 
-            with mirror_file_path.open(mode="a") as file_stream:
-                file_stream.writelines(
-                    [
-                        f"{timestamp}\t{bytes_sent}\t{ip}\n"
-                        for timestamp, bytes_sent, ip in zip(
-                            timestamps_per_object_key[object_key],
-                            bytes_sent_per_object_key[object_key],
-                            ips_per_object_key[object_key],
-                        )
-                    ]
-                )
+            timestamps_mirror_file_path = mirror_directory / "timestamps.txt"
+            numpy.savetxt(fname=timestamps_mirror_file_path, X=timestamps_per_object_key[object_key])
+            bytes_sent_mirror_file_path = mirror_directory / "bytes_sent.txt"
+            numpy.savetxt(fname=bytes_sent_mirror_file_path, X=bytes_sent_per_object_key[object_key])
+            ips_mirror_file_path = mirror_directory / "ips.txt"
+            numpy.savetxt(fname=ips_mirror_file_path, X=ips_per_object_key[object_key])
+
+        with self.file_copy_end_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(f"{file_path}\n")
 
         # TODO: re-enable cleanup when done testing
         # shutil.rmtree(self.temporary_directory)
@@ -139,7 +130,7 @@ class S3LogAccessExtractor:
     # TODO: shouldn't this be absolute file path (str)?
     def _record_success(self, file_path: pathlib.Path) -> None:
         """To avoid needlessly rerunning the validation process, we record the file path in a cache file."""
-        with self.record_file_path.open(mode="a") as file_stream:
+        with self.extraction_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
@@ -148,23 +139,45 @@ class S3LogAccessExtractor:
         if self.record.get(absolute_file_path, False) is True:
             return
 
+        # These must be set per process
+        self.temporary_directory = self.base_temporary_directory / str(os.getpid())
+        self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
+        self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
+        self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
+        self.ips_file_path = self.temporary_directory / "ips.txt"
+
         self._run_extraction(file_path=file_path)
 
         self.record[absolute_file_path] = True
         self._record_success(file_path=file_path)
 
-    def extract_directory(self, directory: str | pathlib.Path, limit: int | None = None) -> None:
+    def extract_directory(
+        self, directory: str | pathlib.Path, limit: int | None = None, max_workers: int | None = None
+    ) -> None:
         directory = pathlib.Path(directory)
 
         all_log_files = {str(file_path.absolute()) for file_path in directory.rglob("*.log")}
         unextracted_files = all_log_files - set(self.record.keys())
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
-        for file_path in tqdm.tqdm(
-            iterable=files_to_extract,
-            desc="Running extraction on S3 logs: ",
-            total=len(files_to_extract),
-            unit="file",
-            smoothing=0,
-        ):
-            self.extract_file(file_path=file_path)
+
+        if max_workers is None or max_workers == 1:
+            for file_path in tqdm.tqdm(
+                iterable=files_to_extract,
+                desc="Running extraction on S3 logs: ",
+                total=len(files_to_extract),
+                unit="file",
+                smoothing=0,
+            ):
+                self.extract_file(file_path=file_path)
+        else:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                list(
+                    tqdm.tqdm(
+                        executor.map(self.extract_file, map(str, files_to_extract)),
+                        desc="Running extraction on S3 logs: ",
+                        total=len(files_to_extract),
+                        unit="file",
+                        smoothing=0,
+                    )
+                )
