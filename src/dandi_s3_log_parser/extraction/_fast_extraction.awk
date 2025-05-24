@@ -19,19 +19,21 @@ BEGIN {
 
     # Pre-URI fields like this should be unaffected
     split($1, pre_uri_fields, " ")
-    ip = pre_uri_fields[5]
-    if (ip ~ DROGON_IP_REGEX) {next}
-
     request_type = pre_uri_fields[8]
     if (request_type != "REST.GET.OBJECT") {next}
+
+    ip = pre_uri_fields[5]
+    if (ip ~ DROGON_IP_REGEX) {next}
 
     split($2, post_uri_fields, " ")
     status = post_uri_fields[2]
     if (substr(status, 1, 1) != "2") {next}
 
+    bytes_sent = post_uri_fields[4]
+    if (bytes_sent == "-") {next}
+
     object_key = pre_uri_fields[9]
     timestamp = pre_uri_fields[3]
-    bytes_sent = post_uri_fields[4]
 
     print object_key > OBJECT_KEYS_FILE_PATH
     print substr(timestamp, 2, 21) > TIMESTAMPS_FILE_PATH
