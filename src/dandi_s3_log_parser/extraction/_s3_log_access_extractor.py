@@ -52,16 +52,12 @@ class S3LogAccessExtractor:
         self.extraction_record_directory = self.cache_directory / "extraction_records"
         self.extraction_record_directory.mkdir(exist_ok=True)
 
-        self.mirror_copy_start_record_directory = self.cache_directory / "mirror_copy_start_records"
-        self.mirror_copy_start_record_directory.mkdir(exist_ok=True)
-
-        self.mirror_copy_end_record_directory = self.cache_directory / "mirror_copy_end_records"
-        self.mirror_copy_end_record_directory.mkdir(exist_ok=True)
-
-        record_file_name = f"{self.__class__.__name__}.txt"  # NOTE: not hashing the code of the class here yet
-        self.extraction_record_file_path = self.extraction_record_directory / record_file_name
-        self.mirror_copy_start_record_file_path = self.mirror_copy_start_record_directory / record_file_name
-        self.mirror_copy_end_record_file_path = self.mirror_copy_end_record_directory / record_file_name
+        extraction_record_file_name = f"{self.__class__.__name__}_extraction.txt"
+        self.extraction_record_file_path = self.extraction_record_directory / extraction_record_file_name
+        mirror_copy_start_record_file_name = f"{self.__class__.__name__}_mirror-copy-start.txt"
+        self.mirror_copy_start_record_file_path = self.extraction_record_directory / mirror_copy_start_record_file_name
+        mirror_copy_end_record_file_name = f"{self.__class__.__name__}_mirror-copy-end.txt"
+        self.mirror_copy_end_record_file_path = self.extraction_record_directory / mirror_copy_end_record_file_name
 
         initial_mirror_record_difference = {}
         if self.mirror_copy_start_record_file_path.exists() and self.mirror_copy_end_record_file_path.exists():
