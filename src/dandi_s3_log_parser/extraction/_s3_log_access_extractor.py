@@ -3,6 +3,7 @@ import concurrent.futures
 import datetime
 import os
 import pathlib
+import shutil
 import subprocess
 
 import numpy
@@ -18,12 +19,14 @@ class S3LogAccessExtractor:
     An extractor of basic access information contained in raw S3 logs.
 
     This class is not a full parser of all fields but instead is optimized for targeting the most relevant
-    information for the DANDI Archive. The information is then reduced to a smaller storage size for further
-    processing.
+    information for reporting summaries of access.
+
+    The `extraction` subdirectory within the cache directory will contain a mirror of the object structures
+    from the S3 bucket.
 
     This extractor is:
       - parallelized
-      - semi-interruptible; most of the computation via AWK can be interrupted safely, but the cache mirror step cannot
+      - semi-interruptible; most of the computation via AWK can be interrupted safely, but not the mirror copy step
       - resumable
 
     Parameters
@@ -49,23 +52,35 @@ class S3LogAccessExtractor:
         self.extraction_record_directory = self.cache_directory / "extraction_records"
         self.extraction_record_directory.mkdir(exist_ok=True)
 
-        self.file_copy_start_record_directory = self.cache_directory / "file_copy_start_records"
-        self.file_copy_start_record_directory.mkdir(exist_ok=True)
+        self.mirror_copy_start_record_directory = self.cache_directory / "mirror_copy_start_records"
+        self.mirror_copy_start_record_directory.mkdir(exist_ok=True)
 
-        self.file_copy_end_record_directory = self.cache_directory / "file_copy_end_records"
-        self.file_copy_end_record_directory.mkdir(exist_ok=True)
+        self.mirror_copy_end_record_directory = self.cache_directory / "mirror_copy_end_records"
+        self.mirror_copy_end_record_directory.mkdir(exist_ok=True)
 
         record_file_name = f"{self.__class__.__name__}.txt"  # NOTE: not hashing the code of the class here yet
         self.extraction_record_file_path = self.extraction_record_directory / record_file_name
-        self.file_copy_start_record_file_path = self.file_copy_start_record_directory / record_file_name
-        self.file_copy_end_record_file_path = self.file_copy_end_record_directory / record_file_name
+        self.mirror_copy_start_record_file_path = self.mirror_copy_start_record_directory / record_file_name
+        self.mirror_copy_end_record_file_path = self.mirror_copy_end_record_directory / record_file_name
+
+        with self.mirror_copy_start_record_file_path.open(mode="r") as file_stream:
+            mirror_copy_start_record = set(file_stream.read().splitlines())
+        with self.mirror_copy_end_record_file_path.open(mode="r") as file_stream:
+            mirror_copy_end_record = set(file_stream.read().splitlines())
+        initial_mirror_record_difference = mirror_copy_start_record - mirror_copy_end_record
+        if len(initial_mirror_record_difference) > 0:
+            message = (
+                "Mirror copy corruption from previous run detected - "
+                "please call `.purge_cache()` to clean the extraction cache and records.\n"
+            )
+            raise ValueError(message)
 
         self.extraction_record = {}
         if not self.extraction_record_file_path.exists():
             return
 
         with self.extraction_record_file_path.open(mode="r") as file_stream:
-            self.extraction_record = {line.strip(): True for line in file_stream.readlines()}
+            self.extraction_record = {line: True for line in file_stream.read().splitlines()}
 
     def _run_extraction(self, file_path: pathlib.Path) -> None:
         absolute_script_path = str(self._relative_script_path.absolute())
@@ -89,6 +104,10 @@ class S3LogAccessExtractor:
             )
             raise RuntimeError(message)
 
+        # Sometimes a log file (especially very early ones) may not have any valid GET entries
+        if not self.object_keys_file_path.exists():
+            return
+
         object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
         with self.timestamps_file_path.open(mode="r") as file_stream:
             timestamps = [
@@ -106,7 +125,7 @@ class S3LogAccessExtractor:
             bytes_sent_per_object_key[object_key].append(bytes_sent)
             ips_per_object_key[object_key].append(ip)
 
-        with self.file_copy_start_record_file_path.open(mode="a") as file_stream:
+        with self.mirror_copy_start_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
 
         for object_key in timestamps_per_object_key.keys():
@@ -123,11 +142,10 @@ class S3LogAccessExtractor:
             with ips_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=ips_per_object_key[object_key], fmt="%s")
 
-        with self.file_copy_end_record_file_path.open(mode="a") as file_stream:
+        with self.mirror_copy_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
 
-        # TODO: re-enable cleanup when done testing
-        # shutil.rmtree(self.temporary_directory)
+        shutil.rmtree(path=self.temporary_directory)
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         file_path = pathlib.Path(file_path)
@@ -179,3 +197,12 @@ class S3LogAccessExtractor:
                         smoothing=0,
                     )
                 )
+
+    def purge_cache(self) -> None:
+        """
+        Purge the cache directory and all extraction records.
+        """
+        shutil.rmtree(path=self.extraction_directory)
+        self.extraction_record_file_path.unlink(missing_ok=True)
+        self.mirror_copy_start_record_file_path.unlink(missing_ok=True)
+        self.mirror_copy_end_record_file_path.unlink(missing_ok=True)
