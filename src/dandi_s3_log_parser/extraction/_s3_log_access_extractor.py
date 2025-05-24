@@ -63,11 +63,13 @@ class S3LogAccessExtractor:
         self.mirror_copy_start_record_file_path = self.mirror_copy_start_record_directory / record_file_name
         self.mirror_copy_end_record_file_path = self.mirror_copy_end_record_directory / record_file_name
 
-        with self.mirror_copy_start_record_file_path.open(mode="r") as file_stream:
-            mirror_copy_start_record = set(file_stream.read().splitlines())
-        with self.mirror_copy_end_record_file_path.open(mode="r") as file_stream:
-            mirror_copy_end_record = set(file_stream.read().splitlines())
-        initial_mirror_record_difference = mirror_copy_start_record - mirror_copy_end_record
+        initial_mirror_record_difference = {}
+        if self.mirror_copy_start_record_file_path.exists() and self.mirror_copy_end_record_file_path.exists():
+            with self.mirror_copy_start_record_file_path.open(mode="r") as file_stream:
+                mirror_copy_start_record = set(file_stream.read().splitlines())
+            with self.mirror_copy_end_record_file_path.open(mode="r") as file_stream:
+                mirror_copy_end_record = set(file_stream.read().splitlines())
+            initial_mirror_record_difference = mirror_copy_start_record - mirror_copy_end_record
         if len(initial_mirror_record_difference) > 0:
             message = (
                 "Mirror copy corruption from previous run detected - "
