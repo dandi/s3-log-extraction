@@ -30,7 +30,7 @@ BEGIN {
     if (substr(status, 1, 1) != "2") {next}
 
     bytes_sent = post_uri_fields[4]
-    if (bytes_sent == "-") {next}
+    if (bytes_sent == "-") {next}  # Sometimes the total bytes of the object is zero, resulting in a dash here
 
     object_key = pre_uri_fields[9]
     timestamp = pre_uri_fields[3]
