@@ -37,7 +37,7 @@ class S3LogAccessExtractor:
 
     def __init__(self) -> None:
         self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
-        self.object_keys_to_extract_regex = "blobs|zarr"
+        self.object_keys_to_extract_regex = "^blobs|zarr$"
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
