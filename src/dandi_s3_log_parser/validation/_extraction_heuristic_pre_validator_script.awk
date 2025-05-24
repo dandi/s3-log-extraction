@@ -7,6 +7,7 @@ BEGIN {
     }
     DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
     STATUS_IP_REGEX = "^[1-5][0-9]{2}$"
+    BYTES_SENT_REGEX = "^[0-9]+$"
 }
 
 {
@@ -55,6 +56,14 @@ BEGIN {
         print "Both status codes were extracted as valid numbers, the direct extraction was successful, but the two did not match - line #" NR " of " FILENAME > "/dev/stderr"
         print "Extraction: " status_from_heuristic > "/dev/stderr"
         print "Direct: " status_from_direct_rule > "/dev/stderr"
+        print $0 > "/dev/stderr"
+        exit 1
+    }
+
+    bytes_sent = post_uri_fields[4]
+    if (bytes_sent !~ BYTES_SENT_REGEX) {
+        print "Bytes sent was not a valid number - line #" NR " of " FILENAME > "/dev/stderr"
+        print "Bytes sent: \"" bytes_sent "\" (" typeof(bytes_sent) ")" > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1
     }
