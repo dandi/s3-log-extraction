@@ -143,7 +143,7 @@ class S3LogAccessExtractor:
         self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
         self.ips_file_path = self.temporary_directory / "ips.txt"
 
-        self._run_extraction(absolute_file_path=file_path)
+        self._run_extraction(file_path=file_path)
 
         self.extraction_record[absolute_file_path] = True
         with self.extraction_record_file_path.open(mode="a") as file_stream:
