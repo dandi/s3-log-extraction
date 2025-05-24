@@ -115,11 +115,14 @@ class S3LogAccessExtractor:
             mirror_directory.parent.mkdir(parents=True, exist_ok=True)
 
             timestamps_mirror_file_path = mirror_directory / "timestamps.txt"
-            numpy.savetxt(fname=timestamps_mirror_file_path, X=timestamps_per_object_key[object_key])
+            with timestamps_mirror_file_path.open(mode="a") as file_stream:
+                numpy.savetxt(fname=file_stream, X=timestamps_per_object_key[object_key])
             bytes_sent_mirror_file_path = mirror_directory / "bytes_sent.txt"
-            numpy.savetxt(fname=bytes_sent_mirror_file_path, X=bytes_sent_per_object_key[object_key])
+            with bytes_sent_mirror_file_path.open(mode="a") as file_stream:
+                numpy.savetxt(fname=file_stream, X=bytes_sent_per_object_key[object_key])
             ips_mirror_file_path = mirror_directory / "ips.txt"
-            numpy.savetxt(fname=ips_mirror_file_path, X=ips_per_object_key[object_key])
+            with ips_mirror_file_path.open(mode="a") as file_stream:
+                numpy.savetxt(fname=file_stream, X=ips_per_object_key[object_key])
 
         with self.file_copy_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
