@@ -142,7 +142,7 @@ class S3LogAccessExtractor:
                 numpy.savetxt(fname=file_stream, X=timestamps_per_object_key[object_key], fmt="%s")
             bytes_sent_mirror_file_path = mirror_directory / "bytes_sent.txt"
             with bytes_sent_mirror_file_path.open(mode="a") as file_stream:
-                numpy.savetxt(fname=file_stream, X=bytes_sent_per_object_key[object_key])
+                numpy.savetxt(fname=file_stream, X=bytes_sent_per_object_key[object_key], fmt="%d")
             ips_mirror_file_path = mirror_directory / "full_ips.txt"
             with ips_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=ips_per_object_key[object_key], fmt="%s")
