@@ -60,12 +60,16 @@ BEGIN {
         exit 1
     }
 
-    bytes_sent = post_uri_fields[4]
-    total_bytes = post_uri_fields[5]
-    if (bytes_sent !~ BYTES_SENT_REGEX && total_bytes != 0 && substr(status_from_direct_rule,1,1) == "2") {
-        print "Bytes sent was not a valid number, total bytes was non-zero, and status was success - line #" NR " of "FILENAME > "/dev/stderr"
-        print "Bytes sent: \"" bytes_sent "\" (" typeof(bytes_sent) ")" > "/dev/stderr"
-        print $0 > "/dev/stderr"
-        exit 1
-    }
+    # Keeping this around as a note; it does find examples of bytes_sent being 0 ('-') from GET requests even when
+    # size of object is not zero...
+    # Impact on extraction heuristic is to therefore just always record the request as bytes_sent = 0
+    #
+    #    bytes_sent = post_uri_fields[4]
+    #    total_bytes = post_uri_fields[5]
+    #    if (bytes_sent !~ BYTES_SENT_REGEX && total_bytes != 0 && substr(status_from_direct_rule,1,1) == "2") {
+    #        print "Bytes sent was not a valid number, total bytes was non-zero, and status was success - line #" NR " of "FILENAME > "/dev/stderr"
+    #        print "Bytes sent: \"" bytes_sent "\" (" typeof(bytes_sent) ")" > "/dev/stderr"
+    #        print $0 > "/dev/stderr"
+    #        exit 1
+    #    }
 }

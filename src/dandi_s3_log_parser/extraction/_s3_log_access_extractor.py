@@ -37,7 +37,6 @@ class S3LogAccessExtractor:
 
     def __init__(self) -> None:
         self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
-        self.object_keys_to_extract_regex = "^blobs|zarr$"
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
@@ -97,7 +96,6 @@ class S3LogAccessExtractor:
             env={
                 "IPS_TO_SKIP_REGEX": self.ips_to_skip_regex,
                 "TEMPORARY_DIRECTORY": absolute_temporary_directory,
-                "OBJECT_KEYS_TO_EXTRACT_REGEX": self.object_keys_to_extract_regex,
             },
         )
         if result.returncode != 0:
@@ -143,7 +141,7 @@ class S3LogAccessExtractor:
             bytes_sent_mirror_file_path = mirror_directory / "bytes_sent.txt"
             with bytes_sent_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=bytes_sent_per_object_key[object_key])
-            ips_mirror_file_path = mirror_directory / "ips.txt"
+            ips_mirror_file_path = mirror_directory / "full_ips.txt"
             with ips_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=ips_per_object_key[object_key], fmt="%s")
 

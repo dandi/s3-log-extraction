@@ -6,7 +6,6 @@ BEGIN {
         exit 1
     }
     IPS_TO_SKIP_REGEX = ENVIRON["IPS_TO_SKIP_REGEX"]
-    OBJECT_KEYS_TO_EXTRACT_REGEX = ENVIRON["OBJECT_KEYS_TO_EXTRACT_REGEX"]
     TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"] "/"
 
     OBJECT_KEYS_FILE_PATH = TEMPORARY_DIRECTORY "object_keys.txt"
@@ -30,19 +29,20 @@ BEGIN {
     status = post_uri_fields[2]
     if (substr(status, 1, 1) != "2") {next}
 
-    bytes_sent = post_uri_fields[4]
-    if (bytes_sent == "-") {next}  # Sometimes the total bytes of the object is zero, resulting in a dash here
-
     object_key = pre_uri_fields[9]
-    split(object_key, object_key_parts, "/")
-    if (object_key_parts[1] !~ OBJECT_KEYS_TO_EXTRACT_REGEX) {next}
-
+    object_type = substr(object_key, 1, 4)
     # SPECIAL CASE: Limit Zarr stores to their top level to limit the number of files
-    if (object_key_parts[1] == "zarr") {
+    if (object_type == "zarr") {
+        split(object_key, object_key_parts, "/")
         object_key = object_key_parts[1] "/" object_key_parts[2]
+    } else if (object_type != "blob") {
+        # SPECIAL CASE: DANDI assigns files to 'blobs'
+        # if trying to use this for more generic bucket mirroring, disable this
+        next
     }
 
     timestamp = pre_uri_fields[3]
+    bytes_sent = (post_uri_fields[4] == "-" ? 0 : post_uri_fields[4])
 
     print object_key > OBJECT_KEYS_FILE_PATH
     print substr(timestamp, 2, 21) > TIMESTAMPS_FILE_PATH
