@@ -23,7 +23,7 @@ class S3LogAccessExtractor:
 
     This extractor is:
       - parallelized
-      - interruptible
+      - semi-interruptible; most of the computation via AWK can be interrupted safely, but the cache mirror step cannot
       - resumable
 
     Parameters
@@ -127,16 +127,10 @@ class S3LogAccessExtractor:
         # TODO: re-enable cleanup when done testing
         # shutil.rmtree(self.temporary_directory)
 
-    # TODO: shouldn't this be absolute file path (str)?
-    def _record_success(self, file_path: pathlib.Path) -> None:
-        """To avoid needlessly rerunning the validation process, we record the file path in a cache file."""
-        with self.extraction_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{file_path}\n")
-
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
-        if self.record.get(absolute_file_path, False) is True:
+        if self.extraction_record.get(absolute_file_path, False) is True:
             return
 
         # These must be set per process
@@ -146,10 +140,11 @@ class S3LogAccessExtractor:
         self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
         self.ips_file_path = self.temporary_directory / "ips.txt"
 
-        self._run_extraction(file_path=file_path)
+        self._run_extraction(absolute_file_path=file_path)
 
-        self.record[absolute_file_path] = True
-        self._record_success(file_path=file_path)
+        self.extraction_record[absolute_file_path] = True
+        with self.extraction_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(f"{absolute_file_path}\n")
 
     def extract_directory(
         self, directory: str | pathlib.Path, limit: int | None = None, max_workers: int | None = None
@@ -157,7 +152,7 @@ class S3LogAccessExtractor:
         directory = pathlib.Path(directory)
 
         all_log_files = {str(file_path.absolute()) for file_path in directory.rglob("*.log")}
-        unextracted_files = all_log_files - set(self.record.keys())
+        unextracted_files = all_log_files - set(self.extraction_record.keys())
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
