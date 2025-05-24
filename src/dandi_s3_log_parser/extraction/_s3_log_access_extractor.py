@@ -94,9 +94,9 @@ class S3LogAccessExtractor:
             parsed_timestamps = [
                 datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S") for line in file_stream.readlines()
             ]
-        timestamps = numpy.array(parsed_timestamps)
+        timestamps = numpy.array(parsed_timestamps, dtype="U<19")
         all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
-        ips = numpy.loadtxt(fname=self.ips_file_path, dtype=str)
+        ips = numpy.loadtxt(fname=self.ips_file_path, dtype="U<15")
 
         timestamps_per_object_key = collections.defaultdict(list)
         bytes_sent_per_object_key = collections.defaultdict(list)
