@@ -178,7 +178,7 @@ class S3LogAccessExtractor:
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
-        if max_workers == 1:
+        if max_workers is None or max_workers == 1:
             for file_path in tqdm.tqdm(
                 iterable=files_to_extract,
                 desc="Running extraction on S3 logs: ",
