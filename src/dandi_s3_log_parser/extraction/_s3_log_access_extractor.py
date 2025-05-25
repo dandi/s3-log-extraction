@@ -134,7 +134,7 @@ class S3LogAccessExtractor:
         object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
         with self.timestamps_file_path.open(mode="r") as file_stream:
             timestamps = [
-                datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S") for line in file_stream.readlines()
+                datetime.datetime.strptime(line.strip(), format="%d/%b/%Y:%H:%M:%S") for line in file_stream.readlines()
             ]
         all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
         ips = numpy.loadtxt(fname=self.ips_file_path, dtype="U15")
@@ -144,7 +144,7 @@ class S3LogAccessExtractor:
         ips_per_object_key = collections.defaultdict(list)
 
         for object_key, timestamp, bytes_sent, ip in zip(object_keys, timestamps, all_bytes_sent, ips):
-            timestamps_per_object_key[object_key].append(timestamp.isoformat())
+            timestamps_per_object_key[object_key].append(timestamp.strftime(format="%y%m%d%H%M%S"))
             bytes_sent_per_object_key[object_key].append(bytes_sent)
             ips_per_object_key[object_key].append(ip)
 
