@@ -131,43 +131,62 @@ class S3LogAccessExtractor:
         if not self.object_keys_file_path.exists():
             return
 
-        object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
-        with self.timestamps_file_path.open(mode="r") as file_stream:
-            timestamps = [
-                datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S") for line in file_stream.readlines()
-            ]
-        all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
-        ips = numpy.loadtxt(fname=self.ips_file_path, dtype="U15")
+        # Record the start of the mirror copy step
+        with self.mirror_copy_start_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(f"{file_path}\n")
 
         timestamps_per_object_key = collections.defaultdict(list)
         bytes_sent_per_object_key = collections.defaultdict(list)
         ips_per_object_key = collections.defaultdict(list)
 
-        for object_key, timestamp, bytes_sent, ip in zip(object_keys, timestamps, all_bytes_sent, ips):
-            timestamps_per_object_key[object_key].append(timestamp.strftime(format="%y%m%d%H%M%S"))
-            bytes_sent_per_object_key[object_key].append(bytes_sent)
-            ips_per_object_key[object_key].append(ip)
+        # Mirror the timestamps
+        object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
+        with self.timestamps_file_path.open(mode="r") as file_stream:
+            all_timestamps = [
+                datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S").strftime(format="%y%m%d%H%M%S")
+                for line in file_stream.readlines()
+            ]
 
-        with self.mirror_copy_start_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{file_path}\n")
+        for object_key, timestamp in zip(object_keys, all_timestamps):
+            timestamps_per_object_key[object_key].append(timestamp)
 
-        for object_key in timestamps_per_object_key.keys():
+        for object_key, timestamps in timestamps_per_object_key.items():
             mirror_directory = self.extraction_directory / object_key
             mirror_directory.mkdir(parents=True, exist_ok=True)
 
             timestamps_mirror_file_path = mirror_directory / "timestamps.txt"
             with timestamps_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=timestamps_per_object_key[object_key], fmt="%s")
+        del timestamps, timestamps_per_object_key  # Clear memory to reduce overhead
+
+        # Mirror the bytes sent
+        all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
+        for object_key, bytes_sent in zip(object_keys, all_bytes_sent):
+            bytes_sent_per_object_key[object_key].append(bytes_sent)
+
+        for object_key, bytes_sent in bytes_sent_per_object_key.items():
+            mirror_directory = self.extraction_directory / object_key
+
             bytes_sent_mirror_file_path = mirror_directory / "bytes_sent.txt"
             with bytes_sent_mirror_file_path.open(mode="a") as file_stream:
-                numpy.savetxt(fname=file_stream, X=bytes_sent_per_object_key[object_key], fmt="%d")
+                numpy.savetxt(fname=file_stream, X=bytes_sent, fmt="%d")
+        del all_bytes_sent, bytes_sent_per_object_key
+
+        # Mirror the IPs
+        all_ips = numpy.loadtxt(fname=self.ips_file_path, dtype="U15")
+        for object_key, ip in zip(object_keys, all_ips):
+            ips_per_object_key[object_key].append(ip)
+
+        for object_key, ips in ips_per_object_key.items():
+            mirror_directory = self.extraction_directory / object_key
+
             ips_mirror_file_path = mirror_directory / "full_ips.txt"
             with ips_mirror_file_path.open(mode="a") as file_stream:
-                numpy.savetxt(fname=file_stream, X=ips_per_object_key[object_key], fmt="%s")
+                numpy.savetxt(fname=file_stream, X=ips, fmt="%s")
 
+        # Record final success and cleanup
         with self.mirror_copy_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{file_path}\n")
-
         shutil.rmtree(path=self.temporary_directory)
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
