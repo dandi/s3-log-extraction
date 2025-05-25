@@ -60,7 +60,7 @@ class S3LogAccessExtractor:
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
 
-        self.get_cache_directories()
+        self._get_cache_directories()
 
         initial_mirror_record_difference = {}
         if self.mirror_copy_start_record_file_path.exists() and self.mirror_copy_end_record_file_path.exists():
