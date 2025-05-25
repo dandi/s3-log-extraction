@@ -205,8 +205,6 @@ class S3LogAccessExtractor:
         """
         Purge the cache directory and all extraction records.
         """
-        cls._get_cache_directories()
-
         shutil.rmtree(path=cls.extraction_directory)
         cls.extraction_record_file_path.unlink(missing_ok=True)
         cls.mirror_copy_start_record_file_path.unlink(missing_ok=True)
