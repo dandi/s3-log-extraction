@@ -35,32 +35,30 @@ class S3LogAccessExtractor:
         The directory containing the raw S3 log files to be processed.
     """
 
-    def _get_cache_directories(self) -> None:
-        self.cache_directory = get_cache_directory()
+    def __new__(cls):
+        cls.cache_directory = get_cache_directory()
 
-        self.extraction_directory = self.cache_directory / "extraction"
-        self.extraction_directory.mkdir(exist_ok=True)
+        cls.extraction_directory = cls.cache_directory / "extraction"
+        cls.extraction_directory.mkdir(exist_ok=True)
 
-        self.base_temporary_directory = self.cache_directory / "tmp"
-        self.base_temporary_directory.mkdir(exist_ok=True)
+        cls.base_temporary_directory = cls.cache_directory / "tmp"
+        cls.base_temporary_directory.mkdir(exist_ok=True)
 
-        self.extraction_record_directory = self.cache_directory / "extraction_records"
-        self.extraction_record_directory.mkdir(exist_ok=True)
+        cls.extraction_record_directory = cls.cache_directory / "extraction_records"
+        cls.extraction_record_directory.mkdir(exist_ok=True)
 
-        extraction_record_file_name = f"{self.__class__.__name__}_extraction.txt"
-        self.extraction_record_file_path = self.extraction_record_directory / extraction_record_file_name
-        mirror_copy_start_record_file_name = f"{self.__class__.__name__}_mirror-copy-start.txt"
-        self.mirror_copy_start_record_file_path = self.extraction_record_directory / mirror_copy_start_record_file_name
-        mirror_copy_end_record_file_name = f"{self.__class__.__name__}_mirror-copy-end.txt"
-        self.mirror_copy_end_record_file_path = self.extraction_record_directory / mirror_copy_end_record_file_name
+        extraction_record_file_name = f"{cls.__class__.__name__}_extraction.txt"
+        cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
+        mirror_copy_start_record_file_name = f"{cls.__class__.__name__}_mirror-copy-start.txt"
+        cls.mirror_copy_start_record_file_path = cls.extraction_record_directory / mirror_copy_start_record_file_name
+        mirror_copy_end_record_file_name = f"{cls.__class__.__name__}_mirror-copy-end.txt"
+        cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
 
     def __init__(self) -> None:
         self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
-
-        self._get_cache_directories()
 
         initial_mirror_record_difference = {}
         if self.mirror_copy_start_record_file_path.exists() and self.mirror_copy_end_record_file_path.exists():
@@ -202,13 +200,14 @@ class S3LogAccessExtractor:
                     )
                 )
 
-    def purge_cache(self) -> None:
+    @classmethod
+    def purge_cache(cls) -> None:
         """
         Purge the cache directory and all extraction records.
         """
-        self._get_cache_directories()
+        cls._get_cache_directories()
 
-        shutil.rmtree(path=self.extraction_directory)
-        self.extraction_record_file_path.unlink(missing_ok=True)
-        self.mirror_copy_start_record_file_path.unlink(missing_ok=True)
-        self.mirror_copy_end_record_file_path.unlink(missing_ok=True)
+        shutil.rmtree(path=cls.extraction_directory)
+        cls.extraction_record_file_path.unlink(missing_ok=True)
+        cls.mirror_copy_start_record_file_path.unlink(missing_ok=True)
+        cls.mirror_copy_end_record_file_path.unlink(missing_ok=True)
