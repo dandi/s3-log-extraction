@@ -36,7 +36,7 @@ class S3LogAccessExtractor:
     """
 
     @classmethod
-    def _get_cache_directories(cls, cache_directory: pathlib.Path) -> None:
+    def _get_cache_directories(cls, cache_directory: pathlib.Path | None = None) -> None:
         """
         Create the cache directory and subdirectories if they do not exist.
         """
