@@ -4,7 +4,7 @@ import pathlib
 import pandas
 import py
 
-import dandi_s3_log_parser
+import s3_log_extraction
 
 
 def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
@@ -18,12 +18,12 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
 
     expected_output_folder_path = examples_folder_path / "expected_output"
 
-    dandi_s3_log_parser.map_binned_s3_logs_to_dandisets(
+    s3_log_extraction.map_binned_s3_logs_to_dandisets(
         binned_s3_logs_folder_path=example_binned_s3_logs_folder_path,
         mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path,
     )
 
-    dandi_s3_log_parser.generate_archive_summaries(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
+    s3_log_extraction.generate_archive_summaries(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
 
     test_file_paths = {
         path.relative_to(test_mapped_s3_logs_folder_path): path
@@ -52,7 +52,7 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
             raise AssertionError(message)
 
     # TODO: make a standalone test case (requires setting up expected test output example outside live services)
-    dandi_s3_log_parser.generate_all_dandiset_totals(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
+    s3_log_extraction.generate_all_dandiset_totals(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
 
     test_all_dandiset_totals_file_path = test_mapped_s3_logs_folder_path / "all_dandiset_totals.json"
     expected_all_dandiset_totals_file_path = expected_output_folder_path / "all_dandiset_totals.json"
@@ -64,7 +64,7 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
     assert test_all_dandiset_totals == expected_all_dandiset_totals
 
     # TODO: make a standalone test case (requires setting up expected test output example outside live services)
-    dandi_s3_log_parser.generate_archive_totals(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
+    s3_log_extraction.generate_archive_totals(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
 
     test_archive_totals_file_path = test_mapped_s3_logs_folder_path / "archive_totals.json"
     expected_all_dandiset_totals_file_path = expected_output_folder_path / "archive_totals.json"
@@ -78,13 +78,13 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
     # TODO: make a standalone test case (requires setting up expected test output example outside live services)
     test_cache_directory = test_mapped_s3_logs_folder_path / ".cache"
     test_cache_directory.mkdir(exist_ok=True)
-    dandi_s3_log_parser.update_region_codes_to_coordinates(
+    s3_log_extraction.update_region_codes_to_coordinates(
         mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path, cache_directory=test_cache_directory
     )
 
-    test_log_cache_directory = test_cache_directory / "dandi_s3_log_parser"
+    test_log_cache_directory = test_cache_directory / "s3_log_extraction"
     test_region_codes_to_coordinates_file_path = test_log_cache_directory / "region_codes_to_coordinates.json"
-    expected_log_cache_directory = expected_output_folder_path / ".cache" / "dandi_s3_log_parser"
+    expected_log_cache_directory = expected_output_folder_path / ".cache" / "s3_log_extraction"
     expected_region_codes_to_coordinates_file_path = expected_log_cache_directory / "region_codes_to_coordinates.json"
     with test_region_codes_to_coordinates_file_path.open(mode="r") as io:
         test_region_codes_to_coordinates = json.load(fp=io)
