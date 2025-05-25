@@ -30,12 +30,12 @@ BEGIN {
     if (substr(status, 1, 1) != "2") {next}
 
     object_key = pre_uri_fields[9]
-    object_type = substr(object_key, 1, 4)
+    object_type = substr(object_key, 1, 5)
     # SPECIAL CASE: Limit Zarr stores to their top level to limit the number of files
-    if (object_type == "zarr") {
+    if (object_type == "zarr/") {
         split(object_key, object_key_parts, "/")
         object_key = object_key_parts[1] "/" object_key_parts[2]
-    } else if (object_type != "blob") {
+    } else if (object_type != "blobs") {
         # SPECIAL CASE: DANDI assigns files to 'blobs'
         # if trying to use this for more generic bucket mirroring, disable this
         next
