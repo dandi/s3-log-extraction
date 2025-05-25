@@ -38,6 +38,8 @@ class S3LogAccessExtractor:
     def __new__(cls):
         cls._get_cache_directories()
 
+        return super().__new__(cls)
+
     def __init__(self) -> None:
         self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
 
@@ -212,7 +214,7 @@ class S3LogAccessExtractor:
         """
         Purge the cache directory and all extraction records.
         """
-        cls._get_cache_directories()
+        # cls._get_cache_directories()
 
         shutil.rmtree(path=cls.extraction_directory)
         cls.extraction_record_file_path.unlink(missing_ok=True)
