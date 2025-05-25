@@ -59,7 +59,7 @@ class S3LogAccessExtractor:
         cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
 
     @classmethod
-    def purge_cache(cls) -> None:
+    def reset_cache(cls) -> None:
         """
         Purge the cache directory and all extraction records.
         """
