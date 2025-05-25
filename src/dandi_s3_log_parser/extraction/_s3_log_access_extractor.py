@@ -35,12 +35,7 @@ class S3LogAccessExtractor:
         The directory containing the raw S3 log files to be processed.
     """
 
-    def __init__(self) -> None:
-        self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
-
-        # TODO: does this hold after bundling?
-        self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
-
+    def _get_cache_directories(self) -> None:
         self.cache_directory = get_cache_directory()
 
         self.extraction_directory = self.cache_directory / "extraction"
@@ -58,6 +53,14 @@ class S3LogAccessExtractor:
         self.mirror_copy_start_record_file_path = self.extraction_record_directory / mirror_copy_start_record_file_name
         mirror_copy_end_record_file_name = f"{self.__class__.__name__}_mirror-copy-end.txt"
         self.mirror_copy_end_record_file_path = self.extraction_record_directory / mirror_copy_end_record_file_name
+
+    def __init__(self) -> None:
+        self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+
+        # TODO: does this hold after bundling?
+        self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
+
+        self.get_cache_directories()
 
         initial_mirror_record_difference = {}
         if self.mirror_copy_start_record_file_path.exists() and self.mirror_copy_end_record_file_path.exists():
@@ -203,6 +206,8 @@ class S3LogAccessExtractor:
         """
         Purge the cache directory and all extraction records.
         """
+        self._get_cache_directories()
+
         shutil.rmtree(path=self.extraction_directory)
         self.extraction_record_file_path.unlink(missing_ok=True)
         self.mirror_copy_start_record_file_path.unlink(missing_ok=True)
