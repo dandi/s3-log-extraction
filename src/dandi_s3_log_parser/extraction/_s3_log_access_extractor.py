@@ -36,23 +36,7 @@ class S3LogAccessExtractor:
     """
 
     def __new__(cls):
-        cls.cache_directory = get_cache_directory()
-
-        cls.extraction_directory = cls.cache_directory / "extraction"
-        cls.extraction_directory.mkdir(exist_ok=True)
-
-        cls.base_temporary_directory = cls.cache_directory / "tmp"
-        cls.base_temporary_directory.mkdir(exist_ok=True)
-
-        cls.extraction_record_directory = cls.cache_directory / "extraction_records"
-        cls.extraction_record_directory.mkdir(exist_ok=True)
-
-        extraction_record_file_name = f"{cls.__class__.__name__}_extraction.txt"
-        cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
-        mirror_copy_start_record_file_name = f"{cls.__class__.__name__}_mirror-copy-start.txt"
-        cls.mirror_copy_start_record_file_path = cls.extraction_record_directory / mirror_copy_start_record_file_name
-        mirror_copy_end_record_file_name = f"{cls.__class__.__name__}_mirror-copy-end.txt"
-        cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
+        cls._get_cache_directories()
 
     def __init__(self) -> None:
         self.ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
@@ -201,10 +185,35 @@ class S3LogAccessExtractor:
                 )
 
     @classmethod
+    def _get_cache_directories(cls) -> None:
+        """
+        Create the cache directory and subdirectories if they do not exist.
+        """
+        cls.cache_directory = get_cache_directory()
+
+        cls.extraction_directory = cls.cache_directory / "extraction"
+        cls.extraction_directory.mkdir(exist_ok=True)
+
+        cls.base_temporary_directory = cls.cache_directory / "tmp"
+        cls.base_temporary_directory.mkdir(exist_ok=True)
+
+        cls.extraction_record_directory = cls.cache_directory / "extraction_records"
+        cls.extraction_record_directory.mkdir(exist_ok=True)
+
+        extraction_record_file_name = f"{cls.__class__.__name__}_extraction.txt"
+        cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
+        mirror_copy_start_record_file_name = f"{cls.__class__.__name__}_mirror-copy-start.txt"
+        cls.mirror_copy_start_record_file_path = cls.extraction_record_directory / mirror_copy_start_record_file_name
+        mirror_copy_end_record_file_name = f"{cls.__class__.__name__}_mirror-copy-end.txt"
+        cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
+
+    @classmethod
     def purge_cache(cls) -> None:
         """
         Purge the cache directory and all extraction records.
         """
+        cls._get_cache_directories()
+
         shutil.rmtree(path=cls.extraction_directory)
         cls.extraction_record_file_path.unlink(missing_ok=True)
         cls.mirror_copy_start_record_file_path.unlink(missing_ok=True)
