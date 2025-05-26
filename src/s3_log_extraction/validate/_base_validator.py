@@ -4,7 +4,7 @@ import pathlib
 
 import tqdm
 
-from ..config import get_validation_directory
+from ..config import get_records_directory
 
 
 class BaseValidator(abc.ABC):
@@ -18,10 +18,10 @@ class BaseValidator(abc.ABC):
         return checksum_int
 
     def __init__(self) -> None:
-        self.validation_directory = get_validation_directory()
+        self.records_directory = get_records_directory()
 
         record_file_name = f"{self.__class__.__name__}_{hex(hash(self))[2:]}.txt"
-        self.record_file_path = self.validation_directory / record_file_name
+        self.record_file_path = self.records_directory / record_file_name
 
         self.record = {}
         if not self.record_file_path.exists():

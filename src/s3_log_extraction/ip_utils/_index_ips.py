@@ -15,7 +15,6 @@ def index_ips(*, seed: int = 0) -> None:
 
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
     """
-    # Set numpy seed
     rng = numpy.random.default_rng(seed=seed)
 
     cache_directory = get_cache_directory()

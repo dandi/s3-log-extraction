@@ -12,7 +12,7 @@ import typing
 import numpy
 import tqdm
 
-from ..config import get_cache_directory
+from ..config import get_cache_directory, get_records_directory
 
 
 class S3LogAccessExtractor:
@@ -51,18 +51,16 @@ class S3LogAccessExtractor:
         cls.base_temporary_directory = cls.cache_directory / "tmp"
         cls.base_temporary_directory.mkdir(exist_ok=True)
 
-        cls.extraction_record_directory = cls.cache_directory / "extraction_records"
-        cls.extraction_record_directory.mkdir(exist_ok=True)
-
         # Special file for safe interruption during parallel extraction
-        cls.interrupt_file_path = cls.extraction_record_directory / "pause_extraction"
+        cls.records_directory = get_records_directory()
+        cls.interrupt_file_path = cls.records_directory / "pause_extraction"
 
         extraction_record_file_name = f"{cls.__name__}_extraction.txt"
-        cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
+        cls.extraction_record_file_path = cls.records_directory / extraction_record_file_name
         mirror_copy_start_record_file_name = f"{cls.__name__}_mirror-copy-start.txt"
-        cls.mirror_copy_start_record_file_path = cls.extraction_record_directory / mirror_copy_start_record_file_name
+        cls.mirror_copy_start_record_file_path = cls.records_directory / mirror_copy_start_record_file_name
         mirror_copy_end_record_file_name = f"{cls.__name__}_mirror-copy-end.txt"
-        cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
+        cls.mirror_copy_end_record_file_path = cls.records_directory / mirror_copy_end_record_file_name
 
     @classmethod
     def reset_cache(cls) -> None:

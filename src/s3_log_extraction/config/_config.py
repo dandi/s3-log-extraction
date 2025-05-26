@@ -68,18 +68,21 @@ def get_cache_directory() -> pathlib.Path:
     return directory
 
 
-def get_validation_directory() -> pathlib.Path:
+def get_records_directory() -> pathlib.Path:
     """
-    Get the cache directory for the DANDI S3 log parser.
+    Get the records directory for the DANDI S3 log parser.
+
+    Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
+    repeat computations.
 
     Returns
     -------
     pathlib.Path
-        The cache directory for the DANDI S3 log parser.
+        The records directory for the DANDI S3 log parser.
     """
     cache_directory = get_cache_directory()
 
-    validation_directory = cache_directory / "validation_records"
-    validation_directory.mkdir(exist_ok=True)
+    records_directory = cache_directory / "records"
+    records_directory.mkdir(exist_ok=True)
 
-    return validation_directory
+    return records_directory
