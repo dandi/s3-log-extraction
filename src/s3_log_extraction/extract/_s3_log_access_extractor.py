@@ -62,8 +62,6 @@ class S3LogAccessExtractor:
         mirror_copy_end_record_file_name = f"{cls.__name__}_mirror-copy-end.txt"
         cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
 
-        raise NotImplementedError(f"testing: {cls.__name__}")
-
     @classmethod
     def reset_cache(cls) -> None:
         """
