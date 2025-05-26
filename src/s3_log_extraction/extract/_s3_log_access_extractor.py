@@ -55,6 +55,7 @@ class S3LogAccessExtractor:
 
         extraction_record_file_name = f"{cls.__class__.__name__}_extraction.txt"
         cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
+        cls.interrupt_file_path = cls.extraction_record_directory / "stop_extraction"
         mirror_copy_start_record_file_name = f"{cls.__class__.__name__}_mirror-copy-start.txt"
         cls.mirror_copy_start_record_file_path = cls.extraction_record_directory / mirror_copy_start_record_file_name
         mirror_copy_end_record_file_name = f"{cls.__class__.__name__}_mirror-copy-end.txt"
@@ -116,7 +117,6 @@ class S3LogAccessExtractor:
 
         with self.extraction_record_file_path.open(mode="r") as file_stream:
             self.extraction_record = {line: True for line in file_stream.read().splitlines()}
-        self.interrupt_file_path = self.extraction_record_directory / "stop_extraction"
 
     def _run_extraction(self, file_path: pathlib.Path) -> None:
         absolute_script_path = str(self._relative_script_path.absolute())
