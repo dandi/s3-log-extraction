@@ -28,8 +28,9 @@ class S3LogAccessExtractor:
     This extractor is:
       - parallelized
       - interruptible
-          However, you must do so by creating a file called 'pause_extraction' in the extraction record directory
-          and then waiting until all subprocesses have finished their current work before killing the process.
+          However, you must do so in one of two ways:
+            - Create a file in the records cache called 'pause_extraction' to indefinitely pause the processes.
+            - Create a file in the records cache called 'stop_extraction' to end the processes after current completion.
       - updatable
 
     Parameters
@@ -53,7 +54,8 @@ class S3LogAccessExtractor:
 
         # Special file for safe interruption during parallel extraction
         cls.records_directory = get_records_directory()
-        cls.interrupt_file_path = cls.records_directory / "pause_extraction"
+        cls.pause_file_path = cls.records_directory / "pause_extraction"
+        cls.stop_file_path = cls.records_directory / "stop_extraction"
 
         extraction_record_file_name = f"{cls.__name__}_extraction.txt"
         cls.extraction_record_file_path = cls.records_directory / extraction_record_file_name
@@ -205,9 +207,12 @@ class S3LogAccessExtractor:
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         pid = str(os.getpid())
-        while self.interrupt_file_path.exists() is True:
-            print(f"Extraction interrupted on process {pid} - waiting for the interrupt file to be removed...")
+        while self.pause_file_path.exists() is True:
+            print(f"Extraction paused on process {pid} - waiting for the interrupt file to be removed...")
             time.sleep(60)
+        if self.stop_file_path.exists() is True:
+            print(f"Extraction stopped on process {pid} - exiting...")
+            return
 
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
