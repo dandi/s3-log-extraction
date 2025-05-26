@@ -14,7 +14,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
     This validator is:
       - not parallelized, but could be
       - interruptible
-      - resumable
+      - updatable
     """
 
     tqdm_description = "Pre-validating extraction heuristic"

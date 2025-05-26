@@ -6,6 +6,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import time
 import typing
 
 import numpy
@@ -26,8 +27,8 @@ class S3LogAccessExtractor:
 
     This extractor is:
       - parallelized
-      - semi-interruptible; most of the computation via AWK can be interrupted safely, but not the mirror copy step
-      - resumable
+      - interruptible; BUT you must do so by creating a file called 'stop_extraction' in the extraction record directory
+      - updatable
 
     Parameters
     ----------
@@ -46,6 +47,7 @@ class S3LogAccessExtractor:
         cls.extraction_directory.mkdir(exist_ok=True)
 
         cls.base_temporary_directory = cls.cache_directory / "tmp"
+        shutil.rmtree(path=cls.base_temporary_directory, ignore_errors=True)  # Try to clean any previous runs
         cls.base_temporary_directory.mkdir(exist_ok=True)
 
         cls.extraction_record_directory = cls.cache_directory / "extraction_records"
@@ -104,7 +106,7 @@ class S3LogAccessExtractor:
         if len(initial_mirror_record_difference) > 0:
             message = (
                 "Mirror copy corruption from previous run detected - "
-                "please call `.purge_cache()` to clean the extraction cache and records.\n"
+                "please call `.reset_cache()` to clean the extraction cache and records.\n"
             )
             raise ValueError(message)
 
@@ -114,6 +116,7 @@ class S3LogAccessExtractor:
 
         with self.extraction_record_file_path.open(mode="r") as file_stream:
             self.extraction_record = {line: True for line in file_stream.read().splitlines()}
+        self.interrupt_file_path = self.extraction_record_directory / "stop_extraction"
 
     def _run_extraction(self, file_path: pathlib.Path) -> None:
         absolute_script_path = str(self._relative_script_path.absolute())
@@ -154,6 +157,11 @@ class S3LogAccessExtractor:
 
         # Mirror the timestamps
         object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
+        unique_object_keys = numpy.unique(ar=object_keys)
+        for object_key in unique_object_keys:
+            mirror_directory = self.extraction_directory / object_key
+            mirror_directory.mkdir(parents=True, exist_ok=True)
+
         with self.timestamps_file_path.open(mode="r") as file_stream:
             all_timestamps = [
                 datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S").strftime(format="%y%m%d%H%M%S")
@@ -165,8 +173,6 @@ class S3LogAccessExtractor:
 
         for object_key, timestamps in timestamps_per_object_key.items():
             mirror_directory = self.extraction_directory / object_key
-            mirror_directory.mkdir(parents=True, exist_ok=True)
-
             timestamps_mirror_file_path = mirror_directory / "timestamps.txt"
             with timestamps_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=timestamps_per_object_key[object_key], fmt="%s")
@@ -179,7 +185,6 @@ class S3LogAccessExtractor:
 
         for object_key, bytes_sent in bytes_sent_per_object_key.items():
             mirror_directory = self.extraction_directory / object_key
-
             bytes_sent_mirror_file_path = mirror_directory / "bytes_sent.txt"
             with bytes_sent_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=bytes_sent, fmt="%d")
@@ -192,7 +197,6 @@ class S3LogAccessExtractor:
 
         for object_key, ips in ips_per_object_key.items():
             mirror_directory = self.extraction_directory / object_key
-
             ips_mirror_file_path = mirror_directory / "full_ips.txt"
             with ips_mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=ips, fmt="%s")
@@ -203,6 +207,10 @@ class S3LogAccessExtractor:
         shutil.rmtree(path=self.temporary_directory)
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
+        while self.interrupt_file_path.exists() is True:
+            print("Extraction interrupted - waiting for the interrupt file to be removed...")
+            time.sleep(60)
+
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
         if self.extraction_record.get(absolute_file_path, False) is True:

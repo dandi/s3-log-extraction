@@ -110,7 +110,7 @@ Throughout the codebase, various processes are referred to in the following ways
 
 - parallelized: The process can be run in parallel across multiple workers, which increases throughput.
 - interruptible: The process can be safely interrupted (`ctrl+C` or `pkill`) with only a very low chance of causing corruption. For parallelized interruption you may have to either `pkill` the main dispatch process or spam `ctrl+C` multiple times.
-- resumable: The process can be resumed from the last checkpoint without losing any progress. It can also be run fresh at different times, such as on a CRON cycle, and it will only interact with unprocessed data.
+- updatable: The process can be resumed from the last checkpoint without losing any progress. It can also be run fresh at different times, such as on a CRON cycle, and it will only interact with unprocessed data.
 
 ### Performance
 

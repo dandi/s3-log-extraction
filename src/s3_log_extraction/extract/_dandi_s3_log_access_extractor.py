@@ -19,7 +19,7 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
     This extractor is:
       - parallelized
       - semi-interruptible; most of the computation via AWK can be interrupted safely, but not the mirror copy step
-      - resumable
+      - updatable
 
     Parameters
     ----------

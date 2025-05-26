@@ -12,7 +12,7 @@ class HttpSplitCountPreValidator(BaseValidator):
     This validator is:
       - not parallelized, but could be
       - interruptible
-      - resumable
+      - updatable
     """
 
     tqdm_description = "Pre-validating 'HTTP/1.' split count"
