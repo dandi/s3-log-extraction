@@ -6,6 +6,11 @@ BEGIN {
         exit 1
     }
     IPS_TO_SKIP_REGEX = ENVIRON["IPS_TO_SKIP_REGEX"]
+
+    if (!("TEMPORARY_DIRECTORY" in ENVIRON)) {
+        print "Environment variable 'TEMPORARY_DIRECTORY' is not set" > "/dev/stderr"
+        exit 1
+    }
     TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"]
 
     OBJECT_KEYS_FILE_PATH = TEMPORARY_DIRECTORY "object_keys.txt"

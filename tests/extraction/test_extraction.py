@@ -24,9 +24,9 @@ def test_extraction(tmpdir: py.path.local) -> None:
     assert relative_output_files == relative_expected_files
 
     record_files = {
-        pathlib.Path("extraction_records/type_extraction.txt"),
-        pathlib.Path("extraction_records/type_mirror-copy-end.txt"),
-        pathlib.Path("extraction_records/type_mirror-copy-start.txt"),
+        pathlib.Path("extraction_records/S3LogAccessExtractor_extraction.txt"),
+        pathlib.Path("extraction_records/S3LogAccessExtractor_mirror-copy-end.txt"),
+        pathlib.Path("extraction_records/S3LogAccessExtractor_mirror-copy-start.txt"),
     }
     non_record_output_files = relative_output_files - record_files
     non_record_expected_files = relative_expected_files - record_files
