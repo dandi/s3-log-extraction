@@ -47,7 +47,9 @@ class S3LogAccessExtractor:
         cls.extraction_directory.mkdir(exist_ok=True)
 
         cls.base_temporary_directory = cls.cache_directory / "tmp"
-        shutil.rmtree(path=cls.base_temporary_directory, ignore_errors=True)  # Try to clean any previous runs
+        # Try to clean any previous runs
+        for subdirectory in cls.base_temporary_directory.iterdir():
+            shutil.rmtree(path=subdirectory, ignore_errors=True)
         cls.base_temporary_directory.mkdir(exist_ok=True)
 
         cls.extraction_record_directory = cls.cache_directory / "extraction_records"
