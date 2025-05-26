@@ -27,7 +27,9 @@ class S3LogAccessExtractor:
 
     This extractor is:
       - parallelized
-      - interruptible; BUT you must do so by creating a file called 'stop_extraction' in the extraction record directory
+      - interruptible
+          However, you must do so by creating a file called 'stop_extraction' in the extraction record directory
+          and then waiting until all subprocesses have finished their current work before killing the process.
       - updatable
 
     Parameters
@@ -52,13 +54,15 @@ class S3LogAccessExtractor:
         cls.extraction_record_directory = cls.cache_directory / "extraction_records"
         cls.extraction_record_directory.mkdir(exist_ok=True)
 
-        extraction_record_file_name = f"{cls.__class__.__name__}_extraction.txt"
+        extraction_record_file_name = f"{cls.__name__}_extraction.txt"
         cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
         cls.interrupt_file_path = cls.extraction_record_directory / "stop_extraction"
-        mirror_copy_start_record_file_name = f"{cls.__class__.__name__}_mirror-copy-start.txt"
+        mirror_copy_start_record_file_name = f"{cls.__name__}_mirror-copy-start.txt"
         cls.mirror_copy_start_record_file_path = cls.extraction_record_directory / mirror_copy_start_record_file_name
-        mirror_copy_end_record_file_name = f"{cls.__class__.__name__}_mirror-copy-end.txt"
+        mirror_copy_end_record_file_name = f"{cls.__name__}_mirror-copy-end.txt"
         cls.mirror_copy_end_record_file_path = cls.extraction_record_directory / mirror_copy_end_record_file_name
+
+        raise NotImplementedError(f"testing: {cls.__name__}")
 
     @classmethod
     def reset_cache(cls) -> None:
@@ -207,8 +211,9 @@ class S3LogAccessExtractor:
         shutil.rmtree(path=self.temporary_directory)
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
+        pid = str(os.getpid())
         while self.interrupt_file_path.exists() is True:
-            print("Extraction interrupted - waiting for the interrupt file to be removed...")
+            print(f"Extraction interrupted on process {pid} - waiting for the interrupt file to be removed...")
             time.sleep(60)
 
         file_path = pathlib.Path(file_path)
@@ -216,8 +221,7 @@ class S3LogAccessExtractor:
         if self.extraction_record.get(absolute_file_path, False) is True:
             return
 
-        # These must be set per process
-        self.temporary_directory = self.base_temporary_directory / str(os.getpid())
+        self.temporary_directory = self.base_temporary_directory / pid
         self.temporary_directory.mkdir(exist_ok=True)
         self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
         self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
