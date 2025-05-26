@@ -87,7 +87,7 @@ class BaseValidator(abc.ABC):
         """
         directory = pathlib.Path(directory)
 
-        all_log_files = {str(file_path.absolute()) for file_path in directory.rglob("*.log")}
+        all_log_files = {str(file_path.absolute()) for file_path in directory.rglob(pattern="*.log")}
         unvalidated_files = all_log_files - set(self.record.keys())
 
         files_to_validate = list(unvalidated_files)[:limit] if limit is not None else unvalidated_files

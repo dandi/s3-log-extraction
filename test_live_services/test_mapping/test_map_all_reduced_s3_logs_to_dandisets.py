@@ -27,10 +27,11 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
 
     test_file_paths = {
         path.relative_to(test_mapped_s3_logs_folder_path): path
-        for path in test_mapped_s3_logs_folder_path.rglob("*.tsv")
+        for path in test_mapped_s3_logs_folder_path.rglob(pattern="*.tsv")
     }
     expected_file_paths = {
-        path.relative_to(expected_output_folder_path): path for path in expected_output_folder_path.rglob("*.tsv")
+        path.relative_to(expected_output_folder_path): path
+        for path in expected_output_folder_path.rglob(pattern="*.tsv")
     }
     assert set(test_file_paths.keys()) == set(expected_file_paths.keys())
 

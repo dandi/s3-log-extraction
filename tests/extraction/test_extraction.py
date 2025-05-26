@@ -17,9 +17,11 @@ def test_extraction(tmpdir: py.path.local) -> None:
     extractor = s3_log_extraction.extract.S3LogAccessExtractor(cache_directory=output_directory)
     extractor.extract_directory(directory=test_logs_directory)
 
-    relative_output_files = set([file.relative_to(output_directory) for file in output_directory.rglob("*.txt")])
+    relative_output_files = set(
+        [file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")]
+    )
     relative_expected_files = set(
-        [file.relative_to(expected_output_directory) for file in expected_output_directory.rglob("*.txt")]
+        [file.relative_to(expected_output_directory) for file in expected_output_directory.rglob(pattern="*.txt")]
     )
     assert relative_output_files == relative_expected_files
 

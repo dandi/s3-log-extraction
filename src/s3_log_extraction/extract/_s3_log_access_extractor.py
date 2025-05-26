@@ -28,7 +28,7 @@ class S3LogAccessExtractor:
     This extractor is:
       - parallelized
       - interruptible
-          However, you must do so by creating a file called 'stop_extraction' in the extraction record directory
+          However, you must do so by creating a file called 'pause_extraction' in the extraction record directory
           and then waiting until all subprocesses have finished their current work before killing the process.
       - updatable
 
@@ -55,7 +55,7 @@ class S3LogAccessExtractor:
         cls.extraction_record_directory.mkdir(exist_ok=True)
 
         # Special file for safe interruption during parallel extraction
-        cls.interrupt_file_path = cls.extraction_record_directory / "stop_extraction"
+        cls.interrupt_file_path = cls.extraction_record_directory / "pause_extraction"
 
         extraction_record_file_name = f"{cls.__name__}_extraction.txt"
         cls.extraction_record_file_path = cls.extraction_record_directory / extraction_record_file_name
@@ -249,7 +249,7 @@ class S3LogAccessExtractor:
     ) -> None:
         directory = pathlib.Path(directory)
 
-        all_log_files = {str(file_path.absolute()) for file_path in directory.rglob("*.log")}
+        all_log_files = {str(file_path.absolute()) for file_path in directory.rglob(pattern="*.log")}
         unextracted_files = all_log_files - set(self.extraction_record.keys())
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files

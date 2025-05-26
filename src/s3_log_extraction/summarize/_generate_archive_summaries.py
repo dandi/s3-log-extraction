@@ -21,7 +21,7 @@ def generate_archive_summaries(
     # By day
     all_dandiset_summaries_by_day = [
         pandas.read_table(filepath_or_buffer=dandiset_by_day_summary_file_path)
-        for dandiset_by_day_summary_file_path in mapped_s3_logs_folder_path.rglob("dandiset_summary_by_day.tsv")
+        for dandiset_by_day_summary_file_path in mapped_s3_logs_folder_path.rglob(pattern="dandiset_summary_by_day.tsv")
     ]
     aggregated_dandiset_summaries_by_day = pandas.concat(objs=all_dandiset_summaries_by_day, ignore_index=True)
 
@@ -41,7 +41,9 @@ def generate_archive_summaries(
     # By region
     all_dandiset_summaries_by_region = [
         pandas.read_table(filepath_or_buffer=dandiset_by_region_summary_file_path)
-        for dandiset_by_region_summary_file_path in mapped_s3_logs_folder_path.rglob("dandiset_summary_by_region.tsv")
+        for dandiset_by_region_summary_file_path in mapped_s3_logs_folder_path.rglob(
+            pattern="dandiset_summary_by_region.tsv"
+        )
     ]
     aggregated_dandiset_summaries_by_region = pandas.concat(objs=all_dandiset_summaries_by_region, ignore_index=True)
 
