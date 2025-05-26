@@ -164,15 +164,7 @@ class S3LogAccessExtractor:
             with mirror_file_path.open(mode="a") as file_stream:
                 numpy.savetxt(fname=file_stream, X=data, fmt=write_format)
 
-    def _mirror_copy(self, absolute_file_path: str) -> None:
-        # Sometimes a log file (especially very early ones) may not have any valid GET entries
-        if not self.object_keys_file_path.exists():
-            return
-
-        # Record the start of the mirror copy step
-        with self.mirror_copy_start_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{absolute_file_path}\n")
-
+    def _mirror_copy(self) -> None:
         # Mirror the timestamps
         object_keys = numpy.loadtxt(fname=self.object_keys_file_path, dtype=str)
 
@@ -213,11 +205,6 @@ class S3LogAccessExtractor:
         )
         del all_ips
 
-        # Record final success and cleanup
-        with self.mirror_copy_end_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{absolute_file_path}\n")
-        shutil.rmtree(path=self.temporary_directory)
-
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         pid = str(os.getpid())
         while self.interrupt_file_path.exists() is True:
@@ -237,7 +224,21 @@ class S3LogAccessExtractor:
         self.ips_file_path = self.temporary_directory / "full_ips.txt"
 
         self._run_extraction(file_path=file_path)
-        self._mirror_copy(absolute_file_path=absolute_file_path)
+
+        # Sometimes a log file (especially very early ones) may not have any valid GET entries
+        if not self.object_keys_file_path.exists():
+            return
+
+        # Record the start of the mirror copy step
+        with self.mirror_copy_start_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(f"{absolute_file_path}\n")
+
+        self._mirror_copy()
+
+        # Record final success and cleanup
+        with self.mirror_copy_end_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(f"{absolute_file_path}\n")
+        shutil.rmtree(path=self.temporary_directory)
 
         self.extraction_record[absolute_file_path] = True
         with self.extraction_record_file_path.open(mode="a") as file_stream:
