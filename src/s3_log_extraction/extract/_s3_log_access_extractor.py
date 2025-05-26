@@ -47,9 +47,6 @@ class S3LogAccessExtractor:
         cls.extraction_directory.mkdir(exist_ok=True)
 
         cls.base_temporary_directory = cls.cache_directory / "tmp"
-        # Try to clean any previous runs
-        for subdirectory in cls.base_temporary_directory.iterdir():
-            shutil.rmtree(path=subdirectory, ignore_errors=True)
         cls.base_temporary_directory.mkdir(exist_ok=True)
 
         cls.extraction_record_directory = cls.cache_directory / "extraction_records"
@@ -71,6 +68,7 @@ class S3LogAccessExtractor:
         cls._get_cache_directories()
 
         shutil.rmtree(path=cls.extraction_directory)
+        shutil.rmtree(path=cls.base_temporary_directory)
         cls.extraction_record_file_path.unlink(missing_ok=True)
         cls.mirror_copy_start_record_file_path.unlink(missing_ok=True)
         cls.mirror_copy_end_record_file_path.unlink(missing_ok=True)
