@@ -9,14 +9,14 @@ from typing import Literal
 
 import ipinfo
 import requests
-import yaml
 
 from ._error_collection import _collect_error
 from ._globals import _KNOWN_SERVICES
-from ..config._globals import (
-    _IP_HASH_NOT_IN_SERVICES_FILE_PATH,
-    _IP_HASH_TO_REGION_FILE_PATH,
-)
+
+# from ..config._globals import (
+#     _IP_HASH_NOT_IN_SERVICES_FILE_PATH,
+#     _IP_HASH_TO_REGION_FILE_PATH,
+# )
 
 
 def get_region_from_ip_address(
@@ -191,31 +191,33 @@ def _request_cidr_range(service_name: str) -> dict:
 
 def _load_ip_hash_cache(*, name: Literal["region", "services"]) -> dict[str, str] | dict[str, bool]:
     """Load the IP hash to region cache from disk."""
-    match name:
-        case "region":
-            if not _IP_HASH_TO_REGION_FILE_PATH.exists():
-                return dict()  # pragma: no cover
-
-            with open(file=_IP_HASH_TO_REGION_FILE_PATH) as stream:
-                return yaml.load(stream=stream, Loader=yaml.SafeLoader) or dict()
-        case "services":
-            if not _IP_HASH_NOT_IN_SERVICES_FILE_PATH.exists():
-                return dict()  # pragma: no cover
-
-            with open(file=_IP_HASH_NOT_IN_SERVICES_FILE_PATH) as stream:
-                return yaml.load(stream=stream, Loader=yaml.SafeLoader) or dict()
-        case _:
-            raise ValueError(f"Name '{name}' is not recognized!")  # pragma: no cover
+    pass
+    # match name:
+    #     case "region":
+    #         if not _IP_HASH_TO_REGION_FILE_PATH.exists():
+    #             return dict()  # pragma: no cover
+    #
+    #         with open(file=_IP_HASH_TO_REGION_FILE_PATH) as stream:
+    #             return yaml.load(stream=stream, Loader=yaml.SafeLoader) or dict()
+    #     case "services":
+    #         if not _IP_HASH_NOT_IN_SERVICES_FILE_PATH.exists():
+    #             return dict()  # pragma: no cover
+    #
+    #         with open(file=_IP_HASH_NOT_IN_SERVICES_FILE_PATH) as stream:
+    #             return yaml.load(stream=stream, Loader=yaml.SafeLoader) or dict()
+    #     case _:
+    #         raise ValueError(f"Name '{name}' is not recognized!")  # pragma: no cover
 
 
 def _save_ip_hash_cache(*, name: Literal["region", "services"], ip_cache: dict[str, str] | dict[str, bool]) -> None:
     """Save the IP hash to region cache to disk."""
-    match name:
-        case "region":
-            with open(file=_IP_HASH_TO_REGION_FILE_PATH, mode="w") as stream:
-                yaml.dump(data=ip_cache, stream=stream)
-        case "services":
-            with open(file=_IP_HASH_NOT_IN_SERVICES_FILE_PATH, mode="w") as stream:
-                yaml.dump(data=ip_cache, stream=stream)
-        case _:
-            raise ValueError(f"Name '{name}' is not recognized!")  # pragma: no cover
+    pass
+    # match name:
+    #     case "region":
+    #         with open(file=_IP_HASH_TO_REGION_FILE_PATH, mode="w") as stream:
+    #             yaml.dump(data=ip_cache, stream=stream)
+    #     case "services":
+    #         with open(file=_IP_HASH_NOT_IN_SERVICES_FILE_PATH, mode="w") as stream:
+    #             yaml.dump(data=ip_cache, stream=stream)
+    #     case _:
+    #         raise ValueError(f"Name '{name}' is not recognized!")  # pragma: no cover
