@@ -31,6 +31,5 @@ def decrypt_bytes(encrypted_data: bytes) -> bytes:
     key = get_key()
     fernet = cryptography.fernet.Fernet(key=key)
 
-    print(encrypted_data)
     decrypted_data = fernet.decrypt(token=encrypted_data)
     return decrypted_data
