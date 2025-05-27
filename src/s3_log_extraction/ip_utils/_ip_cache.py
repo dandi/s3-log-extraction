@@ -18,7 +18,8 @@ def load_index_to_ip() -> dict[int, str]:
     ips_index_cache_file_path = ips_cache_directory / "indexed_ips.yaml"
 
     if not ips_index_cache_file_path.exists():
-        ips_index_cache_file_path.touch()
+        with ips_index_cache_file_path.open("w") as file_stream:
+            file_stream.write("")
         return {}
 
     with ips_index_cache_file_path.open(mode="rb") as file_stream:
