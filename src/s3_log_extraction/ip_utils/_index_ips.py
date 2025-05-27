@@ -30,7 +30,7 @@ def index_ips(*, seed: int = 0) -> None:
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
     for full_ip_file_path in tqdm.tqdm(
-        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IPs", unit="file", smoothing=0
+        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="file", smoothing=0
     ):
         full_ips = numpy.loadtxt(fname=full_ip_file_path, dtype="U15", ndmin=1)
         new_ips = set(full_ips) - set(ip_to_index.keys())
