@@ -260,8 +260,8 @@ class S3LogAccessExtractor:
         if max_workers is None or max_workers == 1:
             for file_path in tqdm.tqdm(
                 iterable=files_to_extract,
-                desc="Running extraction on S3 logs: ",
                 total=len(files_to_extract),
+                desc="Running extraction on S3 logs: ",
                 unit="file",
                 smoothing=0,
             ):
@@ -271,8 +271,8 @@ class S3LogAccessExtractor:
                 list(
                     tqdm.tqdm(
                         executor.map(self.extract_file, map(str, files_to_extract)),
-                        desc="Running extraction on S3 logs: ",
                         total=len(files_to_extract),
+                        desc="Running extraction on S3 logs: ",
                         unit="file",
                         smoothing=0,
                     )

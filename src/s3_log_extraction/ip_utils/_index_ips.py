@@ -1,5 +1,6 @@
 import numpy
 import numpy.random
+import tqdm
 
 from ._ip_cache import load_index_to_ip, save_index_to_ip
 from ..config import get_cache_directory
@@ -27,11 +28,14 @@ def index_ips(*, seed: int = 0) -> None:
     all_possible_indices = set(range(1, 65_536))
     used_indices = set(index_to_ip.keys())
 
-    for full_ip_file_path in extraction_directory.rglob(pattern="*full_ips.txt"):
+    full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
+    for full_ip_file_path in tqdm.tqdm(
+        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IPs", unit="file", smoothing=0
+    ):
         full_ips = numpy.loadtxt(fname=full_ip_file_path, dtype="U15")
         unique_ips = numpy.unique(full_ips)
 
-        available_indices = all_possible_indices - used_indices
+        available_indices = list(all_possible_indices - used_indices)
         new_indices = rng.choice(a=available_indices, size=len(unique_ips), replace=False, shuffle=False)
         used_indices.update(new_indices)
 
