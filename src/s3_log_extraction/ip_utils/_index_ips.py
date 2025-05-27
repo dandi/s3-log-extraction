@@ -1,9 +1,8 @@
 import numpy
 import numpy.random
-import yaml
 
+from ._ip_cache import load_index_to_ip, save_index_to_ip
 from ..config import get_cache_directory
-from ..encryption_utils import decrypt_bytes, encrypt_bytes
 
 
 def index_ips(*, seed: int = 0) -> None:
@@ -19,16 +18,8 @@ def index_ips(*, seed: int = 0) -> None:
 
     cache_directory = get_cache_directory()
     extraction_directory = cache_directory / "extraction"
-    ips_cache_directory = cache_directory / "ips"
-    ips_index_cache_file_path = ips_cache_directory / "indexed_ips.yaml"
 
-    if not ips_index_cache_file_path.exists():
-        ips_index_cache_file_path.touch()
-
-    with ips_index_cache_file_path.open(mode="rb") as file_stream:
-        encrypted_content = file_stream.read()
-    decrypted_content = decrypt_bytes(encrypted_data=encrypted_content)
-    index_to_ip = yaml.safe_load(stream=decrypted_content) or {}
+    index_to_ip = load_index_to_ip()
     ip_to_index = {value: key for key, value in index_to_ip.items()}
 
     # Using the upper bound of uint16 as current limit; not expecting radically larger number of users
@@ -53,7 +44,6 @@ def index_ips(*, seed: int = 0) -> None:
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.bin"
         numpy.save(file=indexed_ips_file_path, arr=full_indexed_ips, allow_pickle=False)
         full_ip_file_path.unlink()
+    # TODO: add validation for unexpected ip file combinations
 
-    encrypted_content = encrypt_bytes(data=yaml.dumps(index_to_ip).encode(encoding="utf-8"))
-    with ips_index_cache_file_path.open(mode="wb") as file_stream:
-        file_stream.write(encrypted_content)
+    save_index_to_ip(ip_to_index=index_to_ip)
