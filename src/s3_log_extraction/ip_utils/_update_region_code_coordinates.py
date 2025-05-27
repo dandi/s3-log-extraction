@@ -14,7 +14,7 @@ from ._ip_cache import get_ip_cache_directory, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 
-def update_region_codes_to_coordinates() -> None:
+def update_region_code_coordinates() -> None:
     """Update the `region_codes_to_coordinates.yaml` file in the cache directory."""
     opencage_api_key = os.environ.get("OPENCAGE_API_KEY", None)
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", None)
