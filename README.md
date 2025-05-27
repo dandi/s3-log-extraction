@@ -93,13 +93,17 @@ In fresh environments, the cache should be specified as:
 s3_log_extraction set_cache /mnt/backup/dandi/s3-logs-extraction-cache
 ```
 
-To run all the steps (including as daily updates):
+To run all the steps (such as for daily updates):
 
 ```bash
 s3_log_extraction extract_logs /mnt/backup/dandi/dandiarchive-logs
 s3_log_extraction index_ips
-s3_log_extraction generate_totals
-s3_log_extraction generate_summaries
+s3_log_extraction update_indexed_region_codes
+s3_log_extraction update_region_code_coordinates
+s3_log_extraction generate_dandiset_totals
+s3_log_extraction generate_dandisetsummaries
+s3_log_extraction generate_archive_totals
+s3_log_extraction generate_archive_summaries
 ```
 
 

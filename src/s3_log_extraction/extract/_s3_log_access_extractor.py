@@ -202,7 +202,7 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_data(
             object_keys=object_keys,
             all_data=all_timestamps,
-            filename="timestamps.bin",
+            filename="timestamps",  # .npy is added automatically
             write_format="%s",
         )
         del all_timestamps
@@ -211,7 +211,7 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_data(
             object_keys=object_keys,
             all_data=all_bytes_sent,
-            filename="bytes_sent.bin",
+            filename="bytes_sent",  # .npy is added automatically
             write_format="%d",
         )
         del all_bytes_sent

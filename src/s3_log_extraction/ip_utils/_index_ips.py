@@ -45,9 +45,11 @@ def index_ips(*, seed: int = 0) -> None:
 
         full_indexed_ips = numpy.array(object=[ip_to_index[ip] for ip in full_ips], dtype="uint16")
 
-        indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.bin"
+        indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips"  # .npy is added automatically
         numpy.save(file=indexed_ips_file_path, arr=full_indexed_ips, allow_pickle=False)
-        full_ip_file_path.unlink()
 
     # TODO: add validation for unexpected ip file combinations
     save_index_to_ip(index_to_ip=index_to_ip)
+
+    for full_ip_file_path in full_ip_file_paths:
+        full_ip_file_path.unlink()
