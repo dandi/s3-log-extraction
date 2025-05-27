@@ -50,4 +50,4 @@ def index_ips(*, seed: int = 0) -> None:
         full_ip_file_path.unlink()
 
     # TODO: add validation for unexpected ip file combinations
-    save_index_to_ip(ip_to_index=index_to_ip)
+    save_index_to_ip(index_to_ip=index_to_ip)

@@ -147,13 +147,12 @@ class S3LogAccessExtractor:
             )
             raise RuntimeError(message)
 
-    def _bin_and_save_extracted_data(
+    def _bin_and_save_extracted_string_data(
         self,
         *,
         object_keys: typing.Iterable[str],
         all_data: typing.Iterable[str | int],
         filename: str,
-        write_format: typing.Literal["%d", "%s"],
     ) -> None:
         data_per_object_key = collections.defaultdict(list)
         for object_key, data in zip(object_keys, all_data):
@@ -163,7 +162,24 @@ class S3LogAccessExtractor:
             mirror_directory = self.extraction_directory / object_key
             mirror_file_path = mirror_directory / filename
             with mirror_file_path.open(mode="a") as file_stream:
-                numpy.savetxt(fname=file_stream, X=data, fmt=write_format)
+                numpy.savetxt(fname=file_stream, X=data, fmt="%s")
+
+    def _bin_and_save_extracted_numeric_data(
+        self,
+        *,
+        object_keys: typing.Iterable[str],
+        all_data: typing.Iterable[str | int],
+        filename: str,
+    ) -> None:
+        data_per_object_key = collections.defaultdict(list)
+        for object_key, data in zip(object_keys, all_data):
+            data_per_object_key[object_key].append(data)
+
+        for object_key, data in data_per_object_key.items():
+            mirror_directory = self.extraction_directory / object_key
+            mirror_file_path = mirror_directory / filename
+            with mirror_file_path.open(mode="a") as file_stream:
+                numpy.save(file=file_stream, arr=data, allow_pickle=False)
 
     def _mirror_copy(self) -> None:
         # Mirror the timestamps
@@ -176,14 +192,17 @@ class S3LogAccessExtractor:
         del unique_object_keys  # Clear memory to reduce overhead
 
         with self.timestamps_file_path.open(mode="r") as file_stream:
-            all_timestamps = [
-                datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S").strftime(format="%y%m%d%H%M%S")
-                for line in file_stream.readlines()
-            ]
+            all_timestamps = numpy.array(
+                object=[
+                    datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S").strftime(format="%y%m%d%H%M%S")
+                    for line in file_stream.readlines()
+                ],
+                dtype="uint64",
+            )
         self._bin_and_save_extracted_data(
             object_keys=object_keys,
             all_data=all_timestamps,
-            filename="timestamps.txt",
+            filename="timestamps.bin",
             write_format="%s",
         )
         del all_timestamps
@@ -192,7 +211,7 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_data(
             object_keys=object_keys,
             all_data=all_bytes_sent,
-            filename="bytes_sent.txt",
+            filename="bytes_sent.bin",
             write_format="%d",
         )
         del all_bytes_sent

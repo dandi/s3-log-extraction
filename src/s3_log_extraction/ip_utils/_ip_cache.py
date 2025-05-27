@@ -33,7 +33,7 @@ def load_index_to_ip() -> dict[int, str]:
     return index_to_ip
 
 
-def save_index_to_ip(index_to_ip: dict[int, str]) -> None:
+def save_index_to_ip(*, index_to_ip: dict[int, str]) -> None:
     """
     Save the index to IP cache to the cache directory.
 
@@ -53,6 +53,7 @@ def save_index_to_ip(index_to_ip: dict[int, str]) -> None:
 
 
 def load_ip_cache(
+    *,
     cache_type: typing.Literal["indexed_regions", "index_not_in_services", "indexed_regions"],
 ) -> dict[int, str]:
     """Load the index to region cache from the cache directory."""
