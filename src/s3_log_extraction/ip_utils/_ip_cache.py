@@ -20,7 +20,7 @@ def load_index_to_ip() -> dict[int, str]:
 
     if not ips_index_cache_file_path.exists():
         empty_encrypted_content = encrypt_bytes(data=b"")
-        with ips_index_cache_file_path.open("w") as file_stream:
+        with ips_index_cache_file_path.open("wb") as file_stream:
             file_stream.write(empty_encrypted_content)
         return {}
 
