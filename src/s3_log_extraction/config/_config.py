@@ -68,19 +68,25 @@ def get_cache_directory() -> pathlib.Path:
     return directory
 
 
-def get_records_directory() -> pathlib.Path:
+def get_records_directory(*, cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
     """
     Get the records directory for S3 log extraction.
 
     Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
     repeat computations.
 
+    Parameters
+    ----------
+    cache_directory : path-like, optional
+        The directory to use as the cache directory.
+        If not provided, the default cache directory is used.
+
     Returns
     -------
     pathlib.Path
         The records directory for S3 log extraction.
     """
-    cache_directory = get_cache_directory()
+    cache_directory = cache_directory or get_cache_directory()
 
     records_directory = cache_directory / "records"
     records_directory.mkdir(exist_ok=True)

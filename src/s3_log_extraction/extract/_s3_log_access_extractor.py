@@ -40,7 +40,7 @@ class S3LogAccessExtractor:
     """
 
     @classmethod
-    def _get_cache_directories(cls, cache_directory: pathlib.Path | None = None) -> None:
+    def _get_cache_directories(cls, *, cache_directory: pathlib.Path | None = None) -> None:
         """
         Create the cache directory and subdirectories if they do not exist.
         """
@@ -53,7 +53,7 @@ class S3LogAccessExtractor:
         cls.base_temporary_directory.mkdir(exist_ok=True)
 
         # Special file for safe interruption during parallel extraction
-        cls.records_directory = get_records_directory()
+        cls.records_directory = get_records_directory(cache_directory=cache_directory)
         cls.pause_file_path = cls.records_directory / "pause_extraction"
         cls.stop_file_path = cls.records_directory / "stop_extraction"
 
@@ -78,14 +78,14 @@ class S3LogAccessExtractor:
         cls.mirror_copy_end_record_file_path.unlink(missing_ok=True)
 
     def __new__(
-        cls, cache_directory: str | pathlib.Path | None = None, ips_to_skip_regex: str | None = None
+        cls, *, cache_directory: str | pathlib.Path | None = None, ips_to_skip_regex: str | None = None
     ) -> typing.Self:
         cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else None
         cls._get_cache_directories(cache_directory=cache_directory)
 
         return super().__new__(cls)
 
-    def __init__(self, cache_directory: pathlib.Path | None = None, ips_to_skip_regex: str | None = None) -> None:
+    def __init__(self, *, cache_directory: pathlib.Path | None = None, ips_to_skip_regex: str | None = None) -> None:
         # AWK is not as readily available on Windows
         if sys.platform == "win32":
             awk_path = pathlib.Path.home() / "anaconda3" / "Library" / "usr" / "bin" / "awk.exe"
@@ -122,7 +122,7 @@ class S3LogAccessExtractor:
         with self.extraction_record_file_path.open(mode="r") as file_stream:
             self.extraction_record = {line: True for line in file_stream.read().splitlines()}
 
-    def _run_extraction(self, file_path: pathlib.Path) -> None:
+    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
@@ -149,6 +149,7 @@ class S3LogAccessExtractor:
 
     def _bin_and_save_extracted_data(
         self,
+        *,
         object_keys: typing.Iterable[str],
         all_data: typing.Iterable[str | int],
         filename: str,
@@ -205,7 +206,7 @@ class S3LogAccessExtractor:
         )
         del all_ips
 
-    def extract_file(self, file_path: str | pathlib.Path) -> None:
+    def extract_file(self, *, file_path: str | pathlib.Path) -> None:
         pid = str(os.getpid())
         while self.pause_file_path.exists() is True:
             print(f"Extraction paused on process {pid} - waiting for the interrupt file to be removed...")
@@ -248,7 +249,7 @@ class S3LogAccessExtractor:
             file_stream.write(f"{absolute_file_path}\n")
 
     def extract_directory(
-        self, directory: str | pathlib.Path, limit: int | None = None, max_workers: int | None = None
+        self, *, directory: str | pathlib.Path, limit: int | None = None, max_workers: int = 1
     ) -> None:
         directory = pathlib.Path(directory)
 
@@ -257,7 +258,7 @@ class S3LogAccessExtractor:
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
-        if max_workers is None or max_workers == 1:
+        if max_workers == 1:
             for file_path in tqdm.tqdm(
                 iterable=files_to_extract,
                 total=len(files_to_extract),
@@ -270,7 +271,7 @@ class S3LogAccessExtractor:
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 list(
                     tqdm.tqdm(
-                        executor.map(self.extract_file, map(str, files_to_extract)),
+                        iterable=executor.map(self.extract_file, map(str, files_to_extract)),
                         total=len(files_to_extract),
                         desc="Running extraction on S3 logs: ",
                         unit="file",
