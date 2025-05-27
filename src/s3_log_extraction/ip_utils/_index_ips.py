@@ -33,7 +33,7 @@ def index_ips(*, seed: int = 0) -> None:
         iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IPs", unit="file", smoothing=0
     ):
         full_ips = numpy.loadtxt(fname=full_ip_file_path, dtype="U15")
-        print(full_ip_file_path)
+        print(full_ips)
         new_ips = set(full_ips) - set(ip_to_index.keys())
 
         available_indices = list(all_possible_indices - used_indices)
