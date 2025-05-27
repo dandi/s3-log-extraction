@@ -264,10 +264,10 @@
 # def _check_for_errors(cache_directory: str | pathlib.Path | None) -> int:
 #     cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else pathlib.Path.home() / ".cache"
 #     cache_directory.mkdir(exist_ok=True)
-#     log_parser_cache_directory = cache_directory / "s3_log_extraction"
-#     log_parser_cache_directory.mkdir(exist_ok=True)
+#     cache_directory = cache_directory / "s3_log_extraction"
+#     cache_directory.mkdir(exist_ok=True)
 #
-#     region_code_to_coordinates_error_directory = log_parser_cache_directory / "region_codes_to_coordinates_errors"
+#     region_code_to_coordinates_error_directory = cache_directory / "region_codes_to_coordinates_errors"
 #     region_code_to_coordinates_error_directory.mkdir(exist_ok=True)
 #
 #     if len(list(region_code_to_coordinates_error_directory.iterdir())) > 0:

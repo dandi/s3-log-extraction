@@ -120,6 +120,12 @@ The previous attempt used a multistep process which took several days to run (ev
 
 This version requires no intermediate cache, stores only the minimal amount of data to be shared, and takes less than a day to do a fresh run (and is also lazy with regards to daily CRON updates).
 
+### Validation
+
+In lieu of attempting fully validated parsing of each and every line from the log files (which is a hard problem - see [s3-log-parser](https://github.com/dandi/s3-log-parser)), we instead validate the heuristics in a targeted manner through specific validation scripts.
+
+These can also be used to verify the current state of the extraction process, such as warning about corrupt records or incomplete cache files.
+
 ### Submission of line decoding errors
 
 Should you discover any lines in your S3 log files that cause failures in the codebase, please email them to the core maintainer (cody.c.baker.phd@gmail.com) before raising issues or submitting PRs contributing them as examples, to more easily correct any aspects that might require anonymization.

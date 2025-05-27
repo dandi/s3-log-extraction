@@ -33,21 +33,21 @@ def index_ips(*, seed: int = 0) -> None:
         iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IPs", unit="file", smoothing=0
     ):
         full_ips = numpy.loadtxt(fname=full_ip_file_path, dtype="U15")
-        unique_ips = numpy.unique(full_ips)
+        new_ips = set(full_ips) - set(ip_to_index.keys())
 
         available_indices = list(all_possible_indices - used_indices)
-        new_indices = rng.choice(a=available_indices, size=len(unique_ips), replace=False, shuffle=False)
+        new_indices = rng.choice(a=available_indices, size=len(new_ips), replace=False, shuffle=False)
         used_indices.update(new_indices)
 
-        for ip, new_index in zip(unique_ips, new_indices):
-            index_to_ip[new_index] = ip
-            ip_to_index[ip] = new_index
+        for new_ip, new_index in zip(new_ips, new_indices):
+            index_to_ip[new_index] = new_ip
+            ip_to_index[new_ip] = new_index
 
         full_indexed_ips = numpy.array(object=[ip_to_index[ip] for ip in full_ips], dtype="uint16")
 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.bin"
         numpy.save(file=indexed_ips_file_path, arr=full_indexed_ips, allow_pickle=False)
         full_ip_file_path.unlink()
-    # TODO: add validation for unexpected ip file combinations
 
+    # TODO: add validation for unexpected ip file combinations
     save_index_to_ip(ip_to_index=index_to_ip)

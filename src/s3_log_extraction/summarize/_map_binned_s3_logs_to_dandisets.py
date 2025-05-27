@@ -58,8 +58,8 @@ def map_binned_s3_logs_to_dandisets(
 #
 #     client = dandi.dandiapi.DandiAPIClient()
 #
-#     ip_hash_to_region = _load_ip_hash_cache(name="region")
-#     ip_hash_not_in_services = _load_ip_hash_cache(name="services")
+#     index_to_region = _load_ip_hash_cache(name="region")
+#     index_not_in_services = _load_ip_hash_cache(name="services")
 #
 #     if len(restrict_to_dandisets) != 0:
 #         current_dandisets = [client.get_dandiset(dandiset_id=dandiset_id) for dandiset_id in restrict_to_dandisets]
@@ -84,12 +84,12 @@ def map_binned_s3_logs_to_dandisets(
 #             binned_s3_logs_folder_path=binned_s3_logs_folder_path,
 #             dandiset_logs_folder_path=mapped_s3_logs_folder_path,
 #             client=client,
-#             ip_hash_to_region=ip_hash_to_region,
-#             ip_hash_not_in_services=ip_hash_not_in_services,
+#             index_to_region=index_to_region,
+#             index_not_in_services=index_not_in_services,
 #         )
 #
-#     _save_ip_hash_cache(name="region", ip_cache=ip_hash_to_region)
-#     _save_ip_hash_cache(name="services", ip_cache=ip_hash_not_in_services)
+#     _save_ip_hash_cache(name="region", ip_cache=index_to_region)
+#     _save_ip_hash_cache(name="services", ip_cache=index_not_in_services)
 #
 #     return None
 #
@@ -99,8 +99,8 @@ def map_binned_s3_logs_to_dandisets(
 #     binned_s3_logs_folder_path: pathlib.Path,
 #     dandiset_logs_folder_path: pathlib.Path,
 #     client: dandi.dandiapi.DandiAPIClient,
-#     ip_hash_to_region: dict[str, str],
-#     ip_hash_not_in_services: dict[str, bool],
+#     index_to_region: dict[str, str],
+#     index_not_in_services: dict[str, bool],
 # ) -> None:
 #     dandiset_id = dandiset.identifier
 #     dandiset_log_folder_path = dandiset_logs_folder_path / dandiset_id
@@ -168,8 +168,8 @@ def map_binned_s3_logs_to_dandisets(
 #             reduced_s3_log_binned_by_blob_id["region"] = [
 #                 get_region_from_ip_address(
 #                     ip_address=ip_address,
-#                     ip_hash_to_region=ip_hash_to_region,
-#                     ip_hash_not_in_services=ip_hash_not_in_services,
+#                     index_to_region=index_to_region,
+#                     index_not_in_services=index_not_in_services,
 #                 )
 #                 for ip_address in reduced_s3_log_binned_by_blob_id["ip_address"]
 #             ]
