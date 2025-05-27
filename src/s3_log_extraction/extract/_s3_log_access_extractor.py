@@ -225,7 +225,7 @@ class S3LogAccessExtractor:
         )
         del all_ips
 
-    def extract_file(self, *, file_path: str | pathlib.Path) -> None:
+    def extract_file(self, file_path: str | pathlib.Path) -> None:
         pid = str(os.getpid())
         while self.pause_file_path.exists() is True:
             print(f"Extraction paused on process {pid} - waiting for the interrupt file to be removed...")
