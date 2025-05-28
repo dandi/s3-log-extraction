@@ -167,9 +167,10 @@ class S3LogAccessExtractor:
     def _bin_and_save_extracted_numeric_data(
         self,
         *,
-        object_keys: typing.Iterable[str],
-        all_data: typing.Iterable[str | int],
+        object_keys: numpy.typing.NDArray,
+        all_data: numpy.typing.NDArray,
         filename: str,
+        dtype: typing.Literal["uint64"] = "uint64",  # Assuming uint64 for all numeric data here
     ) -> None:
         data_per_object_key = collections.defaultdict(list)
         for object_key, data in zip(object_keys, all_data):
@@ -178,8 +179,17 @@ class S3LogAccessExtractor:
         for object_key, data in data_per_object_key.items():
             mirror_directory = self.extraction_directory / object_key
             mirror_file_path = mirror_directory / filename
-            with mirror_file_path.open(mode="a") as file_stream:
-                numpy.save(file=file_stream, arr=data, allow_pickle=False)
+
+            previous_data = numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r")
+            previous_shape = previous_data.shape[0]
+            del previous_data
+            new_shape = previous_shape + all_data.shape[0]
+
+            with mirror_file_path.open(mode="ab") as file_stream:
+                file_stream.truncate(size=new_shape * numpy.dtype(dtype=dtype).itemsize)
+
+            file_stream = numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r+")
+            file_stream[previous_shape:] = all_data
 
     def _mirror_copy(self) -> None:
         # Mirror the timestamps
@@ -202,7 +212,7 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_numeric_data(
             object_keys=object_keys,
             all_data=all_timestamps,
-            filename="timestamps",  # .npy is added automatically
+            filename="timestamps.bin",
         )
         del all_timestamps
 
@@ -210,7 +220,7 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_numeric_data(
             object_keys=object_keys,
             all_data=all_bytes_sent,
-            filename="bytes_sent",  # .npy is added automatically
+            filename="bytes_sent.bin",
         )
         del all_bytes_sent
 
