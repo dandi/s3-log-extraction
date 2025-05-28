@@ -46,7 +46,7 @@ def index_ips(*, seed: int = 0) -> None:
         full_indexed_ips = numpy.array(object=[ip_to_index[ip] for ip in full_ips], dtype="uint16")
 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.bin"
-        file = numpy.memmap(filename=indexed_ips_file_path, mode="w", dtype="uint16")
+        file = numpy.memmap(filename=indexed_ips_file_path, mode="write", dtype="uint16")
         file[:] = full_indexed_ips
 
     # TODO: add validation for unexpected ip file combinations
