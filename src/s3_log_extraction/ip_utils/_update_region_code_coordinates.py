@@ -50,6 +50,7 @@ def update_region_code_coordinates() -> None:
         coordinates = _get_coordinates_from_region_code(
             country_and_region_code=country_and_region_code,
             ipinfo_handler=ipinfo_handler,
+            opencage_api_key=opencage_api_key,
             service_coordinates=service_coordinates,
         )
         region_codes_to_coordinates[country_and_region_code] = coordinates
