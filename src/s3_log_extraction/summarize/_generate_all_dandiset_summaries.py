@@ -13,6 +13,8 @@ from ..ip_utils import load_ip_cache
 
 
 def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) -> None:
+    summary_directory = pathlib.Path(summary_directory)
+
     client = dandi.dandiapi.DandiAPIClient()
     index_to_region = load_ip_cache(cache_type="index_to_region")
     extraction_directory = get_cache_directory() / "extraction"
