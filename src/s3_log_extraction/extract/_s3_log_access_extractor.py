@@ -180,9 +180,11 @@ class S3LogAccessExtractor:
             mirror_directory = self.extraction_directory / object_key
             mirror_file_path = mirror_directory / filename
 
-            previous_data = numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r")
-            previous_shape = previous_data.shape[0]
-            del previous_data
+            previous_shape = (
+                numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r").shape[0]
+                if mirror_file_path.exists()
+                else 0
+            )
             new_shape = previous_shape + all_data.shape[0]
 
             with mirror_file_path.open(mode="ab") as file_stream:
