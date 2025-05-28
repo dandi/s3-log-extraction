@@ -177,7 +177,11 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
 
 
 def _match_features_to_code(
-    *, features: list[dict[str, typing.Any]], country_code: str, region_code: str | None = None
+    *,
+    features: list[dict[str, typing.Any]],
+    country_code: str,
+    region_code: str | None = None,
+    skip_case_5: bool = False,
 ) -> dict[str, typing.Any] | None:
     """
     Match the features to the region code.
@@ -248,17 +252,19 @@ def _match_features_to_code(
         return aggregate_feature
 
     # Case 5: Constrain to features of the country code
-    features_in_country = [
-        feature for feature in features if feature["properties"]["components"]["country_code"] == country_code
-    ]
-    try:
-        matching_feature = _match_features_to_code(
-            features=features_in_country,
-            country_code=country_code,
-            region_code=region_code,
-        )
-    finally:  # Skip any sub-errors from this recursive call
-        pass  # Final outer raise will deliver error message
+    if skip_case_5 is False:
+        features_in_country = [
+            feature for feature in features if feature["properties"]["components"]["country_code"] == country_code
+        ]
+        try:
+            matching_feature = _match_features_to_code(
+                features=features_in_country,
+                country_code=country_code,
+                region_code=region_code,
+                skip_case_5=True,  # Skip this case to avoid infinite recursion
+            )
+        finally:  # Skip any sub-errors from this recursive call
+            pass  # Final outer raise will deliver error message
 
     if matching_feature is not None:
         return matching_feature
@@ -281,22 +287,15 @@ def _match_features_to_code(
         and _category not in ["natural/water"]
     ]
 
-    try:
-        coordinates = [
-            (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
-            for feature in features_without_other_categories
-        ]
-        average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
-        if average_coordinate is not None:
-            aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
-            aggregate_feature["geometry"][
-                "coordinates"
-            ] = average_coordinate  # But replace it with the average coordinates
-            return aggregate_feature
-    except RecursionError:
-        # Surprisingly, scipy can throw a max recursion depth error here
-        # So just let the final error raise to inform manual resolution
-        pass
+    coordinates = [
+        (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
+        for feature in features_without_other_categories
+    ]
+    average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
+    if average_coordinate is not None:
+        aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
+        aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
+        return aggregate_feature
 
     # No heuristics worked, so raise error
     # Best solution is to resolve manually and add values to default mapping
