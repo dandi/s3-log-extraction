@@ -1,52 +1,37 @@
-from pydantic import DirectoryPath, validate_call
-
-# from .ip_utils import _load_ip_hash_cache, _save_ip_hash_cache, get_region_from_ip_address
-
-
-@validate_call
-def map_binned_s3_logs_to_dandisets(
-    binned_s3_logs_folder_path: DirectoryPath,
-    mapped_s3_logs_folder_path: DirectoryPath,
-    excluded_dandisets: list[str] | None = None,
-    restrict_to_dandisets: list[str] | None = None,
-    dandiset_limit: int | None = None,
-) -> None:
-    """
-    Iterate over all dandisets and create a single .tsv per asset per dandiset version.
-
-    Also creates a summary file per dandiset that has binned activity per day.
-
-    Requires the `ipinfo` environment variables to be set (`IPINFO_API_KEY` and `IP_HASH_SALT`).
-
-    Parameters
-    ----------
-    binned_s3_logs_folder_path : DirectoryPath
-        The path to the folder containing the reduced S3 log files.
-    mapped_s3_logs_folder_path : DirectoryPath
-        The path to the folder where the mapped logs will be saved.
-    excluded_dandisets : list of str, optional
-        A list of Dandiset IDs to exclude from processing.
-    restrict_to_dandisets : list of str, optional
-        A list of Dandiset IDs to exclusively process.
-    dandiset_limit : int, optional
-        The maximum number of Dandisets to process per call.
-        Useful for quick testing.
-    """
-    pass
-
-
-#     if "IPINFO_API_KEY" not in os.environ:  # pragma: no cover
-#         message = "The environment variable 'IPINFO_API_KEY' must be set to import `s3_log_extraction`!"
-#         raise ValueError(message)
+# from pydantic import DirectoryPath, validate_call
 #
-#     if "IP_HASH_SALT" not in os.environ:  # pragma: no cover
-#         message = (
-#             "The environment variable 'IP_HASH_SALT' must be set to import `s3_log_extraction`! "
-#             "To retrieve the value, set a temporary value to this environment variable "
-#             "and then use the `get_hash_salt` helper function and set it to the correct value."
-#         )
-#         raise ValueError(message)
+# # from .ip_utils import _load_ip_hash_cache, _save_ip_hash_cache, get_region_from_ip_address
 #
+#
+# @validate_call
+# def map_binned_s3_logs_to_dandisets(
+#     binned_s3_logs_folder_path: DirectoryPath,
+#     mapped_s3_logs_folder_path: DirectoryPath,
+#     excluded_dandisets: list[str] | None = None,
+#     restrict_to_dandisets: list[str] | None = None,
+#     dandiset_limit: int | None = None,
+# ) -> None:
+#     """
+#     Iterate over all dandisets and create a single .tsv per asset per dandiset version.
+#
+#     Also creates a summary file per dandiset that has binned activity per day.
+#
+#     Requires the `ipinfo` environment variables to be set (`IPINFO_API_KEY` and `IP_HASH_SALT`).
+#
+#     Parameters
+#     ----------
+#     binned_s3_logs_folder_path : DirectoryPath
+#         The path to the folder containing the reduced S3 log files.
+#     mapped_s3_logs_folder_path : DirectoryPath
+#         The path to the folder where the mapped logs will be saved.
+#     excluded_dandisets : list of str, optional
+#         A list of Dandiset IDs to exclude from processing.
+#     restrict_to_dandisets : list of str, optional
+#         A list of Dandiset IDs to exclusively process.
+#     dandiset_limit : int, optional
+#         The maximum number of Dandisets to process per call.
+#         Useful for quick testing.
+#     """
 #     if excluded_dandisets is not None and restrict_to_dandisets is not None:
 #         message = "Only one of `exclude_dandisets` or `restrict_to_dandisets` can be passed, not both!"
 #         raise ValueError(message)
@@ -82,7 +67,7 @@ def map_binned_s3_logs_to_dandisets(
 #         _map_binned_logs_to_dandiset(
 #             dandiset=dandiset,
 #             binned_s3_logs_folder_path=binned_s3_logs_folder_path,
-#             dandiset_logs_folder_path=mapped_s3_logs_folder_path,
+#             dandiset_logs_folder_path=summary_directory,
 #             client=client,
 #             index_to_region=index_to_region,
 #             index_not_in_services=index_not_in_services,

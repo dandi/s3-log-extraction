@@ -129,7 +129,7 @@
 #     type=click.Path(writable=False),
 # )
 # @click.option(
-#     "--mapped_s3_logs_folder_path",
+#     "--summary_directory",
 #     help="",
 #     required=True,
 #     type=click.Path(writable=False),
@@ -157,7 +157,7 @@
 # )
 # def _map_binned_s3_logs_to_dandisets_cli(
 #     binned_s3_logs_folder_path: pathlib.Path,
-#     mapped_s3_logs_folder_path: pathlib.Path,
+#     summary_directory: pathlib.Path,
 #     excluded_dandisets: str | None,
 #     restrict_to_dandisets: str | None,
 #     dandiset_limit: int | None,
@@ -167,7 +167,7 @@
 #
 #     map_binned_s3_logs_to_dandisets(
 #         binned_s3_logs_folder_path=binned_s3_logs_folder_path,
-#         mapped_s3_logs_folder_path=mapped_s3_logs_folder_path,
+#         summary_directory=summary_directory,
 #         excluded_dandisets=split_excluded_dandisets,
 #         restrict_to_dandisets=split_restrict_to_dandisets,
 #         dandiset_limit=dandiset_limit,
@@ -178,53 +178,53 @@
 #
 # @click.command(name="generate_dandiset_summaries")
 # @click.option(
-#     "--mapped_s3_logs_folder_path",
+#     "--summary_directory",
 #     help="",
 #     required=True,
 #     type=click.Path(writable=False),
 # )
 # def _generate_dandiset_summaries_cli(
-#     mapped_s3_logs_folder_path: pathlib.Path,
+#     summary_directory: pathlib.Path,
 # ) -> None:
 #     raise NotImplementedError("This function is not implemented yet.")
 #
 #
 # @click.command(name="generate_all_dandiset_totals")
 # @click.option(
-#     "--mapped_s3_logs_folder_path",
+#     "--summary_directory",
 #     help="",
 #     required=True,
 #     type=click.Path(writable=False),
 # )
-# def _generate_all_dandiset_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
-#     generate_all_dandiset_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+# def _generate_all_dandiset_totals_cli(summary_directory: pathlib.Path) -> None:
+#     generate_all_dandiset_totals(summary_directory=summary_directory)
 #
 #
 # @click.command(name="generate_archive_summaries")
 # @click.option(
-#     "--mapped_s3_logs_folder_path",
+#     "--summary_directory",
 #     help="",
 #     required=True,
 #     type=click.Path(writable=False),
 # )
-# def _generate_archive_summaries_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
-#     generate_archive_summaries(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+# def _generate_archive_summaries_cli(summary_directory: pathlib.Path) -> None:
+#     generate_archive_summaries(summary_directory=summary_directory)
 #
 #
 # @click.command(name="generate_archive_totals")
 # @click.option(
-#     "--mapped_s3_logs_folder_path",
+#     "--summary_directory",
 #     help="",
 #     required=True,
 #     type=click.Path(writable=False),
 # )
-# def _generate_archive_totals_cli(mapped_s3_logs_folder_path: pathlib.Path) -> None:
-#     generate_archive_totals(mapped_s3_logs_folder_path=mapped_s3_logs_folder_path)
+# def _generate_archive_totals_cli(summary_directory: pathlib.Path) -> None:
+#     generate_archive_totals(summary_directory=summary_directory)
 #
 #
 # @click.command(name="update_region_codes_to_coordinates")
 # @click.option(
-#     "--mapped_s3_logs_folder_path",
+#     "--summary_directory",
 #     help="",
 #     required=True,
 #     type=click.Path(writable=False),
@@ -243,12 +243,12 @@
 #     default=None,
 # )
 # def _update_region_codes_to_coordinates_cli(
-#     mapped_s3_logs_folder_path: str,
+#     summary_directory: str,
 #     cache_directory: str | None = None,
 #     maximum_iterations: int | None = None,
 # ) -> None:
 #     update_region_codes_to_coordinates(
-#         mapped_s3_logs_folder_path=mapped_s3_logs_folder_path,
+#         summary_directory=summary_directory,
 #         cache_directory=cache_directory,
 #         maximum_iterations=maximum_iterations,
 #     )

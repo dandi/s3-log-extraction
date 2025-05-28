@@ -9,7 +9,7 @@ from ._ip_cache import get_ip_cache_directory, load_index_to_ip, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 
-def update_indexed_region_codes() -> str | None:
+def update_index_to_region_codes() -> str | None:
     """Update the `indexed_region_codes.yaml` file in the cache directory."""
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", None)
     if ipinfo_api_key is None:
@@ -21,7 +21,7 @@ def update_indexed_region_codes() -> str | None:
     index_not_in_services = load_ip_cache(cache_type="index_not_in_services")
 
     index_to_ip = load_index_to_ip()
-    index_to_region = load_ip_cache(cache_type="indexed_regions")
+    index_to_region = load_ip_cache(cache_type="index_to_region")
     indices_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
     for ip_index in indices_to_update:
         ip_address = index_to_ip[ip_index]
@@ -37,7 +37,7 @@ def update_indexed_region_codes() -> str | None:
             continue
         index_to_region[ip_index] = region_code
 
-    indexed_regions_file_path = ip_cache_directory / "indexed_regions.yaml"
+    indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
     with indexed_regions_file_path.open(mode="w") as file_stream:
         yaml.dump(data=index_to_region, stream=file_stream)
 
