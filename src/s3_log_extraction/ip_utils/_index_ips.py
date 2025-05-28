@@ -25,7 +25,7 @@ def index_ips(*, seed: int = 0) -> None:
 
     # Using the upper bound of uint16 as current limit; not expecting radically larger number of users
     # TODO: add validation to notify if we get close to this
-    all_possible_indices = set(range(1, 65_536))
+    all_possible_indices = set(range(0, 65_535))
     used_indices = set(index_to_ip.keys())
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
