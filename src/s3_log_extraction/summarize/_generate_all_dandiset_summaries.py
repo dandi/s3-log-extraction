@@ -109,15 +109,15 @@ def _summarize_dandiset_by_day(
         if not extracted_asset_directory.exists():
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
-        timestamps_file_path = extracted_asset_directory / "timestamps.bin"
+        timestamps_file_path = extracted_asset_directory / "timestamps.txt"
         dates = [
             datetime.datetime.strptime(str(timestamp), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
-            for timestamp in numpy.memmap(filename=timestamps_file_path, mode="r", dtype="uint64")
+            for timestamp in numpy.loadtxt(fname=timestamps_file_path, mode="r", dtype="uint64")
         ]
         all_dates.extend(dates)
 
-        bytes_sent_file_path = extracted_asset_directory / "bytes_sent.bin"
-        bytes_sent = [int(value) for value in numpy.memmap(filename=bytes_sent_file_path, mode="r", dtype="uint64")]
+        bytes_sent_file_path = extracted_asset_directory / "bytes_sent.txt"
+        bytes_sent = [int(value) for value in numpy.loadtxt(fname=bytes_sent_file_path, dtype="uint64")]
         all_bytes_sent.extend(bytes_sent)
 
     summarized_activity_by_day = collections.defaultdict(int)
@@ -161,8 +161,8 @@ def _summarize_dandiset_by_asset(
         if not extracted_asset_directory.exists():
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
-        bytes_sent_file_path = extracted_asset_directory / "bytes_sent.bin"
-        bytes_sent = [int(value) for value in numpy.memmap(filename=bytes_sent_file_path, mode="r", dtype="uint64")]
+        bytes_sent_file_path = extracted_asset_directory / "bytes_sent.txt"
+        bytes_sent = [int(value) for value in numpy.loadtxt(fname=bytes_sent_file_path, dtype="uint64")]
 
         summarized_activity_by_asset[asset.path] += sum(bytes_sent)
 
@@ -203,13 +203,13 @@ def _summarize_dandiset_by_region(
         if not extracted_asset_directory.exists():
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
-        indexed_ips_file_path = extracted_asset_directory / "indexed_ips.bin"
-        indexed_ips = numpy.memmap(filename=indexed_ips_file_path, mode="r", dtype="uint64")
+        indexed_ips_file_path = extracted_asset_directory / "indexed_ips.txt"
+        indexed_ips = numpy.loadtxt(fname=indexed_ips_file_path, dtype="uint64")
         regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
         all_regions.extend(regions)
 
-        bytes_sent_file_path = extracted_asset_directory / "bytes_sent.bin"
-        bytes_sent = [int(value) for value in numpy.memmap(filename=bytes_sent_file_path, mode="r", dtype="uint64")]
+        bytes_sent_file_path = extracted_asset_directory / "bytes_sent.txt"
+        bytes_sent = [int(value) for value in numpy.loadtxt(fname=bytes_sent_file_path, dtype="uint64")]
         all_bytes_sent.extend(bytes_sent)
 
     summarized_activity_by_region = collections.defaultdict(int)
