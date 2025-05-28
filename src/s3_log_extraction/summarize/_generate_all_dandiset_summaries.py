@@ -7,6 +7,7 @@ import numpy
 import pandas
 import tqdm
 
+from ._get_associated_assets import _get_associated_assets
 from ..config import get_cache_directory
 from ..ip_utils import load_ip_cache
 
@@ -17,6 +18,8 @@ def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) ->
     extraction_directory = get_cache_directory() / "extraction"
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
+    uniquely_associated_assets_by_dandiset_id = _get_associated_assets()
+
     dandisets = client.get_dandisets()
     for dandiset in tqdm.tqdm(
         iterable=dandisets,
@@ -28,41 +31,37 @@ def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) ->
         smoothing=0,
         unit="dandiset",
     ):
+        dandiset_id = dandiset.identifier
+
         _summarize_dandiset(
-            dandiset=dandiset,
+            dandiset_id=dandiset_id,
+            assets=uniquely_associated_assets_by_dandiset_id[dandiset_id],
             summary_directory=summary_directory,
             extraction_directory=extraction_directory,
             index_to_region=index_to_region,
         )
 
 
-def _get_all_uniquely_associated_assets(*, dandiset: dandi.dandiapi.RemoteDandiset) -> list[dandi.dandiapi.RemoteAsset]:
-    # TODO: properly
-    return dandiset.get_assets()
-
-
 def _summarize_dandiset(
     *,
-    dandiset: dandi.dandiapi.RemoteDandiset,
+    dandiset_id: str,
+    assets: list[dandi.dandiapi.RemoteAsset],
     summary_directory: pathlib.Path,
     extraction_directory: pathlib.Path,
     index_to_region: dict[int, str],
 ) -> None:
-    dandiset_id = dandiset.identifier
-    all_uniquely_associated_assets = _get_all_uniquely_associated_assets(dandiset=dandiset)
-
     _summarize_dandiset_by_day(
-        assets=all_uniquely_associated_assets,
+        assets=assets,
         summary_file_path=summary_directory / dandiset_id / "by_day.tsv",
         extraction_directory=extraction_directory,
     )
     _summarize_dandiset_by_asset(
-        assets=all_uniquely_associated_assets,
+        assets=assets,
         summary_file_path=summary_directory / dandiset_id / "by_asset.tsv",
         extraction_directory=extraction_directory,
     )
     _summarize_dandiset_by_region(
-        assets=all_uniquely_associated_assets,
+        assets=assets,
         summary_file_path=summary_directory / dandiset_id / "by_region.tsv",
         extraction_directory=extraction_directory,
         index_to_region=index_to_region,
