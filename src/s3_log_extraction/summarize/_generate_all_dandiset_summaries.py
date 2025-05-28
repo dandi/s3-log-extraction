@@ -20,7 +20,7 @@ def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) ->
     # TODO: record and only update basic DANDI stuff based on mtime or etag
     uniquely_associated_assets_by_dandiset_id = _get_associated_assets()
 
-    dandisets = client.get_dandisets()
+    dandisets = list(client.get_dandisets())
     for dandiset in tqdm.tqdm(
         iterable=dandisets,
         total=len(dandisets),
