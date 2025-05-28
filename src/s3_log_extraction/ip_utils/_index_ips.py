@@ -15,6 +15,9 @@ def index_ips(*, seed: int = 0) -> None:
 
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
     """
+    # Using the upper bound of uint16 as current limit; not expecting radically larger number of users
+    # TODO: add validation to notify if we get close to this
+    index_dtype = numpy.dtype("uint16")
     rng = numpy.random.default_rng(seed=seed)
 
     cache_directory = get_cache_directory()
@@ -23,9 +26,7 @@ def index_ips(*, seed: int = 0) -> None:
     index_to_ip = load_index_to_ip()
     ip_to_index = {value: key for key, value in index_to_ip.items()}
 
-    # Using the upper bound of uint16 as current limit; not expecting radically larger number of users
-    # TODO: add validation to notify if we get close to this
-    all_possible_indices = set(range(0, 65_535))
+    all_possible_indices = set(range(0, numpy.iinfo(index_dtype).max))
     used_indices = set(index_to_ip.keys())
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
@@ -46,8 +47,19 @@ def index_ips(*, seed: int = 0) -> None:
         full_indexed_ips = [ip_to_index[ip] for ip in full_ips]
 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.bin"
-        file = numpy.memmap(filename=indexed_ips_file_path, mode="w+", dtype="uint16", shape=len(full_indexed_ips))
-        file[:] = full_indexed_ips
+
+        previous_shape = (
+            numpy.memmap(filename=indexed_ips_file_path, dtype=index_dtype, mode="r").shape[0]
+            if indexed_ips_file_path.exists()
+            else 0
+        )
+        new_shape = previous_shape + len(full_indexed_ips)
+
+        with indexed_ips_file_path.open(mode="ab") as file_stream:
+            file_stream.truncate(new_shape * index_dtype.itemsize)
+
+        file = numpy.memmap(filename=indexed_ips_file_path, dtype=index_dtype, mode="r+")
+        file[previous_shape:] = full_indexed_ips
 
     # TODO: add validation for unexpected ip file combinations
     save_index_to_ip(index_to_ip=index_to_ip)
