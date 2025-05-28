@@ -281,15 +281,22 @@ def _match_features_to_code(
         and _category not in ["natural/water"]
     ]
 
-    coordinates = [
-        (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
-        for feature in features_without_other_categories
-    ]
-    average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
-    if average_coordinate is not None:
-        aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
-        aggregate_feature["geometry"]["coordinates"] = average_coordinate  # But replace it with the average coordinates
-        return aggregate_feature
+    try:
+        coordinates = [
+            (feature["geometry"]["coordinates"][0], feature["geometry"]["coordinates"][1])
+            for feature in features_without_other_categories
+        ]
+        average_coordinate = _average_coordinates_if_close(coordinates=coordinates)
+        if average_coordinate is not None:
+            aggregate_feature = copy.deepcopy(features[0])  # Choose first feature arbitrarily
+            aggregate_feature["geometry"][
+                "coordinates"
+            ] = average_coordinate  # But replace it with the average coordinates
+            return aggregate_feature
+    except RecursionError:
+        # Surprisingly, scipy can throw a max recursion depth error here
+        # So just let the final error raise to inform manual resolution
+        pass
 
     # No heuristics worked, so raise error
     # Best solution is to resolve manually and add values to default mapping

@@ -50,7 +50,7 @@ def _summarize_dandiset(
 ) -> None:
     dandiset_id = dandiset.identifier
     uniquely_associated_assets = uniquely_associated_assets_by_dandiset_id.get(dandiset_id, [])
-    # unassociated_assets = []
+    unassociated_assets = []
 
     assets = uniquely_associated_assets
     _summarize_dandiset_by_day(
@@ -71,17 +71,17 @@ def _summarize_dandiset(
     )
 
     _summarize_dandiset_by_day(
-        assets=assets,
+        assets=unassociated_assets,
         summary_file_path=summary_directory / "undetermined" / "by_day.tsv",
         extraction_directory=extraction_directory,
     )
     _summarize_dandiset_by_asset(
-        assets=assets,
+        assets=unassociated_assets,
         summary_file_path=summary_directory / "undetermined" / "by_asset.tsv",
         extraction_directory=extraction_directory,
     )
     _summarize_dandiset_by_region(
-        assets=assets,
+        assets=unassociated_assets,
         summary_file_path=summary_directory / "undetermined" / "by_region.tsv",
         extraction_directory=extraction_directory,
         index_to_region=index_to_region,

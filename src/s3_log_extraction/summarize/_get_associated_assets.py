@@ -22,9 +22,9 @@ def _get_associated_assets() -> dict[str, list[dandi.dandiapi.RemoteAsset]]:
     uniquely_associated_assets_by_dandiset_id = collections.defaultdict(list)
     for asset_id, dandiset_ids in asset_id_to_dandiset_ids.items():
         if len(dandiset_ids) > 1:
-            continue
-
-        dandiset_id = list(dandiset_ids)[0]
-        uniquely_associated_assets_by_dandiset_id[dandiset_id].append(asset)
+            uniquely_associated_assets_by_dandiset_id["multiple"].append(asset_id)
+        else:
+            dandiset_id = list(dandiset_ids)[0]
+            uniquely_associated_assets_by_dandiset_id[dandiset_id].append(asset_id)
 
     return uniquely_associated_assets_by_dandiset_id
