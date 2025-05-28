@@ -9,6 +9,7 @@ import sys
 import time
 import typing
 
+import natsort
 import numpy
 import tqdm
 
@@ -281,7 +282,9 @@ class S3LogAccessExtractor:
     ) -> None:
         directory = pathlib.Path(directory)
 
-        all_log_files = {str(file_path.absolute()) for file_path in directory.rglob(pattern="*.log")}
+        all_log_files = {
+            str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*.log"))
+        }
         unextracted_files = all_log_files - set(self.extraction_record.keys())
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
