@@ -28,12 +28,12 @@ def update_region_code_coordinates() -> None:
 
     ip_cache_directory = get_ip_cache_directory()
 
-    indexed_region_codes_file_path = ip_cache_directory / "indexed_regions.yaml"
+    indexed_region_codes_file_path = ip_cache_directory / "index_to_regions.yaml"
     if not indexed_region_codes_file_path.exists():
         message = (
             f"Cannot update region codes to coordinates because the indexed regions file does not exist: "
             f"{indexed_region_codes_file_path}\n"
-            f"Please run `s3_log_extractor.update_indexed_region_codes()` first to create the indexed regions file."
+            f"Please run `s3_log_extractor.update_index_to_region_codes()` first to create the indexed regions file."
         )
         raise FileNotFoundError(message)
 
