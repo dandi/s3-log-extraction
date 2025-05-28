@@ -46,20 +46,9 @@ def index_ips(*, seed: int = 0) -> None:
 
         full_indexed_ips = [ip_to_index[ip] for ip in full_ips]
 
-        indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.bin"
-
-        previous_shape = (
-            numpy.memmap(filename=indexed_ips_file_path, dtype=index_dtype, mode="r").shape[0]
-            if indexed_ips_file_path.exists()
-            else 0
-        )
-        new_shape = previous_shape + len(full_indexed_ips)
-
-        with indexed_ips_file_path.open(mode="ab") as file_stream:
-            file_stream.truncate(new_shape * index_dtype.itemsize)
-
-        file = numpy.memmap(filename=indexed_ips_file_path, dtype=index_dtype, mode="r+")
-        file[previous_shape:] = full_indexed_ips
+        indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
+        with indexed_ips_file_path.open(mode="a") as file_stream:
+            numpy.savetxt(file=file_stream, X=full_indexed_ips, format="%d")
 
     # TODO: add validation for unexpected ip file combinations
     save_index_to_ip(index_to_ip=index_to_ip)
