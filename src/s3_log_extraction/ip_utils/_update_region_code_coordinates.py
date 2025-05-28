@@ -9,7 +9,7 @@ import requests
 import scipy.spatial.distance
 import yaml
 
-from ._globals import _KNOWN_SERVICES
+from ._globals import _DEFAULT_REGION_CODES_TO_COORDINATES, _KNOWN_SERVICES
 from ._ip_cache import get_ip_cache_directory, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
@@ -43,8 +43,11 @@ def update_region_code_coordinates() -> None:
     with service_coordinates_file_path.open(mode="r") as file_stream:
         service_coordinates = yaml.safe_load(stream=file_stream) or {}
 
+    region_codes_to_coordinates: dict[str, dict[str, float]] = _DEFAULT_REGION_CODES_TO_COORDINATES
+    previous_region_codes_to_coordinates = load_ip_cache(cache_type="region_codes_to_coordinates")
+    region_codes_to_coordinates.update(previous_region_codes_to_coordinates)
+
     indexed_region_codes = load_ip_cache(cache_type="index_to_region")
-    region_codes_to_coordinates = load_ip_cache(cache_type="region_codes_to_coordinates")
     region_codes_to_update = set(indexed_region_codes.values()) - set(region_codes_to_coordinates.keys())
     for country_and_region_code in region_codes_to_update:
         coordinates = _get_coordinates_from_region_code(
