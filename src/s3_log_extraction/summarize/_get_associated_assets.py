@@ -3,7 +3,7 @@ import collections
 import dandi.dandiapi
 
 
-def _get_associated_assets(*, dandiset: dandi.dandiapi.RemoteDandiset) -> dict[str, list[dandi.dandiapi.RemoteAsset]]:
+def _get_associated_assets() -> dict[str, list[dandi.dandiapi.RemoteAsset]]:
     # TODO: cache published dandisets to avoid repeating web requests
 
     client = dandi.dandiapi.DandiAPIClient()
@@ -21,10 +21,10 @@ def _get_associated_assets(*, dandiset: dandi.dandiapi.RemoteDandiset) -> dict[s
 
     uniquely_associated_assets_by_dandiset_id = collections.defaultdict(list)
     for asset_id, dandiset_ids in asset_id_to_dandiset_ids.items():
-        if len(dandiset_ids) >= 1:
+        if len(dandiset_ids) > 1:
             continue
 
-        dandiset_id = dandiset_ids[0]
+        dandiset_id = list(dandiset_ids)[0]
         uniquely_associated_assets_by_dandiset_id[dandiset_id].append(asset)
 
     return uniquely_associated_assets_by_dandiset_id

@@ -31,11 +31,9 @@ def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) ->
         smoothing=0,
         unit="dandiset",
     ):
-        dandiset_id = dandiset.identifier
-
         _summarize_dandiset(
-            dandiset_id=dandiset_id,
-            assets=uniquely_associated_assets_by_dandiset_id[dandiset_id],
+            dandiset=dandiset,
+            uniquely_associated_assets_by_dandiset_id=uniquely_associated_assets_by_dandiset_id,
             summary_directory=summary_directory,
             extraction_directory=extraction_directory,
             index_to_region=index_to_region,
@@ -44,12 +42,17 @@ def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) ->
 
 def _summarize_dandiset(
     *,
-    dandiset_id: str,
-    assets: list[dandi.dandiapi.RemoteAsset],
+    dandiset: dandi.dandiapi.DandiAPIClient,
+    uniquely_associated_assets_by_dandiset_id: dict[str, list[dandi.dandiapi.RemoteAsset]],
     summary_directory: pathlib.Path,
     extraction_directory: pathlib.Path,
     index_to_region: dict[int, str],
 ) -> None:
+    dandiset_id = dandiset.identifier
+    uniquely_associated_assets = uniquely_associated_assets_by_dandiset_id.get(dandiset_id, [])
+    # unassociated_assets = []
+
+    assets = uniquely_associated_assets
     _summarize_dandiset_by_day(
         assets=assets,
         summary_file_path=summary_directory / dandiset_id / "by_day.tsv",
@@ -67,6 +70,23 @@ def _summarize_dandiset(
         index_to_region=index_to_region,
     )
 
+    _summarize_dandiset_by_day(
+        assets=assets,
+        summary_file_path=summary_directory / "undetermined" / "by_day.tsv",
+        extraction_directory=extraction_directory,
+    )
+    _summarize_dandiset_by_asset(
+        assets=assets,
+        summary_file_path=summary_directory / "undetermined" / "by_asset.tsv",
+        extraction_directory=extraction_directory,
+    )
+    _summarize_dandiset_by_region(
+        assets=assets,
+        summary_file_path=summary_directory / "undetermined" / "by_region.tsv",
+        extraction_directory=extraction_directory,
+        index_to_region=index_to_region,
+    )
+
 
 def _summarize_dandiset_by_day(
     *,
@@ -74,6 +94,8 @@ def _summarize_dandiset_by_day(
     summary_file_path: pathlib.Path,
     extraction_directory: pathlib.Path,
 ):
+    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
+
     all_dates = []
     all_bytes_sent = []
     for asset in assets:
