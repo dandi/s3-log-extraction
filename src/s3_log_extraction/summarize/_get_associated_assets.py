@@ -14,17 +14,17 @@ def _get_associated_assets() -> dict[str, list[dandi.dandiapi.RemoteAsset]]:
         for version in dandiset.get_versions()
     ]
 
-    asset_id_to_dandiset_ids = collections.defaultdict(set)
+    asset_to_dandiset_ids = collections.defaultdict(set)
     for dandiset in all_dandisets:
         for asset in dandiset.get_assets():
-            asset_id_to_dandiset_ids[asset.identifier].update([dandiset.identifier])
+            asset_to_dandiset_ids[asset].update([dandiset.identifier])
 
     uniquely_associated_assets_by_dandiset_id = collections.defaultdict(list)
-    for asset_id, dandiset_ids in asset_id_to_dandiset_ids.items():
+    for asset, dandiset_ids in asset_to_dandiset_ids.items():
         if len(dandiset_ids) > 1:
-            uniquely_associated_assets_by_dandiset_id["multiple"].append(asset_id)
+            uniquely_associated_assets_by_dandiset_id["undetermined"].append(asset)
         else:
             dandiset_id = list(dandiset_ids)[0]
-            uniquely_associated_assets_by_dandiset_id[dandiset_id].append(asset_id)
+            uniquely_associated_assets_by_dandiset_id[dandiset_id].append(asset)
 
     return uniquely_associated_assets_by_dandiset_id
