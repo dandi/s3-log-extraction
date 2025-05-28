@@ -188,7 +188,7 @@ class S3LogAccessExtractor:
             new_shape = previous_shape + all_data.shape[0]
 
             with mirror_file_path.open(mode="ab") as file_stream:
-                file_stream.truncate(size=new_shape * numpy.dtype(dtype=dtype).itemsize)
+                file_stream.truncate(new_shape * numpy.dtype(dtype=dtype).itemsize)
 
             file_stream = numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r+")
             file_stream[previous_shape:] = all_data
