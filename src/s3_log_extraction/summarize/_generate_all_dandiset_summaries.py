@@ -47,7 +47,7 @@ def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) ->
     # Special key for multiple associations
     dandiset_id = "undetermined"
     _summarize_dandiset(
-        dandiset=dandiset_id,
+        dandiset_id=dandiset_id,
         associated_assets=uniquely_associated_assets_by_dandiset_id.get(dandiset_id, []),
         summary_directory=summary_directory,
         extraction_directory=extraction_directory,

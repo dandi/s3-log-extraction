@@ -40,6 +40,8 @@ def _get_associated_assets(use_cache: bool = True) -> dict[str, list[dandi.dandi
         with daily_dandi_cache_file_path.open(mode="w") as file_stream:
             yaml.dump(data=asset_id_to_dandiset_ids, stream=file_stream)
 
+    # TODO: add validation or other automatic cleaner for old caches here
+
     uniquely_associated_assets_by_dandiset_id = collections.defaultdict(list)
     for asset_id, dandiset_ids in asset_id_to_dandiset_ids.items():
         asset = asset_id_to_asset[asset_id]
