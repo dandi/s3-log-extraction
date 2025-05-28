@@ -32,8 +32,8 @@ def index_ips(*, seed: int = 0) -> None:
     for full_ip_file_path in tqdm.tqdm(
         iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="file", smoothing=0
     ):
-        full_ips = numpy.loadtxt(fname=full_ip_file_path, dtype="U15", ndmin=1)
-        new_ips = set(full_ips) - set(ip_to_index.keys())
+        full_ips = {str(ip) for ip in numpy.loadtxt(fname=full_ip_file_path, dtype="U15", ndmin=1)}
+        new_ips = full_ips - set(ip_to_index.keys())
 
         available_indices = list(all_possible_indices - used_indices)
         new_indices = rng.choice(a=available_indices, size=len(new_ips), replace=False, shuffle=False)
