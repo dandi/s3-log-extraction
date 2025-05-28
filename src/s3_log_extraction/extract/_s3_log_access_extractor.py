@@ -199,29 +199,26 @@ class S3LogAccessExtractor:
                 ],
                 dtype="uint64",
             )
-        self._bin_and_save_extracted_data(
+        self._bin_and_save_extracted_numeric_data(
             object_keys=object_keys,
             all_data=all_timestamps,
             filename="timestamps",  # .npy is added automatically
-            write_format="%s",
         )
         del all_timestamps
 
         all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
-        self._bin_and_save_extracted_data(
+        self._bin_and_save_extracted_numeric_data(
             object_keys=object_keys,
             all_data=all_bytes_sent,
             filename="bytes_sent",  # .npy is added automatically
-            write_format="%d",
         )
         del all_bytes_sent
 
         all_ips = numpy.loadtxt(fname=self.ips_file_path, dtype="U15")
-        self._bin_and_save_extracted_data(
+        self._bin_and_save_extracted_string_data(
             object_keys=object_keys,
             all_data=all_ips,
             filename="full_ips.txt",
-            write_format="%s",
         )
         del all_ips
 
