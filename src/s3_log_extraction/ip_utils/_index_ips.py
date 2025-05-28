@@ -33,7 +33,7 @@ def index_ips(*, seed: int = 0) -> None:
     for full_ip_file_path in tqdm.tqdm(
         iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="file", smoothing=0
     ):
-        full_ips = {str(ip) for ip in numpy.loadtxt(fname=full_ip_file_path, dtype="U15", ndmin=1)}
+        full_ips = {ip for ip in numpy.loadtxt(fname=full_ip_file_path, dtype="U15", ndmin=1)}
         new_ips = full_ips - set(ip_to_index.keys())
 
         available_indices = list(all_possible_indices - used_indices)
@@ -41,7 +41,7 @@ def index_ips(*, seed: int = 0) -> None:
         used_indices.update(new_indices)
 
         for new_ip, new_index in zip(new_ips, new_indices):
-            index_to_ip[new_index] = new_ip
+            index_to_ip[int(new_index)] = str(new_ip)
             ip_to_index[new_ip] = new_index
 
         full_indexed_ips = [ip_to_index[ip] for ip in full_ips]
