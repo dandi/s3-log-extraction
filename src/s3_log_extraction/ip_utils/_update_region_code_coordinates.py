@@ -43,7 +43,7 @@ def update_region_code_coordinates() -> None:
     with service_coordinates_file_path.open(mode="r") as file_stream:
         service_coordinates = yaml.safe_load(stream=file_stream) or {}
 
-    indexed_region_codes = load_ip_cache(cache_type="indexed_regions")
+    indexed_region_codes = load_ip_cache(cache_type="index_to_region")
     region_codes_to_coordinates = load_ip_cache(cache_type="region_codes_to_coordinates")
     region_codes_to_update = set(indexed_region_codes.values()) - set(region_codes_to_coordinates.keys())
     for country_and_region_code in region_codes_to_update:

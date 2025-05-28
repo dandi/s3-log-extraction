@@ -13,7 +13,7 @@ from ..ip_utils import load_ip_cache
 
 def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) -> None:
     client = dandi.dandiapi.DandiAPIClient()
-    index_to_region = load_ip_cache(cache_type="indexed_regions")
+    index_to_region = load_ip_cache(cache_type="index_to_region")
     extraction_directory = get_cache_directory() / "extraction"
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
