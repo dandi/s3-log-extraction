@@ -148,12 +148,13 @@ class S3LogAccessExtractor:
             )
             raise RuntimeError(message)
 
-    def _bin_and_save_extracted_string_data(
+    def _bin_and_save_extracted_data(
         self,
         *,
         object_keys: typing.Iterable[str],
         all_data: typing.Iterable[str | int],
         filename: str,
+        write_format: typing.Literal["%d", "%s"],
     ) -> None:
         data_per_object_key = collections.defaultdict(list)
         for object_key, data in zip(object_keys, all_data):
@@ -163,36 +164,7 @@ class S3LogAccessExtractor:
             mirror_directory = self.extraction_directory / object_key
             mirror_file_path = mirror_directory / filename
             with mirror_file_path.open(mode="a") as file_stream:
-                numpy.savetxt(fname=file_stream, X=data, fmt="%s")
-
-    def _bin_and_save_extracted_numeric_data(
-        self,
-        *,
-        object_keys: numpy.typing.NDArray,
-        all_data: numpy.typing.NDArray,
-        filename: str,
-        dtype: typing.Literal["uint64"] = "uint64",  # Assuming uint64 for all numeric data here
-    ) -> None:
-        data_per_object_key = collections.defaultdict(list)
-        for object_key, data in zip(object_keys, all_data):
-            data_per_object_key[object_key].append(data)
-
-        for object_key, data in data_per_object_key.items():
-            mirror_directory = self.extraction_directory / object_key
-            mirror_file_path = mirror_directory / filename
-
-            previous_shape = (
-                numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r").shape[0]
-                if mirror_file_path.exists()
-                else 0
-            )
-            new_shape = previous_shape + all_data.shape[0]
-
-            with mirror_file_path.open(mode="ab") as file_stream:
-                file_stream.truncate(new_shape * numpy.dtype(dtype=dtype).itemsize)
-
-            file_stream = numpy.memmap(filename=mirror_file_path, dtype=dtype, mode="r+")
-            file_stream[previous_shape:] = all_data
+                numpy.savetxt(fname=file_stream, X=data, fmt=write_format)
 
     def _mirror_copy(self) -> None:
         # Mirror the timestamps
@@ -215,7 +187,8 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_numeric_data(
             object_keys=object_keys,
             all_data=all_timestamps,
-            filename="timestamps.bin",
+            filename="timestamps.txt",
+            write_format="%d",
         )
         del all_timestamps
 
@@ -223,7 +196,8 @@ class S3LogAccessExtractor:
         self._bin_and_save_extracted_numeric_data(
             object_keys=object_keys,
             all_data=all_bytes_sent,
-            filename="bytes_sent.bin",
+            filename="bytes_sent.txt",
+            write_format="%d",
         )
         del all_bytes_sent
 
@@ -232,6 +206,7 @@ class S3LogAccessExtractor:
             object_keys=object_keys,
             all_data=all_ips,
             filename="full_ips.txt",
+            write_format="%s",
         )
         del all_ips
 
