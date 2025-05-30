@@ -18,5 +18,5 @@ jobs:
     uses: ./.github/workflows/testing_live_services.yml
     secrets:
       IP_HASH_SALT: ${{ secrets.IP_HASH_SALT }}
-      IPINFO_CREDENTIALS: ${{ secrets.IPINFO_CREDENTIALS }}
+      IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
       CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}
