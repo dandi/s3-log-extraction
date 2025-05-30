@@ -21,6 +21,7 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     "PA/Panamá": {"latitude": 8.559559, "longitude": -81.1308434},
     "PA/Panamá Oeste Province": {"latitude": 8.88028, "longitude": -79.78330},
     "PE/Lima Province": {"latitude": -12.5453873, "longitude": -75.8599243},
+    "PL/Greater Poland": {"latitude": 52.406374, "longitude": 16.9251681},
     "PL/Silesia": {"latitude": 50.6966393, "longitude": 17.9254068},
     "PL/Subcarpathia": {"latitude": 50.0575, "longitude": 22.0896},
     "PR/San Juan": {"latitude": 18.384239, "longitude": -66.05344},
