@@ -8,6 +8,7 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     "BO/La Paz Department": {"latitude": -11.7773231, "longitude": -67.4519752},
     "CL/Valparaíso": {"latitude": -32.5976089, "longitude": -70.8529753},
     "CN/Hainan": {"latitude": 19.2000001, "longitude": 109.5999999},
+    "CO/Huila Department": {"latitude": 2.53593490, "longitude": -75.52766990},
     "CO/Risaralda Department": {"latitude": 5.2102948, "longitude": -75.9842236},
     "CR/San José": {"latitude": 9.9325427, "longitude": -84.0795782},
     "ES/Castille and León": {"latitude": 42.00, "longitude": -5.5},
