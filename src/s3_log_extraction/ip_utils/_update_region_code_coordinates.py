@@ -3,6 +3,7 @@ import os
 import ipinfo
 import natsort
 import opencage.geocoder
+import tqdm
 import yaml
 
 from ._globals import _DEFAULT_REGION_CODES_TO_COORDINATES, _KNOWN_SERVICES
@@ -45,7 +46,13 @@ def update_region_code_coordinates() -> None:
 
     indexed_region_codes = load_ip_cache(cache_type="index_to_region")
     region_codes_to_update = set(indexed_region_codes.values()) - set(region_codes_to_coordinates.keys())
-    for country_and_region_code in region_codes_to_update:
+    for country_and_region_code in tqdm.tqdm(
+        iterable=region_codes_to_update,
+        total=len(region_codes_to_update),
+        desc="Updating region coordinates",
+        smoothing=0,
+        unit="region",
+    ):
         coordinates = _get_coordinates_from_region_code(
             country_and_region_code=country_and_region_code,
             ipinfo_handler=ipinfo_handler,
