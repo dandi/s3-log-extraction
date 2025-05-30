@@ -145,6 +145,13 @@ def _get_coordinates_from_opencage(*, country_and_region_code: str, opencage_api
     client = opencage.geocoder.OpenCageGeocode(key=opencage_api_key)
     results = client.geocode(country_and_region_code)
 
+    if not any(results):
+        message = (
+            f"\nCannot get coordinates for region code `{country_and_region_code}` from OpenCage API -"
+            f"please check the region code and ensure it is valid.\n"
+        )
+        raise ValueError(message)
+
     latitude = results[0]["geometry"]["lat"]
     longitude = results[0]["geometry"]["lng"]
     coordinates = {"latitude": latitude, "longitude": longitude}
