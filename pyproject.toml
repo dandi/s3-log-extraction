@@ -23,11 +23,11 @@ dependencies = [
     "pandas",
     "tqdm",
     "ipinfo",
+    "opencage",
     "PyYAML",
     "click",
     "natsort",
     "dandi",
-    "scipy",
     "cryptography",
 ]
 classifiers = [
