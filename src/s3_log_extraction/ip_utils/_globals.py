@@ -19,6 +19,7 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     "NI/Managua Department": {"latitude": 12.125, "longitude": -86.31},
     "NO/Vestland": {"latitude": 60.9291011, "longitude": 6.1078869},
     "PA/Panamá": {"latitude": 8.559559, "longitude": -81.1308434},
+    "PA/Panamá Oeste Province": {"latitude": 8.88028, "longitude": -79.78330},
     "PE/Lima Province": {"latitude": -12.5453873, "longitude": -75.8599243},
     "PL/Silesia": {"latitude": 50.6966393, "longitude": 17.9254068},
     "PL/Subcarpathia": {"latitude": 50.0575, "longitude": 22.0896},
