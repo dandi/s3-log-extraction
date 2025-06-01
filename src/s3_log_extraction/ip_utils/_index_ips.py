@@ -26,7 +26,7 @@ def index_ips(*, seed: int = 0) -> None:
     index_to_ip = load_index_to_ip()
     ip_to_index = {value: key for key, value in index_to_ip.items()}
 
-    available_indices = set(range(0, int(numpy.iinfo(index_dtype).max / 4)) - set(index_to_ip.keys())
+    available_indices = list(set(range(0, int(numpy.iinfo(index_dtype).max / 4))) - set(index_to_ip.keys()))
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
     for full_ip_file_path in tqdm.tqdm(
