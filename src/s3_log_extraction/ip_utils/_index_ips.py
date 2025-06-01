@@ -44,7 +44,7 @@ def index_ips(*, seed: int = 0) -> None:
         full_indexed_ips = [ip_to_index[ip] for ip in full_ips]
 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
-        with indexed_ips_file_path.open(mode="a") as file_stream:
+        with indexed_ips_file_path.open(mode="w") as file_stream:
             numpy.savetxt(fname=file_stream, X=full_indexed_ips, fmt="%d")
 
     # TODO: add validation for unexpected ip file combinations
