@@ -15,9 +15,9 @@ def index_ips(*, seed: int = 0) -> None:
 
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
     """
-    # Using the upper bound of uint16 as current limit; not expecting radically larger number of users
+    # Using the upper bound of uint32 as current limit; not expecting radically larger number of users
     # TODO: add validation to notify if we get close to this
-    index_dtype = numpy.dtype("uint16")
+    index_dtype = numpy.dtype("uint32")
     rng = numpy.random.default_rng(seed=seed)
 
     cache_directory = get_cache_directory()
