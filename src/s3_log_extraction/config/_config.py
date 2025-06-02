@@ -1,6 +1,8 @@
 import json
 import pathlib
+import sys
 import typing
+import warnings
 
 from ._globals import DEFAULT_CACHE_DIRECTORY, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
 
@@ -66,6 +68,46 @@ def get_cache_directory() -> pathlib.Path:
     directory.mkdir(exist_ok=True)
 
     return directory
+
+
+def set_awk_path(file_path: str | pathlib.Path) -> None:
+    if sys.platform != "win32":
+        message = "Setting the AWK path is only applicable to Windows systems - ignoring set command."
+        warnings.warn(message=message)
+        return
+    file_path = pathlib.Path(file_path)
+
+    config = get_config()
+    config["awk_path"] = str(file_path.absolute())
+    save_config(config=config)
+
+
+def get_awk_path() -> str | pathlib.Path:
+    """
+    Get the location of the AWK executable for S3 log extraction.
+
+    Only applies to Windows systems.
+
+    Returns
+    -------
+    pathlib.Path
+        The path to the AWK executable for S3 log extraction.
+    """
+    if sys.platform != "win32":
+        return "awk"
+
+    config = get_config()
+
+    default_awk_path = pathlib.Path.home() / "anaconda3" / "Library" / "usr" / "bin" / "awk.exe"
+    awk_path = pathlib.Path(config.get("awk_path", default_awk_path))
+    if not awk_path.exists():
+        message = (
+            "\nUnable to find `awk`, which is required for extraction - "
+            "please set this using `s3_log_extraction.set_awk_path(file_path=...)`.\n\n"
+        )
+        raise RuntimeError(message)
+
+    return awk_path
 
 
 def get_records_directory(*, cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:

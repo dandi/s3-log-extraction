@@ -39,12 +39,13 @@ def test_extraction(tmpdir: py.path.local) -> None:
             output_content = file_stream_1.read()
             expected_content = file_stream_2.read()
             assert output_content == expected_content
+
     for record_file in record_files:
         output_file = output_directory / record_file
         expected_file = expected_output_directory / record_file
         with output_file.open(mode="r") as file_stream_1, expected_file.open(mode="r") as file_stream_2:
-            output_content = set(file_stream_1.read().splitlines())
-            expected_content = set(file_stream_2.read().splitlines())
+            output_content = set([pathlib.Path(file_string).name for file_string in file_stream_1.read().splitlines()])
+            expected_content = set([file_string.split("\\")[-1] for file_string in file_stream_2.read().splitlines()])
             assert output_content == expected_content
 
 
