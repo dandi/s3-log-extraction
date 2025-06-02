@@ -5,7 +5,6 @@ import os
 import pathlib
 import shutil
 import subprocess
-import sys
 import time
 import typing
 
@@ -13,7 +12,7 @@ import natsort
 import numpy
 import tqdm
 
-from ..config import get_cache_directory, get_records_directory
+from ..config import get_awk_path, get_cache_directory, get_records_directory
 
 
 class S3LogAccessExtractor:
@@ -87,14 +86,7 @@ class S3LogAccessExtractor:
         return super().__new__(cls)
 
     def __init__(self, *, cache_directory: pathlib.Path | None = None, ips_to_skip_regex: str | None = None) -> None:
-        # AWK is not as readily available on Windows
-        if sys.platform == "win32":
-            awk_path = pathlib.Path.home() / "anaconda3" / "Library" / "usr" / "bin" / "awk.exe"
-
-            if not awk_path.exists():
-                message = "Unable to find `awk`, which is required for extraction - please raise an issue."
-                raise RuntimeError(message)
-        self.awk_base = "awk" if sys.platform != "win32" else awk_path
+        self.awk_base = get_awk_path()
 
         # Long-term TODO: use a separate script with no IP filtering for even further speedup in case of " "
         self.ips_to_skip_regex = ips_to_skip_regex or " "
