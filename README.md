@@ -53,7 +53,7 @@ Next, ensure some required environment variables are set:
    - Access token for the [ipinfo.io](https://ipinfo.io/) service.
    - Extracts geographic region information in ISO 3166 format (e.g. "US/California") for anonymized statistics.
 2. **OPENCAGE_API_KEY**:
-   - Access token for the [opencagedata.com](opencagedata.com) service.
+   - Access token for the [opencagedata.com](https://opencagedata.com) service.
    - Maps the ISO 3166 codes from the first step to latitude and longitude coordinates for the geographic heat maps used in visualizations.
 
 ```bash
