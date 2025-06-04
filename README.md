@@ -50,11 +50,11 @@ s3_log_extraction extract_logs < log directory >
 Next, ensure some required environment variables are set:
 
 1. **IPINFO_API_KEY**:
-  - Access token for the [ipinfo.io](ipinfo.io) service.
-  - Extracts geographic region information in ISO 3166 format (e.g. "US/California") for anonymized statistics.
+   - Access token for the [ipinfo.io](https://ipinfo.io/) service.
+   - Extracts geographic region information in ISO 3166 format (e.g. "US/California") for anonymized statistics.
 2. **OPENCAGE_API_KEY**:
-  - Access token for the [opencagedata.com](opencagedata.com) service.
-  - Maps the ISO 3166 codes from the first step to latitude and longitude coordinates for the geographic heat maps used in visualizations.
+   - Access token for the [opencagedata.com](opencagedata.com) service.
+   - Maps the ISO 3166 codes from the first step to latitude and longitude coordinates for the geographic heat maps used in visualizations.
 
 ```bash
 export IPINFO_API_KEY="your_token_here"
@@ -77,9 +77,9 @@ These instructions assume you are operating on the Drogon server.
 
 Begin by ensuring some required environment variables are set:
 
-1. **S3_LOG_EXTRACTION_PASSWORD**: Various sensitive information on Drogon is encrypted using this password
-  - The regular expression for all associated Drogon IPs.
-  - The IP index and geolocation caches.
+1. **S3_LOG_EXTRACTION_PASSWORD**: Various sensitive information on Drogon is encrypted using this password. For example:
+   - The regular expression for all associated Drogon IPs.
+   - The IP index and geolocation caches.
 
 This allows us to store full IP information in a persistent way (in case we need to go back and do a lookup) while still being secure.
 
