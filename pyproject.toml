@@ -1,0 +1,121 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/s3_log_extraction"]
+
+[project]
+name = "s3_log_extraction"
+version="0.0.1"
+authors = [
+  { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
+]
+description = "Fast extraction of access summary data for S3 logs."
+readme = "README.md"
+keywords = ["aws", "s3", "log", "download tracking", "geolocation"]
+license = {file = "license.txt"}
+requires-python = ">=3.12"
+dependencies = [
+    "pandas",
+    "tqdm",
+    "ipinfo",
+    "opencage",
+    "PyYAML",
+    "click",
+    "natsort",
+    "dandi",
+    "cryptography",
+]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: BSD License",
+    "Intended Audience :: Developers",
+    "Operating System :: Unix",
+]
+
+#[project.scripts]
+#reduce_all_dandi_raw_s3_logs = "s3_log_extraction._command_line_interface:_reduce_all_dandi_raw_s3_logs_cli"
+#bin_all_reduced_s3_logs_by_object_key = "s3_log_extraction._command_line_interface:_bin_all_reduced_s3_logs_by_object_key_cli"
+#map_binned_s3_logs_to_dandisets = "s3_log_extraction._command_line_interface:_map_binned_s3_logs_to_dandisets_cli"
+#generate_dandiset_summaries = "s3_log_extraction._command_line_interface:_generate_dandiset_summaries_cli"
+#generate_all_dandiset_totals = "s3_log_extraction._command_line_interface:_generate_all_dandiset_totals_cli"
+#generate_archive_summaries = "s3_log_extraction._command_line_interface:_generate_archive_summaries_cli"
+#generate_archive_totals = "s3_log_extraction._command_line_interface:_generate_archive_totals_cli"
+#update_region_codes_to_coordinates = "s3_log_extraction._command_line_interface:_update_region_codes_to_coordinates_cli"
+#check_for_errors = "s3_log_extraction._command_line_interface:_check_for_errors"
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov",
+    "pytest-env",
+    "ipython<9.0.0",  # coloriaze error in pycharm
+    "pre-commit",
+]
+all = ["s3_log_extraction[dev]"]
+
+
+
+[tool.black]
+line-length = 120
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.toml
+  |\.yml
+  |\.txt
+  |\.sh
+  |\.git
+  |\.ini
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+
+
+[tool.ruff]
+exclude = [
+  "*/__init__.py"
+]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "E", "I"]
+ignore = [
+    "PTH123",
+    "D203",
+    "D212",
+    "T201",
+    "FIX002",
+    "TD003",
+    "TD002",
+    "S101",
+    "ICN001",
+    "INP001",
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.isort]
+relative-imports-order = "closest-to-furthest"
+known-first-party = ["s3_log_extraction"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/s3_log_extraction/_hidden_top_level_imports.py" = ["F401"]  # Must perform imports here even if not exposed
+
+
+# None of these environment variables need to be 'correct' with respect to Drogon
+[tool.pytest.ini_options]
+env = [
+    "IPINFO_API_KEY=a1",
+    "OPENCAGE_API_KEY=a1",
+]
