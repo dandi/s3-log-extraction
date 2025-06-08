@@ -11,7 +11,7 @@ BEGIN {
         print "Environment variable 'TEMPORARY_DIRECTORY' is not set" > "/dev/stderr"
         exit 1
     }
-    TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"]
+    TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"] "/"
 
     MONTH_TO_NUMERIC["Jan"] = "01"
     MONTH_TO_NUMERIC["Feb"] = "02"
@@ -25,11 +25,6 @@ BEGIN {
     MONTH_TO_NUMERIC["Oct"] = "10"
     MONTH_TO_NUMERIC["Nov"] = "11"
     MONTH_TO_NUMERIC["Dec"] = "12"
-
-    OBJECT_KEYS_FILE_PATH = TEMPORARY_DIRECTORY "object_keys.txt"
-    TIMESTAMPS_FILE_PATH = TEMPORARY_DIRECTORY "timestamps.txt"
-    BYTES_SENT_FILE_PATH = TEMPORARY_DIRECTORY "bytes_sent.txt"
-    IPS_FILE_PATH = TEMPORARY_DIRECTORY "full_ips.txt"
 }
 
 {
@@ -70,8 +65,35 @@ BEGIN {
 
     bytes_sent = (post_uri_fields[4] == "-" ? 0 : post_uri_fields[4])
 
-    print object_key > OBJECT_KEYS_FILE_PATH
-    print parsed_timestamp > TIMESTAMPS_FILE_PATH
-    print bytes_sent > BYTES_SENT_FILE_PATH
-    print ip > IPS_FILE_PATH
+    data[object_key]["timestamps"][++data[object_key]["timestamps_count"]] = parsed_timestamp
+    data[object_key]["bytes_sent"][++data[object_key]["bytes_sent_count"]] = bytes_sent
+    data[object_key]["ip"][++data[object_key]["ip_count"]] = ip
+}
+
+END {
+    for (object_key in data) {
+        subdirectory = TEMPORARY_DIRECTORY object_key
+        gsub("/", "\\", subdirectory)
+        gsub("\\\\", "\\\\\\\\", subdirectory)
+        system("mkdir -p " subdirectory)
+    }
+
+    for (object_key in data) {
+        subdirectory = TEMPORARY_DIRECTORY object_key
+        gsub("/", "\\", subdirectory)
+        gsub("\\\\", "\\\\\\\\", subdirectory)
+        timestamps_file_path = subdirectory "\\timestamps.txt"
+        bytes_sent_file_path = subdirectory "\\bytes_sent.txt"
+        full_ips_file_path = subdirectory "\\full_ips.txt"
+
+        for (i = 1; i <= data[object_key]["timestamps_count"]; i++) {
+            print data[object_key]["timestamps"][i] >> timestamps_file_path
+        }
+        for (i = 1; i <= data[object_key]["bytes_sent_count"]; i++) {
+            print data[object_key]["bytes_sent"][i] >> bytes_sent_file_path
+        }
+        for (i = 1; i <= data[object_key]["ip_count"]; i++) {
+            print data[object_key]["ip"][i] >> full_ips_file_path
+        }
+    }
 }

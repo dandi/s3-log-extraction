@@ -1,3 +1,4 @@
+import os
 import pathlib
 
 
@@ -20,7 +21,7 @@ def assert_expected_extraction_content(
         output_file = output_directory / relative_output_file
         expected_file = expected_output_directory / relative_expected_file
         with output_file.open(mode="rb") as file_stream_1, expected_file.open(mode="rb") as file_stream_2:
-            output_content = file_stream_1.read()
+            output_content = file_stream_1.read().replace(b"\n", os.linesep.encode())
             expected_content = file_stream_2.read()
             assert output_content == expected_content, f"Binary content mismatch in {relative_output_file}"
     for record_file in record_files:
