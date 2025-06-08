@@ -1,16 +1,21 @@
+"""Configuration options, such as cache management."""
+
 from ._config import (
     save_config,
     get_config,
     get_cache_directory,
     set_cache_directory,
+    get_extraction_directory,
     get_records_directory,
     get_ip_cache_directory,
+    get_temporary_directory,
 )
 from ._globals import (
     S3_LOG_EXTRACTION_BASE_FOLDER_PATH,
     S3_LOG_EXTRACTION_CONFIG_FILE_PATH,
     DEFAULT_CACHE_DIRECTORY,
 )
+from ._reset import reset_extraction, reset_tmp
 
 __all__ = [
     "S3_LOG_EXTRACTION_BASE_FOLDER_PATH",
@@ -20,6 +25,10 @@ __all__ = [
     "get_config",
     "get_cache_directory",
     "get_ip_cache_directory",
+    "get_extraction_directory",
     "get_records_directory",
+    "get_temporary_directory",
     "set_cache_directory",
+    "reset_extraction",
+    "reset_tmp",
 ]

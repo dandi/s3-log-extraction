@@ -7,7 +7,10 @@ from ._base_validator import BaseValidator
 
 class HttpSplitCountPreValidator(BaseValidator):
     """
-    This is an independent pre-check that ensures our fast extraction heuristic does not miss unintended lines.
+    This check ensures that there at most only one occurrence of 'HTTP/1.' in each line of the log file.
+
+    No occurrences is allowed but not checked to correspond to GET requests since that is covered by the
+    HttpEmptySplitPreValidator.
 
     This validator is:
       - not parallelized, but could be

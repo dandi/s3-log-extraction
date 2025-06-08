@@ -21,7 +21,7 @@ __all__ = [
     # Public submodules
     "config",
     "encryption_utils",
-    "extract",
+    "extractors",
     "ip_utils",
     "summarize",
     "testing",

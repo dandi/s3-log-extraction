@@ -6,14 +6,13 @@ import pathlib
 import shutil
 import subprocess
 import sys
-import time
 import typing
 
 import natsort
 import numpy
 import tqdm
 
-from ..config import get_cache_directory, get_records_directory
+from ..config import get_cache_directory, get_extraction_directory, get_records_directory, get_temporary_directory
 
 
 class S3LogAccessExtractor:
@@ -30,7 +29,6 @@ class S3LogAccessExtractor:
       - parallelized
       - interruptible
           However, you must do so in one of two ways:
-            - Create a file in the records cache called 'pause_extraction' to indefinitely pause the processes.
             - Create a file in the records cache called 'stop_extraction' to end the processes after current completion.
       - updatable
 
@@ -40,53 +38,7 @@ class S3LogAccessExtractor:
         The directory containing the raw S3 log files to be processed.
     """
 
-    @classmethod
-    def _get_cache_directories(cls, *, cache_directory: pathlib.Path | None = None) -> None:
-        """
-        Create the cache directory and subdirectories if they do not exist.
-        """
-        cls.cache_directory = cache_directory or get_cache_directory()
-
-        cls.extraction_directory = cls.cache_directory / "extraction"
-        cls.extraction_directory.mkdir(exist_ok=True)
-
-        cls.base_temporary_directory = cls.cache_directory / "tmp"
-        cls.base_temporary_directory.mkdir(exist_ok=True)
-
-        # Special file for safe interruption during parallel extraction
-        cls.records_directory = get_records_directory(cache_directory=cache_directory)
-        cls.pause_file_path = cls.records_directory / "pause_extraction"
-        cls.stop_file_path = cls.records_directory / "stop_extraction"
-
-        extraction_record_file_name = f"{cls.__name__}_extraction.txt"
-        cls.extraction_record_file_path = cls.records_directory / extraction_record_file_name
-        mirror_copy_start_record_file_name = f"{cls.__name__}_mirror-copy-start.txt"
-        cls.mirror_copy_start_record_file_path = cls.records_directory / mirror_copy_start_record_file_name
-        mirror_copy_end_record_file_name = f"{cls.__name__}_mirror-copy-end.txt"
-        cls.mirror_copy_end_record_file_path = cls.records_directory / mirror_copy_end_record_file_name
-
-    @classmethod
-    def reset_cache(cls) -> None:
-        """
-        Purge the cache directory and all extraction records.
-        """
-        cls._get_cache_directories()
-
-        shutil.rmtree(path=cls.extraction_directory)
-        shutil.rmtree(path=cls.base_temporary_directory)
-        cls.extraction_record_file_path.unlink(missing_ok=True)
-        cls.mirror_copy_start_record_file_path.unlink(missing_ok=True)
-        cls.mirror_copy_end_record_file_path.unlink(missing_ok=True)
-
-    def __new__(
-        cls, *, cache_directory: str | pathlib.Path | None = None, ips_to_skip_regex: str | None = None
-    ) -> typing.Self:
-        cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else None
-        cls._get_cache_directories(cache_directory=cache_directory)
-
-        return super().__new__(cls)
-
-    def __init__(self, *, cache_directory: pathlib.Path | None = None, ips_to_skip_regex: str | None = None) -> None:
+    def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
         # AWK is not as readily available on Windows
         if sys.platform == "win32":
             awk_path = pathlib.Path.home() / "anaconda3" / "Library" / "usr" / "bin" / "awk.exe"
@@ -96,13 +48,27 @@ class S3LogAccessExtractor:
                 raise RuntimeError(message)
         self.awk_base = "awk" if sys.platform != "win32" else awk_path
 
-        # Long-term TODO: use a separate script with no IP filtering for even further speedup in case of " "
-        self.ips_to_skip_regex = ips_to_skip_regex or " "
+        self.cache_directory = cache_directory or get_cache_directory()
+        self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
+        self.base_temporary_directory = get_temporary_directory(cache_directory=self.cache_directory)
+
+        # Special file for safe interruption during parallel extraction
+        self.records_directory = get_records_directory(cache_directory=self.cache_directory)
+        self.stop_file_path = self.records_directory / "stop_extraction"
+
+        class_name = self.__class__.__name__
+        extraction_record_file_name = f"{class_name}_extraction.txt"
+        self.extraction_record_file_path = self.records_directory / extraction_record_file_name
+        mirror_copy_start_record_file_name = f"{class_name}_mirror-copy-start.txt"
+        self.mirror_copy_start_record_file_path = self.records_directory / mirror_copy_start_record_file_name
+        mirror_copy_end_record_file_name = f"{class_name}_mirror-copy-end.txt"
+        self.mirror_copy_end_record_file_path = self.records_directory / mirror_copy_end_record_file_name
 
         # TODO: does this hold after bundling?
-        self._relative_script_path = pathlib.Path(__file__).parent / "_fast_extraction.awk"
+        self._relative_script_path = pathlib.Path(__file__).parent / "_fast_generic_extraction.awk"
+        self._awk_env = dict()
 
-        initial_mirror_record_difference = {}
+        initial_mirror_record_difference = dict()
         if self.mirror_copy_start_record_file_path.exists() and self.mirror_copy_end_record_file_path.exists():
             with self.mirror_copy_start_record_file_path.open(mode="r") as file_stream:
                 mirror_copy_start_record = set(file_stream.read().splitlines())
@@ -128,16 +94,15 @@ class S3LogAccessExtractor:
         absolute_file_path = str(file_path.absolute())
 
         absolute_temporary_directory = str(self.temporary_directory.absolute()) + str(pathlib.Path("/"))
+        self._awk_env["TEMPORARY_DIRECTORY"] = absolute_temporary_directory
+
         awk_command = f"{self.awk_base} --file {absolute_script_path} {absolute_file_path}"
         result = subprocess.run(
             args=awk_command,
             shell=True,
             capture_output=True,
             text=True,
-            env={
-                "IPS_TO_SKIP_REGEX": self.ips_to_skip_regex,
-                "TEMPORARY_DIRECTORY": absolute_temporary_directory,
-            },
+            env=self._awk_env,
         )
         if result.returncode != 0:
             message = (
@@ -212,9 +177,6 @@ class S3LogAccessExtractor:
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         pid = str(os.getpid())
-        while self.pause_file_path.exists() is True:
-            print(f"Extraction paused on process {pid} - waiting for the interrupt file to be removed...")
-            time.sleep(60)
         if self.stop_file_path.exists() is True:
             print(f"Extraction stopped on process {pid} - exiting...")
             return

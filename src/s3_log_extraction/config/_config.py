@@ -68,9 +68,26 @@ def get_cache_directory() -> pathlib.Path:
     return directory
 
 
-def get_records_directory(*, cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
+def _establish_cache_subdirectory(
+    *, cache_directory: str | pathlib.Path | None = None, name: typing.Literal["records", "extraction", "ips"]
+) -> None:
     """
-    Get the records directory for S3 log extraction.
+    I prefer to have each of the subdirectories below hard-established for API and docstring exposure.
+
+    This makes it easier to navigate the codebase via auto-completion and IDEs.
+    As opposed to only having one function like this and returning a structure such as a dictionary.
+    """
+    cache_directory = cache_directory or get_cache_directory()
+
+    records_directory = cache_directory / name
+    records_directory.mkdir(exist_ok=True)
+
+    return records_directory
+
+
+def get_records_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
+    """
+    Get the records subdirectory for S3 log extraction.
 
     Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
     repeat computations.
@@ -84,19 +101,32 @@ def get_records_directory(*, cache_directory: str | pathlib.Path | None = None) 
     Returns
     -------
     pathlib.Path
+        The main output directory for S3 log extraction.
+    """
+    return _establish_cache_subdirectory(cache_directory=cache_directory, name="records")
+
+
+def get_extraction_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
+    """
+    Get the main output subdirectory for S3 log extraction.
+
+    Parameters
+    ----------
+    cache_directory : path-like, optional
+        The directory to use as the cache directory.
+        If not provided, the default cache directory is used.
+
+    Returns
+    -------
+    pathlib.Path
         The records directory for S3 log extraction.
     """
-    cache_directory = cache_directory or get_cache_directory()
-
-    records_directory = cache_directory / "records"
-    records_directory.mkdir(exist_ok=True)
-
-    return records_directory
+    return _establish_cache_subdirectory(cache_directory=cache_directory, name="extraction")
 
 
-def get_ip_cache_directory() -> pathlib.Path:
+def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
     """
-    Get the IP cache directory for S3 log extraction.
+    Get the IP cache subdirectory for S3 log extraction.
 
     Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
     repeat computations.
@@ -106,9 +136,16 @@ def get_ip_cache_directory() -> pathlib.Path:
     pathlib.Path
         The IP cache directory for S3 log extraction.
     """
-    cache_directory = get_cache_directory()
+    return _establish_cache_subdirectory(cache_directory=cache_directory, name="ips")
 
-    ip_cache_directory = cache_directory / "ips"
-    ip_cache_directory.mkdir(exist_ok=True)
 
-    return ip_cache_directory
+def get_temporary_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
+    """
+    Get the temporary cache subdirectory for S3 log extraction.
+
+    Returns
+    -------
+    pathlib.Path
+        The temporary directory for S3 log extraction.
+    """
+    return _establish_cache_subdirectory(cache_directory=cache_directory, name="tmp")

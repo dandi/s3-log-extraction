@@ -1,2 +1,0 @@
-E:\GitHub\s3-log-extraction\tests\extraction\test_logs\hard_lines.log
-E:\GitHub\s3-log-extraction\tests\extraction\test_logs\easy_lines.log

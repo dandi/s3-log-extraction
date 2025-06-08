@@ -16,7 +16,7 @@ def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
 
     test_mapped_s3_logs_folder_path = tmpdir
 
-    expected_output_folder_path = examples_folder_path / "expected_output"
+    expected_output_folder_path = examples_folder_path / "expected_dandi_output"
 
     s3_log_extraction.map_binned_s3_logs_to_dandisets(
         binned_s3_logs_folder_path=example_binned_s3_logs_folder_path,
