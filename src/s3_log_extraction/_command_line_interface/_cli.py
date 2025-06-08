@@ -76,7 +76,7 @@ def _extract_cli(
 @_s3logextraction_cli.command(name="stop")
 @click.option(
     "--timeout",
-    dest="max_timeout_in_seconds",
+    "max_timeout_in_seconds",
     help=(
         "The maximum time to wait (in seconds) for the extraction processes to stop before "
         "ceasing to track their status. This does not mean that the processes will not stop after this time."
