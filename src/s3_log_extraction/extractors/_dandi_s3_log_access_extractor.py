@@ -148,7 +148,6 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
             for object_key, timestamp, bytes_sent, ip in zip(
                 all_object_keys, timestamps_file, bytes_sent_file, ips_file
             ):
-                object_key = object_key.rstrip("\n")
                 data_per_object_key[object_key][0].append(timestamp)
                 data_per_object_key[object_key][1].append(bytes_sent)
                 data_per_object_key[object_key][2].append(ip)
