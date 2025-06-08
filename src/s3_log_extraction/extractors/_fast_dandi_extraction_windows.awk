@@ -73,14 +73,18 @@ BEGIN {
 END {
     for (object_key in data) {
         subdirectory = TEMPORARY_DIRECTORY object_key
+        gsub("/", "\\", subdirectory)
+        gsub("\\\\", "\\\\\\\\", subdirectory)
         system("mkdir -p " subdirectory)
     }
 
     for (object_key in data) {
         subdirectory = TEMPORARY_DIRECTORY object_key
-        timestamps_file_path = subdirectory "/timestamps.txt"
-        bytes_sent_file_path = subdirectory "/bytes_sent.txt"
-        full_ips_file_path = subdirectory "/full_ips.txt"
+        gsub("/", "\\", subdirectory)
+        gsub("\\\\", "\\\\\\\\", subdirectory)
+        timestamps_file_path = subdirectory "\\timestamps.txt"
+        bytes_sent_file_path = subdirectory "\\bytes_sent.txt"
+        full_ips_file_path = subdirectory "\\full_ips.txt"
 
         for (i = 1; i <= data[object_key]["timestamps_count"]; i++) {
             print data[object_key]["timestamps"][i] >> timestamps_file_path
