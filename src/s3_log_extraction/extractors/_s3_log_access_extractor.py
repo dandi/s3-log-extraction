@@ -225,6 +225,7 @@ class S3LogAccessExtractor:
                 desc="Running extraction on S3 logs: ",
                 unit="file",
                 smoothing=0,
+                mininterval=10.0,  # in seconds
             ):
                 self.extract_file(file_path=file_path)
         else:
