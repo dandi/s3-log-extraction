@@ -5,14 +5,7 @@ import psutil
 from ..config import get_extraction_directory, get_temporary_directory
 
 
-def _get_pid_by_name(process_name):
-    for proc in psutil.process_iter(["pid", "name"]):
-        if proc.info["name"] == process_name:
-            return proc.info["pid"]
-    return None
-
-
-def get_possible_running_pids(cache_directory: str | pathlib.Path | None = None) -> list[str]:
+def get_running_pids(cache_directory: str | pathlib.Path | None = None) -> list[str]:
     """
     Get a list of possible running PIDs from the temporary directory.
 
@@ -21,8 +14,8 @@ def get_possible_running_pids(cache_directory: str | pathlib.Path | None = None)
     temporary_directory = get_temporary_directory(cache_directory=cache_directory)
     possible_pids = {str(pid.name) for pid in temporary_directory.iterdir()}
 
-    possible_running_pids = {possible_pid for possible_pid in possible_pids if psutil.pid_exists(pid=int(possible_pid))}
-    return possible_running_pids
+    running_pids = {possible_pid for possible_pid in possible_pids if psutil.pid_exists(pid=int(possible_pid))}
+    return running_pids
 
 
 def stop_extraction(cache_directory: str | pathlib.Path | None = None) -> None:

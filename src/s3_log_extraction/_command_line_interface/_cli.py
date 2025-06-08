@@ -7,7 +7,7 @@ import typing
 import click
 
 from ..config import get_extraction_directory, reset_extraction, reset_tmp, set_cache_directory
-from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, get_possible_running_pids
+from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, get_running_pids
 
 
 # s3logextraction
@@ -93,15 +93,13 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
     Note that you should not attempt to interrupt the extraction process using Ctrl+C or pkill, as this may lead to
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
     """
-    possible_running_pids = get_possible_running_pids()
-    if len(possible_running_pids) == 0:
+    running_pids = get_running_pids()
+    if len(running_pids) == 0:
         click.echo(message="No extraction processes are currently running.")
         return
 
     pid_string = (
-        f" on PIDs [{", ".join(possible_running_pids)}]"
-        if len(possible_running_pids) > 1
-        else f" on PID {possible_running_pids[0]}"
+        f" on PIDs [{", ".join(running_pids)}]" if len(running_pids) > 1 else f" on PID {list(running_pids)[0]}"
     )
 
     click.echo(message=f"Stopping the extraction process{pid_string}...")
@@ -111,7 +109,7 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
 
     time_so_far_in_seconds = 0
     while time_so_far_in_seconds < max_timeout_in_seconds:
-        if any(get_possible_running_pids()):
+        if any(get_running_pids()):
             time.sleep(1)
         else:
             click.echo(message="Extraction has been stopped.")
