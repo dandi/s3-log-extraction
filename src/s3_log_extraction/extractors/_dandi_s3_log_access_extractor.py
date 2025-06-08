@@ -84,13 +84,20 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
 
         # unique_object_keys = numpy.unique(object_keys)
         unique_object_keys = {object_key for object_key in all_object_keys}
-        for object_key in unique_object_keys:
-            mirror_directory = self.extraction_directory / object_key
-            mirror_directory.mkdir(parents=True, exist_ok=True)
+        # for object_key in unique_object_keys:
+        #     mirror_directory = self.extraction_directory / object_key
+        #     mirror_directory.mkdir(parents=True, exist_ok=True)
+        collections.deque(
+            (
+                (self.extraction_directory / object_key).mkdir(parents=True, exist_ok=True)
+                for object_key in unique_object_keys
+            ),
+            maxlen=0,
+        )
         del unique_object_keys  # Clear memory to reduce overhead
 
         # all_timestamps = numpy.loadtxt(fname=self.timestamps_file_path, dtype="uint64")
-        all_timestamps = self.timestamps_file_path.read_text().splitlines()
+        # all_timestamps = self.timestamps_file_path.read_text().splitlines()
         # self._bin_and_save_extracted_data(
         #     object_keys=all_object_keys,
         #     all_data=all_timestamps,
@@ -100,7 +107,7 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
         # del all_timestamps
 
         # all_bytes_sent = numpy.loadtxt(fname=self.bytes_sent_file_path, dtype="uint64")
-        all_bytes_sent = self.bytes_sent_file_path.read_text().splitlines()
+        # all_bytes_sent = self.bytes_sent_file_path.read_text().splitlines()
         # self._bin_and_save_extracted_data(
         #     object_keys=all_object_keys,
         #     all_data=all_bytes_sent,
@@ -110,7 +117,7 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
         # del all_bytes_sent
 
         # all_ips = numpy.loadtxt(fname=self.ips_file_path, dtype="U15")
-        all_ips = self.ips_file_path.read_text().splitlines()
+        # all_ips = self.ips_file_path.read_text().splitlines()
         # self._bin_and_save_extracted_data(
         #     object_keys=all_object_keys,
         #     all_data=all_ips,
@@ -125,11 +132,26 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
         # data_per_object_key = {
         #     object_key: [data for object_key, data in zip(all_object_keys, all_ips)]
         # }
-        data_per_object_key = collections.defaultdict(lambda: [[], [], []])
-        for object_key, timestamp, bytes_sent, ip in zip(all_object_keys, all_timestamps, all_bytes_sent, all_ips):
-            data_per_object_key[object_key][0].append(f"{timestamp}\n")
-            data_per_object_key[object_key][1].append(f"{bytes_sent}\n")
-            data_per_object_key[object_key][2].append(f"{ip}\n")
+
+        # data_per_object_key = collections.defaultdict(lambda: ([], [], []))
+        # for object_key, timestamp, bytes_sent, ip in zip(all_object_keys, all_timestamps, all_bytes_sent, all_ips):
+        #     data_per_object_key[object_key][0].append(f"{timestamp}\n")
+        #     data_per_object_key[object_key][1].append(f"{bytes_sent}\n")
+        #     data_per_object_key[object_key][2].append(f"{ip}\n")
+
+        with (
+            self.timestamps_file_path.open(mode="r") as timestamps_file,
+            self.bytes_sent_file_path.open(mode="r") as bytes_sent_file,
+            self.ips_file_path.open(mode="r") as ips_file,
+        ):
+            data_per_object_key = collections.defaultdict(lambda: ([], [], []))
+            for object_key, timestamp, bytes_sent, ip in zip(
+                all_object_keys, timestamps_file, bytes_sent_file, ips_file
+            ):
+                object_key = object_key.rstrip("\n")
+                data_per_object_key[object_key][0].append(timestamp)
+                data_per_object_key[object_key][1].append(bytes_sent)
+                data_per_object_key[object_key][2].append(ip)
 
         for object_key, data in data_per_object_key.items():
             mirror_directory = self.extraction_directory / object_key
@@ -141,3 +163,42 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
                 ts_file.writelines(data[0])
                 bs_file.writelines(data[1])
                 ip_file.writelines(data[2])
+
+    # def extract_file(self, file_path: str | pathlib.Path) -> None:
+    #     pid = str(os.getpid())
+    #     if self.stop_file_path.exists() is True:
+    #         print(f"Extraction stopped on process {pid} - exiting...")
+    #         return
+    #
+    #     file_path = pathlib.Path(file_path)
+    #     absolute_file_path = str(file_path.absolute())
+    #     if self.extraction_record.get(absolute_file_path, False) is True:
+    #         return
+    #
+    #     self.temporary_directory = self.base_temporary_directory / pid
+    #     self.temporary_directory.mkdir(exist_ok=True)
+    #     self.object_keys_file_path = self.temporary_directory / "object_keys.txt"
+    #     self.timestamps_file_path = self.temporary_directory / "timestamps.txt"
+    #     self.bytes_sent_file_path = self.temporary_directory / "bytes_sent.txt"
+    #     self.ips_file_path = self.temporary_directory / "full_ips.txt"
+    #
+    #     self._run_extraction(file_path=file_path)
+    #
+    #     # Sometimes a log file (especially very early ones) may not have any valid GET entries
+    #     if not self.object_keys_file_path.exists():
+    #         return
+    #
+    #     # Record the start of the mirror copy step
+    #     with self.mirror_copy_start_record_file_path.open(mode="a") as file_stream:
+    #         file_stream.write(f"{absolute_file_path}\n")
+    #
+    #     self._mirror_copy()
+    #
+    #     # Record final success and cleanup
+    #     with self.mirror_copy_end_record_file_path.open(mode="a") as file_stream:
+    #         file_stream.write(f"{absolute_file_path}\n")
+    #     shutil.rmtree(path=self.temporary_directory)
+    #
+    #     self.extraction_record[absolute_file_path] = True
+    #     with self.extraction_record_file_path.open(mode="a") as file_stream:
+    #         file_stream.write(f"{absolute_file_path}\n")
