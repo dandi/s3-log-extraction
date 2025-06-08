@@ -37,7 +37,7 @@ def _s3logextraction_cli():
     "--mode",
     help=(
         "Special parsing mode related to expected object key structure; "
-        "for example, if 'dandi' then only extract 'blobs' and 'zarr' objects."
+        "for example, if 'dandi' then only extract 'blobs' and 'zarr' objects. "
         "By default, objects will be processed using the generic structure."
     ),
     required=False,
@@ -76,6 +76,7 @@ def _extract_cli(
 @_s3logextraction_cli.command(name="stop")
 @click.option(
     "--timeout",
+    dest="max_timeout_in_seconds",
     help=(
         "The maximum time to wait (in seconds) for the extraction processes to stop before "
         "ceasing to track their status. This does not mean that the processes will not stop after this time."

@@ -1,6 +1,5 @@
 import collections
 import concurrent.futures
-import datetime
 import os
 import pathlib
 import shutil
@@ -141,14 +140,7 @@ class S3LogAccessExtractor:
             mirror_directory.mkdir(parents=True, exist_ok=True)
         del unique_object_keys  # Clear memory to reduce overhead
 
-        with self.timestamps_file_path.open(mode="r") as file_stream:
-            all_timestamps = numpy.array(
-                object=[
-                    datetime.datetime.strptime(line.strip(), "%d/%b/%Y:%H:%M:%S").strftime(format="%y%m%d%H%M%S")
-                    for line in file_stream.readlines()
-                ],
-                dtype="uint64",
-            )
+        all_timestamps = numpy.loadtxt(fname=self.timestamps_file_path, dtype="uint64")
         self._bin_and_save_extracted_data(
             object_keys=object_keys,
             all_data=all_timestamps,
