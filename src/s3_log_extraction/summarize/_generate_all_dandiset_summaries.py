@@ -42,7 +42,6 @@ def generate_all_dandiset_summaries() -> None:
             summary_directory=summary_directory,
             index_to_region=index_to_region,
             asset_id_to_asset_path=asset_id_to_asset_path,
-            client=client,
         )
 
     # Special key for multiple associations
