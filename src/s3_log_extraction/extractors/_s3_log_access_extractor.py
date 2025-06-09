@@ -24,7 +24,7 @@ class S3LogAccessExtractor:
       - parallelized
       - interruptible
           However, you must do so in one of two ways:
-            - Invoke the command `s3logextraction stop extraction` to end the processes after the current completion.
+            - Invoke the command `s3logextraction stop` to end the processes after the current round of completion.
             - Manually create a file in the records cache called 'stop_extraction'.
       - updatable
 

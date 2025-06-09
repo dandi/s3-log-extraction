@@ -8,6 +8,13 @@ import click
 
 from ..config import get_extraction_directory, reset_extraction, set_cache_directory
 from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, get_running_pids
+from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
+from ..summarize import (
+    generate_all_dandiset_summaries,
+    generate_all_dandiset_totals,
+    generate_archive_summaries,
+    generate_archive_totals,
+)
 
 
 # s3logextraction
@@ -176,19 +183,19 @@ def _update_ip_cli() -> None:
 # s3logextraction update ip indexes
 @_update_ip_cli.command(name="indexes")
 def _update_ip_indexes_cli() -> None:
-    click.echo(message="Updating IP indexes...")
+    index_ips()
 
 
 # s3logextraction update ip regions
 @_update_ip_cli.command(name="regions")
 def _update_ip_regions_cli() -> None:
-    click.echo(message="Updating IP regions...")
+    update_index_to_region_codes()
 
 
 # s3logextraction update ip coordinates
 @_update_ip_cli.command(name="coordinates")
 def _update_ip_coordinates_cli() -> None:
-    click.echo(message="Updating IP coordinates...")
+    update_region_code_coordinates()
 
 
 # s3logextraction update summaries
@@ -198,16 +205,47 @@ def _update_ip_coordinates_cli() -> None:
     help=(
         "Generate condensed summaries of activity across the extracted data per object key. "
         "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
+        "Mode 'archive' aggregates over all dataset summaries."
     ),
     required=False,
-    type=click.Choice(choices=["dandi"]),
+    type=click.Choice(choices=["dandi", "archive"]),
     default=None,
 )
-def _update_summaries_cli(mode: typing.Literal["dandi"] | None = None) -> None:
-    pass
+def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
+    """
+    Generate condensed summaries of activity across the extracted data per object key.
+
+
+    """
+    match mode:
+        case "dandi":
+            generate_all_dandiset_summaries()
+        case "archive":
+            generate_archive_summaries()
+        case _:
+            # TODO
+            pass
 
 
 # s3logextraction update totals
 @_update_cli.command(name="totals")
-def _update_totals_cli(mode: typing.Literal["dandi"] | None = None) -> None:
-    pass
+@click.option(
+    "--mode",
+    help=(
+        "Generate condensed summaries of activity across the extracted data per object key. "
+        "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
+    ),
+    required=False,
+    type=click.Choice(choices=["dandi", "archive"]),
+    default=None,
+)
+def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
+    """Generate grand scalar totals of all extracted data."""
+    match mode:
+        case "dandi":
+            generate_all_dandiset_totals()
+        case "archive":
+            generate_archive_totals()
+        case _:
+            # TODO
+            pass

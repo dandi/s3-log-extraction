@@ -14,7 +14,7 @@ from ._globals import (
     S3_LOG_EXTRACTION_CONFIG_FILE_PATH,
     DEFAULT_CACHE_DIRECTORY,
 )
-from ._reset import reset_extraction, reset_tmp
+from ._reset import reset_extraction
 
 __all__ = [
     "S3_LOG_EXTRACTION_BASE_FOLDER_PATH",
@@ -28,5 +28,4 @@ __all__ = [
     "get_records_directory",
     "set_cache_directory",
     "reset_extraction",
-    "reset_tmp",
 ]
