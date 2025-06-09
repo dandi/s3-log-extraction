@@ -16,13 +16,8 @@ BEGIN {
 
     # Pre-URI fields like this should be unaffected
     split($1, pre_uri_fields, " ")
+
     ip = pre_uri_fields[5]
-    if (ip !~ IP_REGEX) {
-        print "Error with IP extraction - line #" NR " of " FILENAME > "/dev/stderr"
-        print "Direct: \"" ip "\" (" typeof(ip) ")" > "/dev/stderr"
-        print $0 > "/dev/stderr"
-        exit 1
-    }
     if (ip ~ DROGON_IP_REGEX) {next}
 
     request_type = pre_uri_fields[8]
@@ -63,6 +58,13 @@ BEGIN {
         print "Both status codes were extracted as valid numbers, the direct extraction was successful, but the two did not match - line #" NR " of " FILENAME > "/dev/stderr"
         print "Extraction: " status_from_heuristic > "/dev/stderr"
         print "Direct: " status_from_direct_rule > "/dev/stderr"
+        print $0 > "/dev/stderr"
+        exit 1
+    }
+
+    if (ip !~ IP_REGEX) {
+        print "Error with IP extraction - line #" NR " of " FILENAME > "/dev/stderr"
+        print "Direct: \"" ip "\" (" typeof(ip) ")" > "/dev/stderr"
         print $0 > "/dev/stderr"
         exit 1
     }
