@@ -51,6 +51,7 @@ def generate_all_dandiset_summaries() -> None:
         asset_directories=dandiset_id_to_asset_directories.get(dandiset_id, []),
         summary_directory=summary_directory,
         index_to_region=index_to_region,
+        asset_id_to_asset_path=asset_id_to_asset_path,
     )
 
 
