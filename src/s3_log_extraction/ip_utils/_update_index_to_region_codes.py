@@ -17,13 +17,11 @@ def update_index_to_region_codes() -> str | None:
         raise ValueError(message)  # pragma: no cover
     ipinfo_handler = ipinfo.getHandler(access_token=ipinfo_api_key)
 
-    ip_cache_directory = get_ip_cache_directory()
-    index_not_in_services = load_ip_cache(cache_type="index_not_in_services")
-
     index_to_ip = load_index_to_ip()
+    index_not_in_services = load_ip_cache(cache_type="index_not_in_services")
     index_to_region = load_ip_cache(cache_type="index_to_region")
-    indices_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
-    for ip_index in indices_to_update:
+    indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
+    for ip_index in indexes_to_update:
         ip_address = index_to_ip[ip_index]
         region_code = _get_region_code_from_ip_index(
             ip_index=ip_index,
@@ -37,6 +35,7 @@ def update_index_to_region_codes() -> str | None:
             continue
         index_to_region[ip_index] = region_code
 
+    ip_cache_directory = get_ip_cache_directory()
     indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
     with indexed_regions_file_path.open(mode="w") as file_stream:
         yaml.dump(data=index_to_region, stream=file_stream)

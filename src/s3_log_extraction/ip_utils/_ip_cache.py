@@ -13,7 +13,7 @@ def load_index_to_ip() -> dict[int, str]:
     Returns
     -------
     dict[int, str]
-        A dictionary mapping indices to full IP addresses.
+        A dictionary mapping indexes to full IP addresses.
     """
     ips_cache_directory = get_ip_cache_directory()
     ips_index_cache_file_path = ips_cache_directory / "indexed_ips.yaml"
@@ -40,7 +40,7 @@ def save_index_to_ip(*, index_to_ip: dict[int, str]) -> None:
     Parameters
     ----------
     index_to_ip : dict[int, str]
-        A dictionary mapping indices to full IP addresses.
+        A dictionary mapping indexes to full IP addresses.
     """
     ip_cache_directory = get_ip_cache_directory()
     ip_index_cache_file_path = ip_cache_directory / "indexed_ips.yaml"

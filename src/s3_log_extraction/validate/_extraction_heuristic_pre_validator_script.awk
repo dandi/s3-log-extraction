@@ -6,7 +6,9 @@ BEGIN {
         exit 1
     }
     DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
-    STATUS_IP_REGEX = "^[1-5][0-9]{2}$"
+
+    IP_REGEX = "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"
+    STATUS_REGEX = "^[1-5][0-9]{2}$"
     BYTES_SENT_REGEX = "^[0-9]+$"
 }
 
@@ -16,6 +18,12 @@ BEGIN {
     # Pre-URI fields like this should be unaffected
     split($1, pre_uri_fields, " ")
     ip = pre_uri_fields[5]
+    if (ip !~ IP_REGEX) {
+        print "Error with IP extraction - line #" NR " of " FILENAME > "/dev/stderr"
+        print "Direct: \"" ip "\" (" typeof(ip) ")" > "/dev/stderr"
+        print $0 > "/dev/stderr"
+        exit 1
+    }
     if (ip ~ DROGON_IP_REGEX) {next}
 
     request_type = pre_uri_fields[8]
@@ -35,7 +43,7 @@ BEGIN {
         print $0 > "/dev/stderr"
         exit 1
     }
-    if (status_from_direct_rule !~ STATUS_IP_REGEX) {
+    if (status_from_direct_rule !~ STATUS_REGEX) {
         print "Error with direct status code detection - line #" NR " of " FILENAME > "/dev/stderr"
         print "Direct: \"" status_from_direct_rule "\" (" typeof(status_from_direct_rule) ")" > "/dev/stderr"
         print $0 > "/dev/stderr"
@@ -45,7 +53,7 @@ BEGIN {
     # Post-URI fields are more likely to be affected by failures of the heuristic
     split($2, post_uri_fields, " ")
     status_from_heuristic = post_uri_fields[2]
-    if (status_from_heuristic !~ STATUS_IP_REGEX && substr(status_from_direct_rule,1,1) == "2") {
+    if (status_from_heuristic !~ STATUS_REGEX && substr(status_from_direct_rule,1,1) == "2") {
         print "A directly detected success status code was discovered while the extraction rule failed to detect at all - line #" NR " of " FILENAME > "/dev/stderr"
         print "Extraction: " status_from_heuristic > "/dev/stderr"
         print "Direct: " status_from_direct_rule > "/dev/stderr"

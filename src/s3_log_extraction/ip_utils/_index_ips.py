@@ -11,7 +11,7 @@ def index_ips(*, seed: int = 0) -> None:
     Indexes IP addresses extracted from the S3 log files.
 
     This function reads the full IPs from the extracted S3 log files, replacing them with a new file containing
-    the randomized indices of unique IPs.
+    the randomized indexes of unique IPs.
 
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
     """
