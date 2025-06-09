@@ -12,7 +12,7 @@ def get_running_pids(cache_directory: str | pathlib.Path | None = None) -> list[
     This is used to identify which processes are currently running and may need to be stopped.
     """
     running_pids = {
-        str(process.info["pid"]) for process in psutil.process_iter() if process.info["name" == "s3logextraction"]
+        str(process.info["pid"]) for process in psutil.process_iter() if process.info["name"] == "s3logextraction"
     }
     return running_pids
 
