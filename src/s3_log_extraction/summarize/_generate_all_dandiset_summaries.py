@@ -3,7 +3,6 @@ import datetime
 import pathlib
 
 import dandi.dandiapi
-import numpy
 import pandas
 import tqdm
 
@@ -86,7 +85,7 @@ def _summarize_dandiset_by_day(
     assets: list[dandi.dandiapi.RemoteAsset],
     summary_file_path: pathlib.Path,
     extraction_directory: pathlib.Path,
-):
+) -> None:
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
 
     all_dates = []
@@ -111,18 +110,21 @@ def _summarize_dandiset_by_day(
 
         timestamps_file_path = extracted_asset_directory / "timestamps.txt"
         dates = [
-            datetime.datetime.strptime(str(timestamp), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
-            for timestamp in numpy.loadtxt(fname=timestamps_file_path, mode="r", dtype="uint64")
+            datetime.datetime.strptime(str(timestamp.strip()), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
+            for timestamp in timestamps_file_path.read_text().splitlines()
         ]
         all_dates.extend(dates)
 
         bytes_sent_file_path = extracted_asset_directory / "bytes_sent.txt"
-        bytes_sent = [int(value) for value in numpy.loadtxt(fname=bytes_sent_file_path, dtype="uint64")]
+        bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
         all_bytes_sent.extend(bytes_sent)
 
     summarized_activity_by_day = collections.defaultdict(int)
     for date, bytes_sent in zip(all_dates, all_bytes_sent):
         summarized_activity_by_day[date] += bytes_sent
+
+    if len(summarized_activity_by_day) == 0:
+        return
 
     # convert dict into pandas dataframe
     summary_table = pandas.DataFrame(
@@ -141,7 +143,7 @@ def _summarize_dandiset_by_asset(
     assets: list[dandi.dandiapi.RemoteAsset],
     summary_file_path: pathlib.Path,
     extraction_directory: pathlib.Path,
-):
+) -> None:
     summarized_activity_by_asset = collections.defaultdict(int)
     for asset in assets:
         asset_as_path = pathlib.Path(asset.path)
@@ -162,9 +164,12 @@ def _summarize_dandiset_by_asset(
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
         bytes_sent_file_path = extracted_asset_directory / "bytes_sent.txt"
-        bytes_sent = [int(value) for value in numpy.loadtxt(fname=bytes_sent_file_path, dtype="uint64")]
+        bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
 
         summarized_activity_by_asset[asset.path] += sum(bytes_sent)
+
+    if len(summarized_activity_by_asset) == 0:
+        return
 
     # convert dict into pandas dataframe
     summary_table = pandas.DataFrame(
@@ -182,7 +187,7 @@ def _summarize_dandiset_by_region(
     summary_file_path: pathlib.Path,
     extraction_directory: pathlib.Path,
     index_to_region: dict[int, str],
-):
+) -> None:
     all_regions = []
     all_bytes_sent = []
     for asset in assets:
@@ -204,17 +209,20 @@ def _summarize_dandiset_by_region(
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
         indexed_ips_file_path = extracted_asset_directory / "indexed_ips.txt"
-        indexed_ips = numpy.loadtxt(fname=indexed_ips_file_path, dtype="uint64")
-        regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
+        indexed_ips = [ip_index.strip() for ip_index in indexed_ips_file_path.read_text().splitlines()]
+        regions = [index_to_region.get(ip_index.strip(), "unknown") for ip_index in indexed_ips]
         all_regions.extend(regions)
 
         bytes_sent_file_path = extracted_asset_directory / "bytes_sent.txt"
-        bytes_sent = [int(value) for value in numpy.loadtxt(fname=bytes_sent_file_path, dtype="uint64")]
+        bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
         all_bytes_sent.extend(bytes_sent)
 
     summarized_activity_by_region = collections.defaultdict(int)
     for region, bytes_sent in zip(all_regions, all_bytes_sent):
         summarized_activity_by_region[region] += bytes_sent
+
+    if len(summarized_activity_by_region) == 0:
+        return
 
     # convert dict into pandas dataframe
     summary_table = pandas.DataFrame(
