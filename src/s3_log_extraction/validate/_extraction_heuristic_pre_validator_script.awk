@@ -7,9 +7,8 @@ BEGIN {
     }
     DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
 
-    IP_REGEX = "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"
+    IP_REGEX = "^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
     STATUS_REGEX = "^[1-5][0-9]{2}$"
-    BYTES_SENT_REGEX = "^[0-9]+$"
 }
 
 {
@@ -69,6 +68,7 @@ BEGIN {
     }
 
     # Keeping this around as a note; it does find examples of bytes_sent being 0 ('-') from GET requests even when
+    #    from BEGIN BYTES_SENT_REGEX = "^[0-9]+$"
     # size of object is not zero...
     # Impact on extraction heuristic is to therefore just always record the request as bytes_sent = 0
     #
