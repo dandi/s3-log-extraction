@@ -131,9 +131,34 @@ def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) ->
     Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
     repeat computations.
 
+    Parameters
+    ----------
+    cache_directory : path-like, optional
+        The directory to use as the cache directory.
+        If not provided, the default cache directory is used.
+
+
     Returns
     -------
     pathlib.Path
         The IP cache directory for S3 log extraction.
     """
     return _establish_cache_subdirectory(cache_directory=cache_directory, name="ips")
+
+
+def get_summary_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
+    """
+    Get the summary subdirectory for S3 log extraction.
+
+    Parameters
+    ----------
+    cache_directory : path-like, optional
+        The directory to use as the cache directory.
+        If not provided, the default cache directory is used.
+
+    Returns
+    -------
+    pathlib.Path
+        The summary directory for S3 log extraction.
+    """
+    return _establish_cache_subdirectory(cache_directory=cache_directory, name="summaries")

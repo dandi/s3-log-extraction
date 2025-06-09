@@ -189,9 +189,9 @@ def _update_ip_coordinates_cli() -> None:
 )
 def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
     """
-    Generate condensed summaries of activity across the extracted data per object key.
+    Generate condensed summaries of activity.
 
-
+    TODO
     """
     match mode:
         case "dandi":
@@ -216,7 +216,7 @@ def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None
     default=None,
 )
 def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
-    """Generate grand scalar totals of all extracted data."""
+    """Generate grand totals of all extracted data."""
     match mode:
         case "dandi":
             generate_all_dandiset_totals()

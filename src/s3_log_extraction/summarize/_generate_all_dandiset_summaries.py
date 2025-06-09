@@ -8,19 +8,19 @@ import pandas
 import tqdm
 
 from ._get_associated_assets import _get_associated_assets
-from ..config import get_cache_directory
+from ..config import get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
-def generate_all_dandiset_summaries(*, summary_directory: str | pathlib.Path) -> None:
-    summary_directory = pathlib.Path(summary_directory)
+def generate_all_dandiset_summaries() -> None:
+    extraction_directory = get_extraction_directory()
+    summary_directory = get_summary_directory()
 
     client = dandi.dandiapi.DandiAPIClient()
     index_to_region = load_ip_cache(cache_type="index_to_region")
-    extraction_directory = get_cache_directory() / "extraction"
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    uniquely_associated_assets_by_dandiset_id = _get_associated_assets()
+    uniquely_associated_assets_by_dandiset_id = _get_associated_assets(client=client)
 
     dandisets = list(client.get_dandisets())
     for dandiset in tqdm.tqdm(

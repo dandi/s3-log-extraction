@@ -7,12 +7,12 @@ import yaml
 from ..config import get_cache_directory
 
 
-def _get_associated_assets(use_cache: bool = True) -> dict[str, list[dandi.dandiapi.RemoteAsset]]:
+def _get_associated_assets(
+    client: dandi.dandiapi.DandiAPIClient, use_cache: bool = True
+) -> dict[str, list[dandi.dandiapi.RemoteAsset]]:
     cache_directory = get_cache_directory()
     dandi_cache_directory = cache_directory / "dandi"
     dandi_cache_directory.mkdir(exist_ok=True)
-
-    client = dandi.dandiapi.DandiAPIClient()
 
     date = datetime.datetime.now().date().strftime("%Y-%m-%d")
     daily_dandi_cache_file_path = dandi_cache_directory / f"{date}.yaml"
