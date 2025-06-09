@@ -23,7 +23,7 @@ def update_index_to_region_codes() -> str | None:
     index_to_region = load_ip_cache(cache_type="index_to_region")
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
     for ip_index in tqdm.tqdm(
-        iterable=indexes_to_update, total=len(indexes_to_update), desc="Fetching IP regions", unit="file", smoothing=0
+        iterable=indexes_to_update, total=len(indexes_to_update), desc="Fetching IP regions", unit="IP", smoothing=0
     ):
         ip_address = index_to_ip[ip_index]
         region_code = _get_region_code_from_ip_index(
