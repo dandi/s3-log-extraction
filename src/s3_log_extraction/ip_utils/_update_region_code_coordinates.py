@@ -88,7 +88,7 @@ def _get_coordinates_from_region_code(
     *,
     country_and_region_code: str,
     ipinfo_client: ipinfo.Handler,
-    opencage_api_key: str,
+    opencage_client: opencage.geocoder.OpenCageGeocode,
     service_coordinates: dict[str, dict[str, float]],
     opencage_failures: list[str],
 ) -> dict[str, float]:
@@ -123,7 +123,7 @@ def _get_coordinates_from_region_code(
     else:
         coordinates = _get_coordinates_from_opencage(
             country_and_region_code=country_and_region_code,
-            opencage_api_key=opencage_api_key,
+            opencage_client=opencage_client,
             opencage_failures=opencage_failures,
         )
 
