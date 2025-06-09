@@ -20,7 +20,7 @@ def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
     records = [
         record
         for record in itertools.chain(
-            records_directory.glob("*_extraction.log"), records_directory.glob("*_mirror-copy-*.txt")
+            records_directory.glob("*_extraction.log"), records_directory.glob("*_file-processing-*.txt")
         )
     ]
     collections.deque((record.unlink(missing_ok=True) for record in records), maxlen=0)

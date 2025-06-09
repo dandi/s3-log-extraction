@@ -1,5 +1,3 @@
-import hashlib
-
 import numpy
 import numpy.random
 import tqdm
@@ -17,35 +15,48 @@ def index_ips(*, seed: int = 0) -> None:
 
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
     """
+    rng = numpy.random.default_rng(seed=seed)
+    high = numpy.iinfo("uint64").max
+    max_redraws = 1_000
+
     cache_directory = get_cache_directory()
     extraction_directory = cache_directory / "extraction"
 
     index_to_ip = load_index_to_ip()
-    ip_to_index = {value: key for key, value in index_to_ip.items()}
+    ip_to_index = {ip: index for index, ip in index_to_ip.items()}
+    indexed_ips = {ip for ip in index_to_ip.values()}
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
     for full_ip_file_path in tqdm.tqdm(
         iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="file", smoothing=0
     ):
-        full_ips = {ip for ip in numpy.loadtxt(fname=full_ip_file_path, dtype="U15", ndmin=1)}
-        new_indices_and_uniqueness = {
-            (index := int(hashlib.sha1(string=bytes(ip, "utf-8")).hexdigest()[:7]), 16): index_to_ip.get(index, False)
-            for ip in full_ips
-        }
+        full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
+        unique_full_ips = {ip for ip in full_ips}
+        ips_to_index = indexed_ips - unique_full_ips
 
-        if not all(new_indices_and_uniqueness.values()):
-            message = "Index collision detected - recommend raising the dtype and hash limit."
-            raise ValueError(message)
+        for ip in ips_to_index:
+            new_index = int(rng.integers(low=0, high=high))
 
-        for ip, index in zip(full_ips, new_indices_and_uniqueness.keys()):
-            index_to_ip[int(index)] = str(ip)
-            ip_to_index[ip] = index
+            redraw = 0
+            while index_to_ip.get(new_index, None) is not None and redraw < max_redraws:
+                new_index = int(rng.integers(low=0, high=high))
+                redraw += 1
 
-        full_indexed_ips = [ip_to_index[ip] for ip in full_ips]
+            if redraw >= max_redraws:
+                message = (
+                    f"Failed to find a unique index for an IP after {max_redraws} redraws - "
+                    "suggest increasing either index dtype or redraw limit."
+                )
+                raise ValueError(message)
+
+            index_to_ip[new_index] = ip
+            ip_to_index[ip] = new_index
+            indexed_ips.update(ip_to_index)
+
+        full_indexed_ips = [f"{ip_to_index[ip]}\n" for ip in full_ips]
 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
-        with indexed_ips_file_path.open(mode="w") as file_stream:
-            numpy.savetxt(fname=file_stream, X=full_indexed_ips, fmt="%d")
+        indexed_ips_file_path.write_text("\n".join(full_indexed_ips))
 
     # TODO: add validation for unexpected ip file combinations
     save_index_to_ip(index_to_ip=index_to_ip)

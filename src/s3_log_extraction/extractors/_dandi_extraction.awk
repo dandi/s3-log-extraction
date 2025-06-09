@@ -7,11 +7,11 @@ BEGIN {
     }
     IPS_TO_SKIP_REGEX = ENVIRON["IPS_TO_SKIP_REGEX"]
 
-    if (!("TEMPORARY_DIRECTORY" in ENVIRON)) {
-        print "Environment variable 'TEMPORARY_DIRECTORY' is not set" > "/dev/stderr"
+    if (!("EXTRACTION_DIRECTORY" in ENVIRON)) {
+        print "Environment variable 'EXTRACTION_DIRECTORY' is not set" > "/dev/stderr"
         exit 1
     }
-    TEMPORARY_DIRECTORY = ENVIRON["TEMPORARY_DIRECTORY"] "/"
+    EXTRACTION_DIRECTORY = ENVIRON["EXTRACTION_DIRECTORY"] "/"
 
     MONTH_TO_NUMERIC["Jan"] = "01"
     MONTH_TO_NUMERIC["Feb"] = "02"
@@ -72,19 +72,15 @@ BEGIN {
 
 END {
     for (object_key in data) {
-        subdirectory = TEMPORARY_DIRECTORY object_key
-        gsub("/", "\\", subdirectory)
-        gsub("\\\\", "\\\\\\\\", subdirectory)
+        subdirectory = EXTRACTION_DIRECTORY object_key
         system("mkdir -p " subdirectory)
     }
 
     for (object_key in data) {
-        subdirectory = TEMPORARY_DIRECTORY object_key
-        gsub("/", "\\", subdirectory)
-        gsub("\\\\", "\\\\\\\\", subdirectory)
-        timestamps_file_path = subdirectory "\\timestamps.txt"
-        bytes_sent_file_path = subdirectory "\\bytes_sent.txt"
-        full_ips_file_path = subdirectory "\\full_ips.txt"
+        subdirectory = EXTRACTION_DIRECTORY object_key
+        timestamps_file_path = subdirectory "/timestamps.txt"
+        bytes_sent_file_path = subdirectory "/bytes_sent.txt"
+        full_ips_file_path = subdirectory "/full_ips.txt"
 
         for (i = 1; i <= data[object_key]["timestamps_count"]; i++) {
             print data[object_key]["timestamps"][i] >> timestamps_file_path

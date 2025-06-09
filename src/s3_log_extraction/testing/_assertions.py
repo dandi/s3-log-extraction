@@ -12,8 +12,8 @@ def assert_expected_extraction_content(
     """Check if the expected content and records match the actual content and records."""
     record_files = {
         pathlib.Path(f"records/{extractor_name}_extraction.txt"),
-        pathlib.Path(f"records/{extractor_name}_mirror-copy-end.txt"),
-        pathlib.Path(f"records/{extractor_name}_mirror-copy-start.txt"),
+        pathlib.Path(f"records/{extractor_name}_file-processing-end.txt"),
+        pathlib.Path(f"records/{extractor_name}_file-processing-start.txt"),
     }
     non_record_output_files = relative_output_files - record_files
     non_record_expected_files = relative_expected_files - record_files

@@ -2,7 +2,7 @@ import pathlib
 
 import psutil
 
-from ..config import get_extraction_directory, get_temporary_directory
+from ..config import get_extraction_directory
 
 
 def get_running_pids(cache_directory: str | pathlib.Path | None = None) -> list[str]:
@@ -11,10 +11,9 @@ def get_running_pids(cache_directory: str | pathlib.Path | None = None) -> list[
 
     This is used to identify which processes are currently running and may need to be stopped.
     """
-    temporary_directory = get_temporary_directory(cache_directory=cache_directory)
-    possible_pids = {str(pid.name) for pid in temporary_directory.iterdir()}
-
-    running_pids = {possible_pid for possible_pid in possible_pids if psutil.pid_exists(pid=int(possible_pid))}
+    running_pids = {
+        str(process.info["pid"]) for process in psutil.process_iter() if process.info["name" == "s3logextraction"]
+    }
     return running_pids
 
 
