@@ -46,10 +46,10 @@ class S3LogAccessExtractor:
 
         self.cache_directory = cache_directory or get_cache_directory()
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
+        self.stop_file_path = self.extraction_directory / "stop_extraction"
 
         # Special file for safe interruption during parallel extraction
         self.records_directory = get_records_directory(cache_directory=self.cache_directory)
-        self.stop_file_path = self.records_directory / "stop_extraction"
 
         class_name = self.__class__.__name__
         extraction_record_file_name = f"{class_name}_extraction.txt"

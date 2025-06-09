@@ -16,7 +16,8 @@ def index_ips(*, seed: int = 0) -> None:
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
     """
     rng = numpy.random.default_rng(seed=seed)
-    high = numpy.iinfo("uint64").max
+    dtype = "uint64"
+    high = numpy.iinfo(dtype).max
     max_redraws = 1_000
 
     cache_directory = get_cache_directory()
@@ -32,10 +33,10 @@ def index_ips(*, seed: int = 0) -> None:
     ):
         full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
         unique_full_ips = {ip for ip in full_ips}
-        ips_to_index = indexed_ips - unique_full_ips
+        ips_to_index = unique_full_ips - indexed_ips
 
         for ip in ips_to_index:
-            new_index = int(rng.integers(low=0, high=high))
+            new_index = int(rng.integers(low=0, high=high, size=1, dtype=dtype))
 
             redraw = 0
             while index_to_ip.get(new_index, None) is not None and redraw < max_redraws:

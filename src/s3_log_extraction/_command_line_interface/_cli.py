@@ -1,13 +1,12 @@
 """Call the DANDI S3 log parser from the command line."""
 
 import os
-import time
 import typing
 
 import click
 
-from ..config import get_extraction_directory, reset_extraction, set_cache_directory
-from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, get_running_pids
+from ..config import reset_extraction, set_cache_directory
+from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, stop_extraction
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
     generate_all_dandiset_summaries,
@@ -91,7 +90,7 @@ def _extract_cli(
     ),
     required=False,
     type=click.IntRange(min=1),
-    default=600,  # Default to 10 minutes
+    default=600,  # 10 minutes
 )
 def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
     """
@@ -100,30 +99,7 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
     Note that you should not attempt to interrupt the extraction process using Ctrl+C or pkill, as this may lead to
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
     """
-    running_pids = get_running_pids()
-    if len(running_pids) == 0:
-        click.echo(message="No extraction processes are currently running.")
-        return
-
-    pid_string = (
-        f" on PIDs [{", ".join(running_pids)}]" if len(running_pids) > 1 else f" on PID {list(running_pids)[0]}"
-    )
-
-    click.echo(message=f"Stopping the extraction process{pid_string}...")
-    extraction_directory = get_extraction_directory()
-    stop_file_path = extraction_directory / "stop_extraction"
-    stop_file_path.touch()
-
-    time_so_far_in_seconds = 0
-    while time_so_far_in_seconds < max_timeout_in_seconds:
-        if any(get_running_pids()):
-            time.sleep(1)
-        else:
-            click.echo(message="Extraction has been stopped.")
-            stop_file_path.unlink(missing_ok=True)
-            return
-
-    click.echo(message="Tracking of process stoppage has timed out - please try calling the method again.")
+    stop_extraction(max_timeout_in_seconds=max_timeout_in_seconds)
 
 
 # s3logextraction config
