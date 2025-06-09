@@ -7,7 +7,7 @@ BEGIN {
     }
     DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
 
-    IP_REGEX = "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"
+    IP_REGEX = "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"
     STATUS_REGEX = "^[1-5][0-9]{2}$"
 }
 
