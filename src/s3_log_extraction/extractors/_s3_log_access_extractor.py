@@ -7,7 +7,7 @@ import sys
 import natsort
 import tqdm
 
-from ..config import get_cache_directory, get_extraction_directory, get_records_directory, get_temporary_directory
+from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
 
 class S3LogAccessExtractor:
@@ -24,7 +24,7 @@ class S3LogAccessExtractor:
       - parallelized
       - interruptible
           However, you must do so in one of two ways:
-            - Invoke the command `s3logextraction stop` to end the processes after the current round of completion.
+            - Invoke the command `s3logextraction stop extraction` to end the processes after the current completion.
             - Manually create a file in the records cache called 'stop_extraction'.
       - updatable
 
@@ -46,7 +46,6 @@ class S3LogAccessExtractor:
 
         self.cache_directory = cache_directory or get_cache_directory()
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
-        self.base_temporary_directory = get_temporary_directory(cache_directory=self.cache_directory)
 
         # Special file for safe interruption during parallel extraction
         self.records_directory = get_records_directory(cache_directory=self.cache_directory)

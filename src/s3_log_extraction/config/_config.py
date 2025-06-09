@@ -137,15 +137,3 @@ def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) ->
         The IP cache directory for S3 log extraction.
     """
     return _establish_cache_subdirectory(cache_directory=cache_directory, name="ips")
-
-
-def get_temporary_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
-    """
-    Get the temporary cache subdirectory for S3 log extraction.
-
-    Returns
-    -------
-    pathlib.Path
-        The temporary directory for S3 log extraction.
-    """
-    return _establish_cache_subdirectory(cache_directory=cache_directory, name="tmp")

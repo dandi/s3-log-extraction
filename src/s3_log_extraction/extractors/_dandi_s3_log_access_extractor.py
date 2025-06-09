@@ -18,7 +18,10 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
 
     This extractor is:
       - parallelized
-      - semi-interruptible; most of the computation via AWK can be interrupted safely, but not the mirror copy step
+      - interruptible
+          However, you must do so in one of two ways:
+            - Invoke the command `s3logextraction stop extraction` to end the processes after the current completion.
+            - Manually create a file in the records cache called 'stop_extraction'.
       - updatable
 
     Parameters

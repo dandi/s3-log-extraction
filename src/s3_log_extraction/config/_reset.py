@@ -3,7 +3,7 @@ import itertools
 import pathlib
 import shutil
 
-from ._config import get_extraction_directory, get_records_directory, get_temporary_directory
+from ._config import get_extraction_directory, get_records_directory
 
 
 def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
@@ -24,12 +24,3 @@ def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
         )
     ]
     collections.deque((record.unlink(missing_ok=True) for record in records), maxlen=0)
-
-    reset_tmp()
-
-
-def reset_tmp(cache_directory: str | pathlib.Path | None = None) -> None:
-    """Clear and remake the temporary directory."""
-    base_temporary_directory = get_temporary_directory(cache_directory=cache_directory)
-    shutil.rmtree(path=base_temporary_directory, ignore_errors=True)
-    base_temporary_directory.mkdir(exist_ok=True)

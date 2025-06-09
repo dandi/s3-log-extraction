@@ -8,7 +8,6 @@ from ._config import (
     get_extraction_directory,
     get_records_directory,
     get_ip_cache_directory,
-    get_temporary_directory,
 )
 from ._globals import (
     S3_LOG_EXTRACTION_BASE_FOLDER_PATH,
@@ -27,7 +26,6 @@ __all__ = [
     "get_ip_cache_directory",
     "get_extraction_directory",
     "get_records_directory",
-    "get_temporary_directory",
     "set_cache_directory",
     "reset_extraction",
     "reset_tmp",

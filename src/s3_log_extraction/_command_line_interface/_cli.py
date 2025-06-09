@@ -6,7 +6,7 @@ import typing
 
 import click
 
-from ..config import get_extraction_directory, reset_extraction, reset_tmp, set_cache_directory
+from ..config import get_extraction_directory, reset_extraction, set_cache_directory
 from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, get_running_pids
 
 
@@ -161,13 +161,6 @@ def _reset_extraction_cli() -> None:
     reset_extraction()
 
 
-# s3logextraction reset tmp
-@_reset_cli.command(name="tmp")
-def _reset_extraction_cli() -> None:
-    reset_tmp()
-
-
-# TODO:
 # s3logextraction update
 @_s3logextraction_cli.group(name="update")
 def _update_cli() -> None:
@@ -176,21 +169,45 @@ def _update_cli() -> None:
 
 # s3logextraction update ip
 @_update_cli.group(name="ip")
-def _ip_cli() -> None:
+def _update_ip_cli() -> None:
     pass
 
 
 # s3logextraction update ip indexes
-@_reset_cli.command(name="extraction")
+@_update_ip_cli.command(name="indexes")
 def _update_ip_indexes_cli() -> None:
     click.echo(message="Updating IP indexes...")
 
 
 # s3logextraction update ip regions
+@_update_ip_cli.command(name="regions")
+def _update_ip_regions_cli() -> None:
+    click.echo(message="Updating IP regions...")
+
+
 # s3logextraction update ip coordinates
-# s3logextraction update dandiset summaries
-# s3logextraction update dandiset totals
-# s3logextraction update toplevel summaries
-# s3logextraction update toplevel totals
-# s3logextraction update archive summaries
-# s3logextraction update archive totals
+@_update_ip_cli.command(name="coordinates")
+def _update_ip_coordinates_cli() -> None:
+    click.echo(message="Updating IP coordinates...")
+
+
+# s3logextraction update summaries
+@_update_cli.command(name="summaries")
+@click.option(
+    "--mode",
+    help=(
+        "Generate condensed summaries of activity across the extracted data per object key. "
+        "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
+    ),
+    required=False,
+    type=click.Choice(choices=["dandi"]),
+    default=None,
+)
+def _update_summaries_cli(mode: typing.Literal["dandi"] | None = None) -> None:
+    pass
+
+
+# s3logextraction update totals
+@_update_cli.command(name="totals")
+def _update_totals_cli(mode: typing.Literal["dandi"] | None = None) -> None:
+    pass
