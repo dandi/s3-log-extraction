@@ -79,7 +79,6 @@ def _get_region_code_from_ip_index(
         country = details.details.get("country", None)
         region = details.details.get("region", None)
 
-        region_string = ""  # Not technically necessary, but quiets the linter
         match (country is None, region is None):
             case (True, True):
                 region_string = "unknown"
@@ -89,6 +88,8 @@ def _get_region_code_from_ip_index(
                 region_string = country
             case (False, False):
                 region_string = f"{country}/{region}"
+            case _:
+                region_string = ""
 
         return region_string
     except ipinfo.exceptions.RequestQuotaExceededError:  # pragma: no cover

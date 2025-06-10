@@ -52,8 +52,6 @@ class S3LogAccessExtractor:
         self.records_directory = get_records_directory(cache_directory=self.cache_directory)
 
         class_name = self.__class__.__name__
-        extraction_record_file_name = f"{class_name}_extraction.txt"
-        self.extraction_record_file_path = self.records_directory / extraction_record_file_name
         file_processing_start_record_file_name = f"{class_name}_file-processing-start.txt"
         self.file_processing_start_record_file_path = self.records_directory / file_processing_start_record_file_name
         file_processing_end_record_file_name = f"{class_name}_file-processing-end.txt"
@@ -122,11 +120,8 @@ class S3LogAccessExtractor:
         self._run_extraction(file_path=file_path)
 
         # Record final success and cleanup
-        with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{absolute_file_path}\n")
-
         self.file_processing_end_record[absolute_file_path] = True
-        with self.extraction_record_file_path.open(mode="a") as file_stream:
+        with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{absolute_file_path}\n")
 
     def extract_directory(

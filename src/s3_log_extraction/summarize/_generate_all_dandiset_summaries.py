@@ -69,7 +69,7 @@ def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
     monthly_dandiset_id_to_asset_directories_cache_file_path = (
         dandi_cache_directory / f"dandiset_id_to_asset_directories_{date}.yaml"
     )
-    monthly_blob_id_to_asset_path_cache_file_path = dandi_cache_directory / f"asset_id_to_asset_path_{date}.yaml"
+    monthly_blob_id_to_asset_path_cache_file_path = dandi_cache_directory / f"blob_id_to_asset_path_{date}.yaml"
     if use_cache is True and monthly_blob_id_to_asset_path_cache_file_path.exists():
         with monthly_dandiset_id_to_asset_directories_cache_file_path.open(mode="r") as file_stream:
             yaml_content = yaml.safe_load(stream=file_stream)
