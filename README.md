@@ -31,6 +31,30 @@ pip install s3-log-extraction
 
 
 
+# Workflow
+
+```mermaid
+flowchart TD
+    A[Configure cache<br/><br/>Initialize home and cache directories]
+    B[Extract logs<br/><br/>Process raw S3 logs and store minimal extracted data]
+    C[Update IP indexes<br/><br/>Generate anonymized indexes for each IP address]
+    D[Update region codes<br/><br/>Map IPs to ISO 3166 region codes using external API]
+    E[Update coordinates<br/><br/>Convert region codes to latitude/longitude for mapping]
+    F[Generate summaries<br/><br/>Create per-dataset summaries for reporting]
+    G[Generate totals<br/><br/>Aggregate statistics across datasets or archive]
+    H[Share!<br/><br/>Post the summaries and totals in a public data repository]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+```
+
+
+
 ## Generic Usage
 
 [Optional] Configure a non-default cache directory on a mounted disk that has sufficient space (the default is placed under `~/.cache`). This will be the main location where extracted logs and other useful information will be stored.
@@ -141,25 +165,6 @@ Throughout the codebase, various processes are referred to in the following ways
 - parallelized: The process can be run in parallel across multiple workers, which increases throughput.
 - interruptible: The process can be safely interrupted (`ctrl+C` or `pkill`) with only a very low chance of causing corruption. For parallelized interruption you may have to either `pkill` the main dispatch process or spam `ctrl+C` multiple times.
 - updatable: The process can be resumed from the last checkpoint without losing any progress. It can also be run fresh at different times, such as on a CRON cycle, and it will only interact with unprocessed data.
-
-### Workflow
-
-# add mermaid diagram of low-level workflow
-
-```mermaid
-flowchart TD
-    A[Start] --> B[Extract logs]
-    B --> C{Is extraction complete?}
-    C -- Yes --> D[Update IP indexes]
-    C -- No --> B
-    D --> E{Are region codes updated?}
-    E -- Yes --> F[Update coordinates]
-    E -- No --> D
-    F --> G[Generate summaries]
-    G --> H[Generate totals]
-    H --> I[End]
-```
-
 
 ### Performance
 
