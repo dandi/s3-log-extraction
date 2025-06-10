@@ -68,9 +68,7 @@ class S3LogAccessExtractor:
                 file_processing_start_record = set(file_stream.read().splitlines())
             with self.file_processing_end_record_file_path.open(mode="r") as file_stream:
                 self.file_processing_end_record = set(file_stream.read().splitlines())
-            file_processing_record_difference = file_processing_start_record - set(
-                self.file_processing_end_record.keys()
-            )
+            file_processing_record_difference = file_processing_start_record - self.file_processing_end_record
         if len(file_processing_record_difference) > 0:
             # TODO: an advanced feature for the future could be looking at the timestamp of the 'started' log
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
