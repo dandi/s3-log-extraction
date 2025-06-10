@@ -85,7 +85,10 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
         asset_id_to_asset = dict()
         asset_id_to_asset_path = dict()
         asset_id_to_dandiset_ids = collections.defaultdict(set)
-        for base_dandiset in client.get_dandisets():
+        dandisets = list(client.get_dandisets())
+        for base_dandiset in tqdm.tqdm(
+            iterable=dandisets, total=len(dandisets), desc="Updating asset caches", unit="dandiset", smoothing=0
+        ):
             for version in base_dandiset.get_versions():
                 dandiset = client.get_dandiset(dandiset_id=base_dandiset.identifier, version_id=version.identifier)
                 for asset in dandiset.get_assets():
@@ -97,9 +100,9 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
         for asset_id, dandiset_ids in asset_id_to_dandiset_ids.items():
             asset = asset_id_to_asset[asset_id]
             asset_directory = (
-                extraction_directory / "zarr" / f"{asset.zarr}.tsv"
+                extraction_directory / "zarr" / asset.zarr
                 if ".zarr" in pathlib.Path(asset.path).suffixes
-                else extraction_directory / "blobs" / asset.blob[:3] / asset.blob[3:6] / f"{asset.blob}.tsv"
+                else extraction_directory / "blobs" / asset.blob[:3] / asset.blob[3:6] / asset.blob
             )
 
             if len(dandiset_ids) > 1:
