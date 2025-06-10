@@ -1,6 +1,5 @@
 """Call the DANDI S3 log parser from the command line."""
 
-import os
 import typing
 
 import click
@@ -33,13 +32,6 @@ def _s3logextraction_cli():
     default=None,
 )
 @click.option(
-    "--workers",
-    help="The maximum number of workers to distribute tasks across. By default, only one worker will be used.",
-    required=False,
-    type=click.IntRange(min=1, max=os.cpu_count()),
-    default=1,
-)
-@click.option(
     "--mode",
     help=(
         "Special parsing mode related to expected object key structure; "
@@ -50,9 +42,7 @@ def _s3logextraction_cli():
     type=click.Choice(choices=["dandi"]),
     default=None,
 )
-def _extract_cli(
-    directory: str, workers: int, limit: int | None = None, mode: typing.Literal["dandi"] | None = None
-) -> None:
+def _extract_cli(directory: str, limit: int | None = None, mode: typing.Literal["dandi"] | None = None) -> None:
     """
     Extract S3 log access data from the specified directory.
 
@@ -68,7 +58,7 @@ def _extract_cli(
             extractor = S3LogAccessExtractor()
 
     try:
-        extractor.extract_directory(directory=directory, limit=limit, max_workers=workers)
+        extractor.extract_directory(directory=directory, limit=limit)
     except KeyboardInterrupt:
         click.echo(
             message=(

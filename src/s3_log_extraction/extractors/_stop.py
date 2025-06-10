@@ -1,3 +1,4 @@
+import os
 import pathlib
 import time
 
@@ -16,7 +17,7 @@ def get_running_pids() -> list[str]:
         str(process.info["pid"])
         for process in psutil.process_iter(attrs=["name", "pid"])
         if process.info["name"] == "s3logextraction"
-    }
+    } - {str(os.getpid())}
     return running_pids
 
 

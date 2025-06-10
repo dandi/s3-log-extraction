@@ -17,7 +17,7 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
     from the S3 bucket; except Zarr stores, which are abbreviated to their top-most level.
 
     This extractor is:
-      - parallelized
+      - not parallelized; to do so would require a synchronized file appender at the AWK level
       - interruptible
           However, you must do so in one of two ways:
             - Invoke the command `s3logextraction stop` to end the processes after the current round of completion.
