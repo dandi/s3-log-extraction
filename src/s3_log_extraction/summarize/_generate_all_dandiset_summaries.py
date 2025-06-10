@@ -94,7 +94,8 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
                 for asset in dandiset.get_assets():
                     asset_id_to_asset[asset.identifier] = asset
                     asset_id_to_asset_path[asset.identifier] = asset.path
-                    asset_id_to_dandiset_ids[asset.identifier].update(dandiset.identifier)
+                    asset_id_to_dandiset_ids[asset.identifier].update({dandiset.identifier})
+                    # ID must be an iterable to maintain entire string
 
         dandiset_id_to_asset_directories = collections.defaultdict(list)
         for asset_id, dandiset_ids in asset_id_to_dandiset_ids.items():
