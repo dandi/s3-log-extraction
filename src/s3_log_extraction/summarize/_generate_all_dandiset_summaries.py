@@ -18,8 +18,8 @@ def generate_all_dandiset_summaries() -> None:
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    dandiset_id_to_asset_directories, asset_id_to_asset_path = (
-        _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(client=client)
+    dandiset_id_to_asset_directories, blob_id_to_asset_path = (
+        _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(client=client)
     )
 
     dandisets = list(client.get_dandisets())
@@ -41,7 +41,7 @@ def generate_all_dandiset_summaries() -> None:
             asset_directories=asset_directories,
             summary_directory=summary_directory,
             index_to_region=index_to_region,
-            asset_id_to_asset_path=asset_id_to_asset_path,
+            blob_id_to_asset_path=blob_id_to_asset_path,
         )
 
     # Special key for multiple associations
@@ -51,11 +51,11 @@ def generate_all_dandiset_summaries() -> None:
         asset_directories=dandiset_id_to_asset_directories.get(dandiset_id, []),
         summary_directory=summary_directory,
         index_to_region=index_to_region,
-        asset_id_to_asset_path=asset_id_to_asset_path,
+        blob_id_to_asset_path=blob_id_to_asset_path,
     )
 
 
-def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
+def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
     *,
     client: dandi.dandiapi.DandiAPIClient,
     use_cache: bool = True,
@@ -69,8 +69,8 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
     monthly_dandiset_id_to_asset_directories_cache_file_path = (
         dandi_cache_directory / f"dandiset_id_to_asset_directories_{date}.yaml"
     )
-    monthly_asset_id_to_asset_path_cache_file_path = dandi_cache_directory / f"asset_id_to_asset_path_{date}.yaml"
-    if use_cache is True and monthly_asset_id_to_asset_path_cache_file_path.exists():
+    monthly_blob_id_to_asset_path_cache_file_path = dandi_cache_directory / f"asset_id_to_asset_path_{date}.yaml"
+    if use_cache is True and monthly_blob_id_to_asset_path_cache_file_path.exists():
         with monthly_dandiset_id_to_asset_directories_cache_file_path.open(mode="r") as file_stream:
             yaml_content = yaml.safe_load(stream=file_stream)
 
@@ -79,11 +79,11 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
             for dandiset_id, asset_directories in yaml_content.items()
         }
 
-        with monthly_asset_id_to_asset_path_cache_file_path.open(mode="r") as file_stream:
-            asset_id_to_asset_path = yaml.safe_load(stream=file_stream)
+        with monthly_blob_id_to_asset_path_cache_file_path.open(mode="r") as file_stream:
+            blob_id_to_asset_path = yaml.safe_load(stream=file_stream)
     else:
         asset_id_to_asset = dict()
-        asset_id_to_asset_path = dict()
+        blob_id_to_asset_path = dict()
         asset_id_to_dandiset_ids = collections.defaultdict(set)
         dandisets = list(client.get_dandisets())
         for base_dandiset in tqdm.tqdm(
@@ -93,7 +93,8 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
                 dandiset = client.get_dandiset(dandiset_id=base_dandiset.identifier, version_id=version.identifier)
                 for asset in dandiset.get_assets():
                     asset_id_to_asset[asset.identifier] = asset
-                    asset_id_to_asset_path[asset.identifier] = asset.path
+                    blob_id = asset.zarr if ".zarr" in pathlib.Path(asset.path).suffixes else asset.blob
+                    blob_id_to_asset_path[blob_id] = asset.path
                     asset_id_to_dandiset_ids[asset.identifier].update({dandiset.identifier})
                     # ID must be an iterable to maintain entire string
 
@@ -119,10 +120,10 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
         with monthly_dandiset_id_to_asset_directories_cache_file_path.open(mode="w") as file_stream:
             yaml.dump(data=yaml_content, stream=file_stream)
 
-        with monthly_asset_id_to_asset_path_cache_file_path.open(mode="w") as file_stream:
-            yaml.dump(data=asset_id_to_asset_path, stream=file_stream)
+        with monthly_blob_id_to_asset_path_cache_file_path.open(mode="w") as file_stream:
+            yaml.dump(data=blob_id_to_asset_path, stream=file_stream)
 
-    return dandiset_id_to_asset_directories, asset_id_to_asset_path
+    return dandiset_id_to_asset_directories, blob_id_to_asset_path
 
 
 def _summarize_dandiset(
@@ -131,7 +132,7 @@ def _summarize_dandiset(
     asset_directories: list[pathlib.Path],
     summary_directory: pathlib.Path,
     index_to_region: dict[int, str],
-    asset_id_to_asset_path: dict[str, str],
+    blob_id_to_asset_path: dict[str, str],
 ) -> None:
     _summarize_dandiset_by_day(
         asset_directories=asset_directories, summary_file_path=summary_directory / dandiset_id / "by_day.tsv"
@@ -139,7 +140,7 @@ def _summarize_dandiset(
     _summarize_dandiset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_asset.tsv",
-        asset_id_to_asset_path=asset_id_to_asset_path,
+        blob_id_to_asset_path=blob_id_to_asset_path,
     )
     _summarize_dandiset_by_region(
         asset_directories=asset_directories,
@@ -189,7 +190,7 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
 
 
 def _summarize_dandiset_by_asset(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, asset_id_to_asset_path: dict[str, str]
+    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, blob_id_to_asset_path: dict[str, str]
 ) -> None:
     summarized_activity_by_asset = collections.defaultdict(int)
     for asset_directory in asset_directories:
@@ -202,8 +203,8 @@ def _summarize_dandiset_by_asset(
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
 
-        asset_id = asset_directory.name
-        asset_path = asset_id_to_asset_path[asset_id]
+        blob_id = asset_directory.name
+        asset_path = blob_id_to_asset_path[blob_id]
         summarized_activity_by_asset[asset_path] += sum(bytes_sent)
 
     if len(summarized_activity_by_asset) == 0:
