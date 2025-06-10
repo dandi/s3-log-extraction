@@ -127,7 +127,7 @@ class S3LogAccessExtractor:
         all_log_files = {
             str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*.log"))
         }
-        unextracted_files = all_log_files - set(self.file_processing_end_record.keys())
+        unextracted_files = all_log_files - self.file_processing_end_record
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
