@@ -20,7 +20,7 @@ class S3LogAccessExtractor:
     from the S3 bucket; except Zarr stores, which are abbreviated to their top-most level.
 
     This extractor is:
-      - not parallelized; to do so would require a synchronized file appender at the AWK level
+      - not parallelized; to do so would require a synchronized file appender at the AWK level (also RAM constraints)
       - interruptible
           However, you must do so in one of two ways:
             - Invoke the command `s3logextraction stop` to end the processes after the current round of completion.
@@ -61,7 +61,7 @@ class S3LogAccessExtractor:
         self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
-        self.file_processing_end_record = dict()
+        self.file_processing_end_record = set()
         file_processing_record_difference = dict()
         if self.file_processing_start_record_file_path.exists() and self.file_processing_end_record_file_path.exists():
             with self.file_processing_start_record_file_path.open(mode="r") as file_stream:
