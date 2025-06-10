@@ -148,8 +148,6 @@ def _summarize_dandiset(
 
 
 def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
-    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
-
     all_dates = []
     all_bytes_sent = []
     for asset_directory in asset_directories:
@@ -177,7 +175,7 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
     if len(summarized_activity_by_day) == 0:
         return
 
-    # convert dict into pandas dataframe
+    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_table = pandas.DataFrame(
         data={
             "date": list(summarized_activity_by_day.keys()),
@@ -210,7 +208,7 @@ def _summarize_dandiset_by_asset(
     if len(summarized_activity_by_asset) == 0:
         return
 
-    # convert dict into pandas dataframe
+    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_table = pandas.DataFrame(
         data={
             "asset_path": list(summarized_activity_by_asset.keys()),
@@ -248,7 +246,7 @@ def _summarize_dandiset_by_region(
     if len(summarized_activity_by_region) == 0:
         return
 
-    # convert dict into pandas dataframe
+    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_table = pandas.DataFrame(
         data={
             "region": list(summarized_activity_by_region.keys()),
