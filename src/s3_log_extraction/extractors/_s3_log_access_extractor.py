@@ -23,9 +23,7 @@ class S3LogAccessExtractor:
     This extractor is:
       - not parallelized; to do so would require a synchronized file appender at the AWK level (also RAM constraints)
       - interruptible
-          However, you must do so in one of two ways:
-            - Invoke the command `s3logextraction stop` to end the processes after the current round of completion.
-            - Manually create a file in the extraction cache called '.stop_extraction'.
+          However, you must use the command `s3logextraction stop` to end the processes after the current completion.
       - updatable
 
     Parameters
@@ -62,14 +60,18 @@ class S3LogAccessExtractor:
         self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
-        self.file_processing_end_record = set()
+        self.file_processing_end_record = dict()
         file_processing_record_difference = dict()
         if self.file_processing_start_record_file_path.exists() and self.file_processing_end_record_file_path.exists():
-            with self.file_processing_start_record_file_path.open(mode="r") as file_stream:
-                file_processing_start_record = set(file_stream.read().splitlines())
-            with self.file_processing_end_record_file_path.open(mode="r") as file_stream:
-                self.file_processing_end_record = set(file_stream.read().splitlines())
-            file_processing_record_difference = file_processing_start_record - self.file_processing_end_record
+            file_processing_start_record = set(
+                file_path for file_path in self.file_processing_start_record_file_path.read_text().splitlines()
+            )
+            self.file_processing_end_record = {
+                file_path: True for file_path in self.file_processing_end_record_file_path.read_text().splitlines()
+            }
+            file_processing_record_difference = file_processing_start_record - set(
+                self.file_processing_end_record.keys()
+            )
         if len(file_processing_record_difference) > 0:
             # TODO: an advanced feature for the future could be looking at the timestamp of the 'started' log
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
@@ -128,7 +130,7 @@ class S3LogAccessExtractor:
         all_log_files = {
             str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*.log"))
         }
-        unextracted_files = all_log_files - self.file_processing_end_record
+        unextracted_files = all_log_files - set(self.file_processing_end_record.keys())
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
