@@ -28,6 +28,7 @@ dependencies = [
     "click",
     "natsort",
     "dandi",
+    "psutil",
     "cryptography",
 ]
 classifiers = [
@@ -38,16 +39,8 @@ classifiers = [
     "Operating System :: Unix",
 ]
 
-#[project.scripts]
-#reduce_all_dandi_raw_s3_logs = "s3_log_extraction._command_line_interface:_reduce_all_dandi_raw_s3_logs_cli"
-#bin_all_reduced_s3_logs_by_object_key = "s3_log_extraction._command_line_interface:_bin_all_reduced_s3_logs_by_object_key_cli"
-#map_binned_s3_logs_to_dandisets = "s3_log_extraction._command_line_interface:_map_binned_s3_logs_to_dandisets_cli"
-#generate_dandiset_summaries = "s3_log_extraction._command_line_interface:_generate_dandiset_summaries_cli"
-#generate_all_dandiset_totals = "s3_log_extraction._command_line_interface:_generate_all_dandiset_totals_cli"
-#generate_archive_summaries = "s3_log_extraction._command_line_interface:_generate_archive_summaries_cli"
-#generate_archive_totals = "s3_log_extraction._command_line_interface:_generate_archive_totals_cli"
-#update_region_codes_to_coordinates = "s3_log_extraction._command_line_interface:_update_region_codes_to_coordinates_cli"
-#check_for_errors = "s3_log_extraction._command_line_interface:_check_for_errors"
+[project.scripts]
+s3logextraction = "s3_log_extraction._command_line_interface._cli:_s3logextraction_cli"
 
 [project.optional-dependencies]
 dev = [
