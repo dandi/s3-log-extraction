@@ -128,7 +128,9 @@ class S3LogAccessExtractor:
         directory = pathlib.Path(directory)
 
         all_log_files = {
-            str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*.log"))
+            str(file_path.absolute())
+            for file_path in natsort.natsorted(seq=directory.rglob(pattern="*"))
+            if file_path.is_file()
         }
         unextracted_files = all_log_files - set(self.file_processing_end_record.keys())
 
