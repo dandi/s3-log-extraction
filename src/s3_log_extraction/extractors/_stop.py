@@ -4,6 +4,7 @@ import time
 
 import psutil
 
+from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ..config import get_extraction_directory
 
 
@@ -38,7 +39,7 @@ def stop_extraction(cache_directory: str | pathlib.Path | None = None, max_timeo
 
     print(f"Stopping the extraction process{pid_string}...")
     extraction_directory = get_extraction_directory(cache_directory=cache_directory)
-    stop_file_path = extraction_directory / "stop_extraction"
+    stop_file_path = extraction_directory / _STOP_EXTRACTION_FILE_NAME
     stop_file_path.touch()
 
     update_delay_in_seconds = 10
