@@ -189,8 +189,8 @@ def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None
         case "archive":
             generate_archive_summaries()
         case _:
-            # TODO
-            pass
+            message = "The generic mode is not yet implemented - please raise an issue to discuss."
+            click.echo(message=message, err=True)
 
 
 # s3logextraction update totals
@@ -213,5 +213,5 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
         case "archive":
             generate_archive_totals()
         case _:
-            # TODO
-            pass
+            message = "The generic mode is not yet implemented - please raise an issue to discuss."
+            click.echo(message=message, err=True)
