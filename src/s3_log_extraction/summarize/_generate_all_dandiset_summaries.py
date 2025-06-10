@@ -104,7 +104,7 @@ def _get_dandiset_id_to_asset_directories_and_asset_id_to_asset_path(
                 if ".zarr" in pathlib.Path(asset.path).suffixes
                 else extraction_directory / "blobs" / asset.blob[:3] / asset.blob[3:6] / asset.blob
             )
-
+            print(dandiset_ids)
             if len(dandiset_ids) > 1:
                 dandiset_id_to_asset_directories["undetermined"].append(asset_directory)
             else:
