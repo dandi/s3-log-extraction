@@ -40,7 +40,7 @@ def index_ips(*, seed: int = 0) -> None:
 
             redraw = 0
             while index_to_ip.get(new_index, None) is not None and redraw < max_redraws:
-                new_index = int(rng.integers(low=0, high=high))
+                new_index = int(rng.integers(low=0, high=high, size=1, dtype=dtype))
                 redraw += 1
 
             if redraw >= max_redraws:
