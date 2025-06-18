@@ -4,13 +4,12 @@ import pathlib
 
 import pandas
 import tqdm
-import yaml
 
-from ..config import get_cache_directory, get_extraction_directory, get_summary_directory
+from ..config import get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
-def generate_all_dataset_summaries() -> None:
+def generate_summaries(level: int = 0) -> None:
     extraction_directory = get_extraction_directory()
 
     datasets = [item for item in extraction_directory.iterdir() if item.is_dir()]
@@ -46,7 +45,8 @@ def _summarize_dataset(
     index_to_region: dict[int, str],
 ) -> None:
     _summarize_dataset_by_day(
-        asset_directories=asset_directories, summary_file_path=summary_directory / dataset_id / "dandiset_summary_by_day.tsv"
+        asset_directories=asset_directories,
+        summary_file_path=summary_directory / dataset_id / "dandiset_summary_by_day.tsv",
     )
     _summarize_dataset_by_asset(
         asset_directories=asset_directories,

@@ -9,8 +9,8 @@ source = "vcs"
 packages = ["src/s3_log_extraction"]
 
 [project]
-name = "s3_log_extraction"
-version="0.0.1"
+name = "s3-log-extraction"
+version="1.0.0"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
