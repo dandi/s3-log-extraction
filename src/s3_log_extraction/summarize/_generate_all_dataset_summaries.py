@@ -9,7 +9,7 @@ from ..config import get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
-def generate_all_dataset_summaries() -> None:
+def generate_summaries(level: int = 0) -> None:
     extraction_directory = get_extraction_directory()
 
     datasets = [item for item in extraction_directory.iterdir() if item.is_dir()]
