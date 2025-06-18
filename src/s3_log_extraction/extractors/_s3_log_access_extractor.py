@@ -55,6 +55,8 @@ class S3LogAccessExtractor:
         file_processing_end_record_file_name = f"{class_name}_file-processing-end.txt"
         self.file_processing_end_record_file_path = self.records_directory / file_processing_end_record_file_name
 
+        self.log_pattern = "*-*-*-*-*-*-*"
+
         # TODO: does this hold after bundling?
         awk_filename = "_generic_extraction.awk" if sys.platform != "win32" else "_generic_extraction_windows.awk"
         self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
@@ -129,7 +131,7 @@ class S3LogAccessExtractor:
 
         all_log_files = {
             str(file_path.absolute())
-            for file_path in natsort.natsorted(seq=directory.rglob(pattern="*"))
+            for file_path in natsort.natsorted(seq=directory.rglob(pattern=self.log_pattern))
             if file_path.is_file()
         }
         unextracted_files = all_log_files - set(self.file_processing_end_record.keys())

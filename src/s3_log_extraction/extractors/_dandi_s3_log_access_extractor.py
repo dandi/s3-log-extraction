@@ -38,3 +38,5 @@ class DandiS3LogAccessExtractor(S3LogAccessExtractor):
 
         ips_to_skip_regex = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
         self._awk_env["IPS_TO_SKIP_REGEX"] = ips_to_skip_regex.decode("utf-8")
+
+        self.log_pattern = "*.log"
