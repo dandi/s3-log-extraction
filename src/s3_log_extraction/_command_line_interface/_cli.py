@@ -13,6 +13,7 @@ from ..summarize import (
     generate_archive_summaries,
     generate_archive_totals,
 )
+from ..testing import generate_benchmark
 
 
 # s3logextraction
@@ -215,3 +216,29 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
         case _:
             message = "The generic mode is not yet implemented - please raise an issue to discuss."
             click.echo(message=message, err=True)
+
+
+# s3logextraction testing
+@_s3logextraction_cli.group(name="testing")
+def _testing_cli() -> None:
+    """Testing utilities for the S3 log extraction."""
+    pass
+
+
+# s3logextraction testing generate benchmark
+@_testing_cli.group(name="generate")
+def _testing_generate_cli() -> None:
+    """Generate various types of mock data for testing purposes."""
+    pass
+
+
+# s3logextraction testing generate benchmark
+@_testing_generate_cli.command(name="benchmark")
+@click.argument("directory", type=click.Path(writable=True))
+def _generate_benchmark_cli(directory: str) -> None:
+    """
+    Generate a ~5GB benchmark of the S3 log extraction to use for performance testing.
+
+    DIRECTORY : The path to the folder where the benchmark will be stored.
+    """
+    generate_benchmark(directory=directory)
