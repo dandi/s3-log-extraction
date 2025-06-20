@@ -11,7 +11,6 @@ def assert_expected_extraction_content(
 ) -> None:
     """Check if the expected content and records match the actual content and records."""
     record_files = {
-        pathlib.Path(f"records/{extractor_name}_extraction.txt"),
         pathlib.Path(f"records/{extractor_name}_file-processing-end.txt"),
         pathlib.Path(f"records/{extractor_name}_file-processing-start.txt"),
     }

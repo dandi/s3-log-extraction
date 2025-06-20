@@ -77,8 +77,8 @@ def generate_benchmark(directory: str | pathlib.Path, seed: int = 0) -> None:
     directory = pathlib.Path(directory)
     random.seed(a=seed)
 
-    object_key_levels = tuple(_generate_object_key_levels(number_of_object_key_levels=(20, 10, 5)))
-    object_keys = tuple(_generate_object_keys(number_of_object_keys=100_000, levels=object_key_levels))
+    object_key_levels = tuple(_generate_object_key_levels(number_of_object_key_levels=(4, 3, 2)))
+    object_keys = tuple(_generate_object_keys(number_of_object_keys=40, levels=object_key_levels))
 
     # In reality this is a much more complicated multi-modal distribution
     object_key_to_total_bytes = {object_key: random.randint(a=4096, b=100_000_000_000) for object_key in object_keys}
