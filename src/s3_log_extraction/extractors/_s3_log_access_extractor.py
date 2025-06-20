@@ -23,7 +23,7 @@ class S3LogAccessExtractor:
     from the S3 bucket; except Zarr stores, which are abbreviated to their top-most level.
 
     This extractor is:
-      - not parallelized; to do so would require a synchronized file appender at the AWK level (also RAM constraints)
+      - parallelized
       - interruptible
           However, you must use the command `s3logextraction stop` to end the processes after the current completion.
       - updatable
