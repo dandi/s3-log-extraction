@@ -1,5 +1,6 @@
 """Call the DANDI S3 log parser from the command line."""
 
+import os
 import typing
 
 import click
@@ -15,6 +16,7 @@ from ..summarize import (
     generate_archive_summaries,
     generate_archive_totals,
 )
+from ..testing import generate_benchmark
 
 
 # s3logextraction
@@ -34,6 +36,17 @@ def _s3logextraction_cli():
     default=None,
 )
 @click.option(
+    "--workers",
+    help=(
+        "The maximum number of workesr to use for parallel processing. "
+        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc. "
+        "By default, "
+    ),
+    required=False,
+    type=click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    default=-2,
+)
+@click.option(
     "--mode",
     help=(
         "Special parsing mode related to expected object key structure; "
@@ -44,7 +57,9 @@ def _s3logextraction_cli():
     type=click.Choice(choices=["dandi"]),
     default=None,
 )
-def _extract_cli(directory: str, limit: int | None = None, mode: typing.Literal["dandi"] | None = None) -> None:
+def _extract_cli(
+    directory: str, limit: int | None = None, workers: int = -2, mode: typing.Literal["dandi"] | None = None
+) -> None:
     """
     Extract S3 log access data from the specified directory.
 
@@ -59,15 +74,8 @@ def _extract_cli(directory: str, limit: int | None = None, mode: typing.Literal[
         case _:
             extractor = S3LogAccessExtractor()
 
-    try:
-        extractor.extract_directory(directory=directory, limit=limit)
-    except KeyboardInterrupt:
-        click.echo(
-            message=(
-                "In order to safely interrupt this process, "
-                "please open a separate console in the environment and call `s3logextraction stop`."
-            )
-        )
+    # TODO: figure out better way to intercept Ctrl+C
+    extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
 # s3logextraction stop
@@ -214,3 +222,29 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
             generate_archive_totals(get_summary_directory())
         case _:
             generate_all_dataset_totals()
+
+
+# s3logextraction testing
+@_s3logextraction_cli.group(name="testing")
+def _testing_cli() -> None:
+    """Testing utilities for the S3 log extraction."""
+    pass
+
+
+# s3logextraction testing generate benchmark
+@_testing_cli.group(name="generate")
+def _testing_generate_cli() -> None:
+    """Generate various types of mock data for testing purposes."""
+    pass
+
+
+# s3logextraction testing generate benchmark
+@_testing_generate_cli.command(name="benchmark")
+@click.argument("directory", type=click.Path(writable=True))
+def _generate_benchmark_cli(directory: str) -> None:
+    """
+    Generate a ~5GB benchmark of the S3 log extraction to use for performance testing.
+
+    DIRECTORY : The path to the folder where the benchmark will be stored.
+    """
+    generate_benchmark(directory=directory)

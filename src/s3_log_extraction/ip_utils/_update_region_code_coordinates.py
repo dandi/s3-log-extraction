@@ -53,7 +53,7 @@ def update_region_code_coordinates() -> None:
         total=len(region_codes_to_update),
         desc="Updating region coordinates",
         smoothing=0,
-        unit="region",
+        unit="regions",
     ):
         coordinates = _get_coordinates_from_region_code(
             country_and_region_code=country_and_region_code,

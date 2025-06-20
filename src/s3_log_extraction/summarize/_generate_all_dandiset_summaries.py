@@ -31,7 +31,7 @@ def generate_all_dandiset_summaries() -> None:
         leave=True,
         mininterval=5.0,
         smoothing=0,
-        unit="dandiset",
+        unit="dandisets",
     ):
         dandiset_id = dandiset.identifier
         asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
@@ -87,7 +87,7 @@ def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
         asset_id_to_dandiset_ids = collections.defaultdict(set)
         dandisets = list(client.get_dandisets())
         for base_dandiset in tqdm.tqdm(
-            iterable=dandisets, total=len(dandisets), desc="Updating asset caches", unit="dandiset", smoothing=0
+            iterable=dandisets, total=len(dandisets), desc="Updating asset caches", unit="dandisets", smoothing=0
         ):
             for version in base_dandiset.get_versions():
                 dandiset = client.get_dandiset(dandiset_id=base_dandiset.identifier, version_id=version.identifier)

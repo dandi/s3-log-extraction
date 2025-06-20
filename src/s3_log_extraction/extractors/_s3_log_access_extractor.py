@@ -1,7 +1,9 @@
+import concurrent.futures
 import os
 import pathlib
 import subprocess
 import sys
+import warnings
 
 import natsort
 import tqdm
@@ -21,7 +23,7 @@ class S3LogAccessExtractor:
     from the S3 bucket; except Zarr stores, which are abbreviated to their top-most level.
 
     This extractor is:
-      - not parallelized; to do so would require a synchronized file appender at the AWK level (also RAM constraints)
+      - parallelized
       - interruptible
           However, you must use the command `s3logextraction stop` to end the processes after the current completion.
       - updatable
@@ -55,8 +57,6 @@ class S3LogAccessExtractor:
         file_processing_end_record_file_name = f"{class_name}_file-processing-end.txt"
         self.file_processing_end_record_file_path = self.records_directory / file_processing_end_record_file_name
 
-        self.log_pattern = "*-*-*-*-*-*-*"
-
         # TODO: does this hold after bundling?
         awk_filename = "_generic_extraction.awk" if sys.platform != "win32" else "_generic_extraction_windows.awk"
         self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
@@ -79,7 +79,7 @@ class S3LogAccessExtractor:
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
             message = (
                 "\nRecord corruption from previous run detected - "
-                "please call `s3_log_extraction.reset_extraction()` to clean the extraction cache and records.\n\n"
+                "please call `s3_log_extraction reset extraction` to clean the extraction cache and records.\n\n"
             )
             raise ValueError(message)
 
@@ -126,24 +126,36 @@ class S3LogAccessExtractor:
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{absolute_file_path}\n")
 
-    def extract_directory(self, *, directory: str | pathlib.Path, limit: int | None = None) -> None:
+    def extract_directory(self, *, directory: str | pathlib.Path, limit: int | None = None, workers: int = -2) -> None:
         directory = pathlib.Path(directory)
+        if workers == 0:
+            message = "The number of workers cannot be 0 - please set it to an integer. Falling back to default of -2."
+            warnings.warn(message=message, stacklevel=2)
+            workers = -2
+        cpu_count = os.cpu_count()
+        max_workers = workers % cpu_count + 1 if workers < 0 else max(cpu_count, workers)
 
         all_log_files = {
             str(file_path.absolute())
-            for file_path in natsort.natsorted(seq=directory.rglob(pattern=self.log_pattern))
+            for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
             if file_path.is_file()
         }
         unextracted_files = all_log_files - set(self.file_processing_end_record.keys())
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
-        for file_path in tqdm.tqdm(
-            iterable=files_to_extract,
-            total=len(files_to_extract),
-            desc="Running extraction on S3 logs: ",
-            unit="file",
-            smoothing=0,
-            miniters=1,
-        ):
-            self.extract_file(file_path=file_path)
+        tqdm_style_kwargs = {
+            "total": len(files_to_extract),
+            "desc": "Running extraction on S3 logs: ",
+            "unit": "files",
+            "smoothing": 0,
+            "miniters": 1,
+        }
+        if max_workers == 1:
+            for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
+                self.extract_file(file_path=file_path)
+        else:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                list(
+                    tqdm.tqdm(iterable=executor.map(self.extract_file, map(str, files_to_extract)), **tqdm_style_kwargs)
+                )
