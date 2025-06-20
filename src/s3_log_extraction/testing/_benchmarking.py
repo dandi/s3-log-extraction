@@ -171,8 +171,8 @@ def _generate_object_keys(
 def _create_date_directories(
     *,
     directory: pathlib.Path,
-    start_year: int = 2018,
-    end_year: int = 2025,
+    start_year: int = 2019,
+    end_year: int = 2024,
 ) -> None:
     """
     Create year/month/day directories for the specified range of years.
@@ -204,7 +204,7 @@ def _create_random_log_files(
     directory: pathlib.Path,
     object_key_to_total_bytes: dict[str, int],
     number_of_files_per_day_lower_bound: int = 1,
-    number_of_files_per_day_upper_bound: int = 100,
+    number_of_files_per_day_upper_bound: int = 20,
 ) -> None:
     # These are frozen since they are mandated by the S3 filename format
     characters: str = "0123456789ABCDEF"
@@ -246,8 +246,8 @@ def _create_random_log_file(
     file_path: pathlib.Path,
     object_keys: list[str],
     object_key_to_total_bytes: dict[str, int],
-    lines_per_file_lower_bound: int = 5,
-    lines_per_file_upper_bound: int = 30,
+    lines_per_file_lower_bound: int = 2,
+    lines_per_file_upper_bound: int = 15,
 ) -> None:
     number_of_lines = random.randint(a=lines_per_file_lower_bound, b=lines_per_file_upper_bound)
     timestamp = "-".join(file_path.name.split("-")[:-1])
