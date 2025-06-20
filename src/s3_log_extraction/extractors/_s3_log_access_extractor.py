@@ -3,6 +3,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import warnings
 
 import natsort
 import tqdm
@@ -78,7 +79,7 @@ class S3LogAccessExtractor:
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
             message = (
                 "\nRecord corruption from previous run detected - "
-                "please call `s3_log_extraction.reset_extraction()` to clean the extraction cache and records.\n\n"
+                "please call `s3_log_extraction reset extraction` to clean the extraction cache and records.\n\n"
             )
             raise ValueError(message)
 
@@ -125,12 +126,14 @@ class S3LogAccessExtractor:
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{absolute_file_path}\n")
 
-    def extract_directory(
-        self, *, directory: str | pathlib.Path, limit: int | None = None, max_workers: int = -2
-    ) -> None:
+    def extract_directory(self, *, directory: str | pathlib.Path, limit: int | None = None, workers: int = -2) -> None:
         directory = pathlib.Path(directory)
-        if max_workers < 0:
-            max_workers = os.cpu_count() + max_workers + 1
+        if workers == 0:
+            message = "The number of workers cannot be 0 - please set it to an integer. Falling back to default of -2."
+            warnings.warn(message=message, stacklevel=2)
+            workers = -2
+        cpu_count = os.cpu_count()
+        max_workers = workers % cpu_count + 1 if workers < 0 else max(cpu_count, workers)
 
         all_log_files = {
             str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
