@@ -95,7 +95,7 @@ class BaseValidator(abc.ABC):
             iterable=files_to_validate,
             desc=self.tqdm_description,
             total=len(files_to_validate),
-            unit="file",
+            unit="files",
             smoothing=0,
         ):
             self.validate_file(file_path=file_path)

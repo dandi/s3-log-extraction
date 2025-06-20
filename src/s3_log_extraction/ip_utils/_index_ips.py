@@ -29,7 +29,7 @@ def index_ips(*, seed: int = 0) -> None:
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
     for full_ip_file_path in tqdm.tqdm(
-        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="file", smoothing=0
+        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="files", smoothing=0
     ):
         full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
         unique_full_ips = {ip for ip in full_ips}
