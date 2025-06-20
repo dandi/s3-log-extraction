@@ -1,3 +1,4 @@
+import concurrent.futures
 import os
 import pathlib
 import subprocess
@@ -124,8 +125,12 @@ class S3LogAccessExtractor:
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{absolute_file_path}\n")
 
-    def extract_directory(self, *, directory: str | pathlib.Path, limit: int | None = None) -> None:
+    def extract_directory(
+        self, *, directory: str | pathlib.Path, limit: int | None = None, max_workers: int = -2
+    ) -> None:
         directory = pathlib.Path(directory)
+        if max_workers < 0:
+            max_workers = os.cpu_count() + max_workers + 1
 
         all_log_files = {
             str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
@@ -134,12 +139,18 @@ class S3LogAccessExtractor:
 
         files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
 
-        for file_path in tqdm.tqdm(
-            iterable=files_to_extract,
-            total=len(files_to_extract),
-            desc="Running extraction on S3 logs: ",
-            unit="files",
-            smoothing=0,
-            miniters=1,
-        ):
-            self.extract_file(file_path=file_path)
+        tqdm_style_kwargs = {
+            "total": len(files_to_extract),
+            "desc": "Running extraction on S3 logs: ",
+            "unit": "files",
+            "smoothing": 0,
+            "miniters": 1,
+        }
+        if max_workers == 1:
+            for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
+                self.extract_file(file_path=file_path)
+        else:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                list(
+                    tqdm.tqdm(iterable=executor.map(self.extract_file, map(str, files_to_extract)), **tqdm_style_kwargs)
+                )
