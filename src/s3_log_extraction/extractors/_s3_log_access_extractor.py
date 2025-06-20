@@ -138,7 +138,7 @@ class S3LogAccessExtractor:
             iterable=files_to_extract,
             total=len(files_to_extract),
             desc="Running extraction on S3 logs: ",
-            unit="file",
+            unit="files",
             smoothing=0,
             miniters=1,
         ):

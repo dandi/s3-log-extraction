@@ -5,6 +5,8 @@ import shutil
 import typing
 import warnings
 
+import tqdm
+
 _DEFAULT_FIELDS = (
     "8787a3c41bf7ce0d54359d9348ad5b08e16bd5bb8ae5aa4e1508b435773a066e",
     "dandiarchive",
@@ -77,10 +79,17 @@ def generate_benchmark(directory: str | pathlib.Path, seed: int = 0) -> None:
 
     object_key_levels = tuple(_generate_object_key_levels(number_of_object_key_levels=(20, 10, 5)))
     object_keys = tuple(_generate_object_keys(number_of_object_keys=100_000, levels=object_key_levels))
+
+    # In reality this is a much more complicated multi-modal distribution
     object_key_to_total_bytes = {object_key: random.randint(a=4096, b=100_000_000_000) for object_key in object_keys}
 
     benchmark_directory = directory / "s3-log-extraction-benchmark"
+    if benchmark_directory.exists() and any(benchmark_directory.iterdir()):
+        message = f"\n\nDirectory {benchmark_directory} is not empty. Existing contents will be removed.\n\n"
+        warnings.warn(message=message, stacklevel=2)
+        shutil.rmtree(path=benchmark_directory)
     benchmark_directory.mkdir(exist_ok=True)
+
     _create_date_directories(directory=benchmark_directory)
     _create_random_log_files(directory=benchmark_directory, object_key_to_total_bytes=object_key_to_total_bytes)
 
@@ -154,7 +163,7 @@ def _generate_object_keys(
         A generator that yields random S3 object keys as strings.
     """
     for _ in range(number_of_object_keys):
-        level = random.choice(levels)
+        level = random.choice(seq=levels)
         length = random.randint(lower_bound, higher_bound)
         yield f"{level}/{''.join(random.choices(population=characters, k=length))}"
 
@@ -177,12 +186,6 @@ def _create_date_directories(
     end_year : int
         The ending year for the directory structure.
     """
-    # if directory is not empty, clean and warn
-    if any(directory.iterdir()):
-        message = f"Directory {directory} is not empty. Existing contents will be removed."
-        warnings.warn(message=message, stacklevel=2)
-        shutil.rmtree(path=directory)
-
     for year in range(start_year, end_year + 1):
         year_directory = directory / str(year)
         year_directory.mkdir(exist_ok=True)
@@ -201,36 +204,47 @@ def _create_random_log_files(
     directory: pathlib.Path,
     object_key_to_total_bytes: dict[str, int],
     number_of_files_per_day_lower_bound: int = 1,
-    number_of_files_per_day_upper_bound: int = 30,
+    number_of_files_per_day_upper_bound: int = 100,
 ) -> None:
     # These are frozen since they are mandated by the S3 filename format
     characters: str = "0123456789ABCDEF"
     length: int = 16
 
+    # For efficiency, only cast this once
+    object_keys = list(object_key_to_total_bytes.keys())
+
     pre_path_to_number_of_files_per_day = {
-        f"{year.name}/{month.name}/{day.name}/{year.name}-{month.name}-{day.name}-": random.randint(
+        f"{year.name}/{month.name}/{day.name}/{year.name}-{month.name}-{day.name}": random.randint(
             a=number_of_files_per_day_lower_bound, b=number_of_files_per_day_upper_bound
         )
         for year in directory.iterdir()
         for month in year.iterdir()
         for day in month.iterdir()
     }
-    for pre_path, number_of_files_per_day in pre_path_to_number_of_files_per_day.items():
+    for pre_path, number_of_files_per_day in tqdm.tqdm(
+        iterable=pre_path_to_number_of_files_per_day.items(),
+        total=len(pre_path_to_number_of_files_per_day),
+        desc="Generating benchmark files",
+        unit="files",
+    ):
         for file_index in range(number_of_files_per_day):
+            # NOTE: This can technically result in collisions at a low probability
             hour = random.randint(a=0, b=23)
             minute = random.randint(a=0, b=59)
             second = random.randint(a=0, b=59)
-            random_id = random.choices(population=characters, k=length)
+            random_id = "".join(random.choices(population=characters, k=length))
             subpath = f"{pre_path}-{hour}-{minute}-{second}-{random_id}"
             file_path = directory / subpath
             _create_random_log_file(
                 file_path=file_path,
+                object_keys=object_keys,
                 object_key_to_total_bytes=object_key_to_total_bytes,
             )
 
 
 def _create_random_log_file(
     file_path: pathlib.Path,
+    object_keys: list[str],
     object_key_to_total_bytes: dict[str, int],
     lines_per_file_lower_bound: int = 5,
     lines_per_file_upper_bound: int = 30,
@@ -238,36 +252,39 @@ def _create_random_log_file(
     number_of_lines = random.randint(a=lines_per_file_lower_bound, b=lines_per_file_upper_bound)
     timestamp = "-".join(file_path.name.split("-")[:-1])
     lines = _generate_random_lines(
-        number_of_lines=number_of_lines, timestamp=timestamp, object_key_to_total_bytes=object_key_to_total_bytes
+        number_of_lines=number_of_lines,
+        timestamp=timestamp,
+        object_keys=object_keys,
+        object_key_to_total_bytes=object_key_to_total_bytes,
     )
     with file_path.open("w") as file_stream:
         file_stream.write("\n".join(lines))
 
 
 def _generate_random_lines(
-    number_of_lines: int, timestamp: str, object_key_to_total_bytes: dict[str, int]
+    number_of_lines: int, timestamp: str, object_keys: list[str], object_key_to_total_bytes: dict[str, int]
 ) -> typing.Generator[str]:
     for _ in range(number_of_lines):
         line = list(_DEFAULT_FIELDS)
 
         year, month, day, hour, minute, second = timestamp.split("-")
-        line[2] = f"[{year}/{_MONTH_TO_STR[month]}/{day:02d}:{hour:02d}:{minute:02d}:{second:02d}"
+        line[2] = f"[{day:02s}/{_MONTH_TO_STR[month]}/{year}:{hour:02s}:{minute:02s}:{second:02s}"
 
-        request_type = random.choice(_POSSIBLE_REQUEST_TYPES)
+        request_type = random.choice(seq=_POSSIBLE_REQUEST_TYPES)
         line[7] = request_type
 
         # In reality, there are clear correlations between objects keys and request types over nearby periods of time
-        object_key = random.choice(population=object_key_to_total_bytes.keys())
-        line[9] = object_key
-        line[11] = f"/{object_key}"
+        object_key = random.choice(seq=object_keys)
+        line[8] = object_key
+        line[10] = f"/{object_key}"
 
-        status_code = random.choice(_POSSIBLE_STATUS_CODES)
-        line[13] = status_code
+        status_code = random.choice(seq=_POSSIBLE_STATUS_CODES)
+        line[12] = status_code
 
         # In reality, this value may not even be present for certain request or status code combinations
         total_bytes = object_key_to_total_bytes[object_key]
         bytes_sent = random.randint(a=1, b=total_bytes) if random.random() >= 0.01 else "-"
-        line[15] = str(bytes_sent)
-        line[16] = str(total_bytes)
+        line[14] = str(bytes_sent)
+        line[15] = str(total_bytes)
 
         yield " ".join(line)
