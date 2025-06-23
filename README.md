@@ -158,6 +158,23 @@ s3logextraction update totals --mode archive
 
 
 
+## How to Setup Logging
+
+If you're new to using AWS S3 buckets and haven't yet enabled the logging this project utilizes, you can follow these simple instructions to get started.
+
+ 1) Log into your AWS console.
+ 2) Create a new **PRIVATE** S3 bucket - typically the name of the new bucket is the name of the one you wish to enable logging on with `-logs` added to the end. For example, `dandiarchive-logs`.
+    - **NEVER** share this bucket publicly as it contains sensitive information.
+ 4) Navigate back to the S3 bucket you wish to enable logging on.
+ 5) Under the `Properties` tab, scroll down to the section called `Server access logging` and select `Edit`.
+ 6) Toggle the selection to `Enable`, then specify the destination where logs will be stored as the new S3 bucket you created in step (2).
+ 7) Recommended:
+    - Specify the `Log object key format` as the nested pattern shown below.
+    - Ensure the `Source of date used in log object key format` is the `S3 event time`.
+  ![image](https://github.com/user-attachments/assets/8e8de5fc-5a58-4dda-8866-8bf71277e2e7)
+
+
+
 ## Developer Notes
 
 Throughout the codebase, various processes are referred to in the following ways:
