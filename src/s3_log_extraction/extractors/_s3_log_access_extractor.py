@@ -1,14 +1,13 @@
 import concurrent.futures
 import os
 import pathlib
-import subprocess
 import sys
-import warnings
 
 import natsort
 import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
+from ._utils import _deploy_subprocess, _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
 
@@ -27,11 +26,6 @@ class S3LogAccessExtractor:
       - interruptible
           However, you must use the command `s3logextraction stop` to end the processes after the current completion.
       - updatable
-
-    Parameters
-    ----------
-    log_directory : path-like
-        The directory containing the raw S3 log files to be processed.
     """
 
     def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
@@ -65,9 +59,9 @@ class S3LogAccessExtractor:
         self.file_processing_end_record = dict()
         file_processing_record_difference = dict()
         if self.file_processing_start_record_file_path.exists() and self.file_processing_end_record_file_path.exists():
-            file_processing_start_record = set(
+            file_processing_start_record = {
                 file_path for file_path in self.file_processing_start_record_file_path.read_text().splitlines()
-            )
+            }
             self.file_processing_end_record = {
                 file_path: True for file_path in self.file_processing_end_record_file_path.read_text().splitlines()
             }
@@ -88,26 +82,15 @@ class S3LogAccessExtractor:
         absolute_file_path = str(file_path.absolute())
 
         gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
-        result = subprocess.run(
-            args=gawk_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            env=self._awk_env,
+        _deploy_subprocess(
+            command=gawk_command,
+            environment_variables=self._awk_env,
+            error_message=f"Extraction failed on {file_path}.",
         )
-        if result.returncode != 0:
-            message = (
-                f"\nExtraction failed.\n "
-                f"Log file: {absolute_file_path}\n"
-                f"Error code {result.returncode}\n\n"
-                f"stderr: {result.stderr}\n\n"
-            )
-            raise RuntimeError(message)
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
-        pid = str(os.getpid())
         if self.stop_file_path.exists() is True:
-            print(f"Extraction stopped on process {pid} - exiting...")
+            print(f"Extraction stopped on process {os.getpid()} - exiting...")
             return
 
         file_path = pathlib.Path(file_path)
@@ -116,24 +99,22 @@ class S3LogAccessExtractor:
             return
 
         # Record the start of the mirror copy step
+        content = f"{absolute_file_path}\n"
+        # _append_with_lock(file_path=self.file_processing_start_record_file_path, content=content)
         with self.file_processing_start_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{absolute_file_path}\n")
+            file_stream.write(content)
 
         self._run_extraction(file_path=file_path)
 
         # Record final success and cleanup
         self.file_processing_end_record[absolute_file_path] = True
+        # _append_with_lock(file_path=self.file_processing_end_record_file_path, content=content)
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{absolute_file_path}\n")
+            file_stream.write(content)
 
     def extract_directory(self, *, directory: str | pathlib.Path, limit: int | None = None, workers: int = -2) -> None:
         directory = pathlib.Path(directory)
-        if workers == 0:
-            message = "The number of workers cannot be 0 - please set it to an integer. Falling back to default of -2."
-            warnings.warn(message=message, stacklevel=2)
-            workers = -2
-        cpu_count = os.cpu_count()
-        max_workers = workers % cpu_count + 1 if workers < 0 else max(cpu_count, workers)
+        max_workers = _handle_max_workers(workers=workers)
 
         all_log_files = {
             str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))

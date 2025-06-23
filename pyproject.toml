@@ -43,13 +43,16 @@ classifiers = [
 s3logextraction = "s3_log_extraction._command_line_interface._cli:_s3logextraction_cli"
 
 [project.optional-dependencies]
+remote = [
+    "s5cmd",
+]
 dev = [
     "pytest-cov",
     "pytest-env",
     "ipython<9.0.0",  # coloriaze error in pycharm
     "pre-commit",
 ]
-all = ["s3_log_extraction[dev]"]
+all = ["s3_log_extraction[dev,remote]"]
 
 
 
