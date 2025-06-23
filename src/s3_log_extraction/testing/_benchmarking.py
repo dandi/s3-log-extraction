@@ -58,7 +58,7 @@ _POSSIBLE_STATUS_CODES = ("200", "206", "304", "400", "403", "404")
 
 def generate_benchmark(directory: str | pathlib.Path, seed: int = 0) -> None:
     """
-    Generate a ~5 GB directory of random log files for benchmarking the S3 log extraction tools.
+    Generate a ~120 MB directory of random log files for benchmarking the S3 log extraction tools.
 
     This does not exhaustively span the extremes of log contents as seen from the tests, but rather replicates
     some of the easier lines with randomized variation in some fields.
