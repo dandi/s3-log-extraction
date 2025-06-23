@@ -55,6 +55,18 @@ def _s3logextraction_cli():
     type=click.Choice(choices=["dandi", "dandi-remote"]),
     default=None,
 )
+@click.option(
+    "--manifest",
+    "manifest_file_path",
+    help=(
+        "A custom manifest file specifying the paths of log files to process from the S3 bucket that would not be "
+        "discovered by the natural nesting pattern. Typically used in cases where the storage pattern was swapped "
+        "from flat to nested at a particular point in time."
+    ),
+    required=False,
+    type=click.Path(writable=False),
+    default=None,
+)
 def _extract_cli(
     directory: str,
     limit: int | None = None,

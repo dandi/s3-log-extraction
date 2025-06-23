@@ -78,6 +78,7 @@ class RemoteS3LogAccessExtractor:
         """
         _handle_aws_credentials()
 
+        manifest = dict()
         manifest_file_path = pathlib.Path(manifest_file_path) if manifest_file_path is not None else None
         if manifest_file_path is not None:
             with manifest_file_path.open(mode="r") as file_stream:
