@@ -5,7 +5,6 @@ import typing
 
 import click
 
-
 from ..config import get_summary_directory, reset_extraction, set_cache_directory
 from ..extractors import DandiS3LogAccessExtractor, RemoteS3LogAccessExtractor, S3LogAccessExtractor, stop_extraction
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
