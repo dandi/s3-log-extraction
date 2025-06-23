@@ -2,7 +2,6 @@ import os
 import pathlib
 import subprocess
 import sys
-import time
 import warnings
 
 
@@ -35,47 +34,6 @@ def _deploy_subprocess(
         return None
 
     return result.stdout
-
-
-def _append_with_lock(file_path: pathlib.Path, content: str, retries: int = 240, delay: float = 1) -> None:
-    system = sys.platform
-    match system:
-        case "win32":
-            import msvcrt
-
-            for attempt in range(retries):
-                try:
-                    with file_path.open(mode="a") as file_stream:
-                        file_descriptor = file_stream.fileno()
-                        nbytes = file_path.stat().st_size
-
-                        try:
-                            msvcrt.locking(file_descriptor, msvcrt.LK_NBLCK, nbytes)
-                            file_stream.write(content)
-                            return
-                        finally:
-                            msvcrt.locking(file_descriptor, msvcrt.LK_UNLCK, nbytes)
-                except PermissionError:
-                    if attempt >= retries - 1:
-                        raise
-                    time.sleep(delay)
-        case _:
-            import fcntl
-
-            with file_path.open(mode="a") as file_stream:
-                file_descriptor = file_stream.fileno()
-
-                for attempt in range(retries):
-                    try:
-                        fcntl.flock(file_descriptor, fcntl.LOCK_EX)
-                        file_stream.write(content)
-                        return
-                    except (BlockingIOError, OSError):
-                        if attempt >= retries - 1:
-                            raise
-                        time.sleep(delay)
-                    finally:
-                        fcntl.flock(file_descriptor, fcntl.LOCK_NB)
 
 
 def _handle_max_workers(*, workers: int) -> int:
