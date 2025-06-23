@@ -6,7 +6,7 @@ from ._ip_cache import load_index_to_ip, save_index_to_ip
 from ..config import get_cache_directory
 
 
-def index_ips(*, seed: int = 0) -> None:
+def index_ips(*, seed: int = None) -> None:
     """
     Indexes IP addresses extracted from the S3 log files.
 

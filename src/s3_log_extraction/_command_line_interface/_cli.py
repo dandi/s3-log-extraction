@@ -5,8 +5,9 @@ import typing
 
 import click
 
+
 from ..config import get_summary_directory, reset_extraction, set_cache_directory
-from ..extractors import DandiS3LogAccessExtractor, S3LogAccessExtractor, stop_extraction
+from ..extractors import DandiS3LogAccessExtractor, RemoteS3LogAccessExtractor, S3LogAccessExtractor, stop_extraction
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
     generate_all_dandiset_summaries,
@@ -38,7 +39,7 @@ def _s3logextraction_cli():
 @click.option(
     "--workers",
     help=(
-        "The maximum number of workesr to use for parallel processing. "
+        "The maximum number of workers to use for parallel processing. "
         "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc. "
         "By default, "
     ),
@@ -54,11 +55,27 @@ def _s3logextraction_cli():
         "By default, objects will be processed using the generic structure."
     ),
     required=False,
-    type=click.Choice(choices=["dandi"]),
+    type=click.Choice(choices=["dandi", "dandi-remote"]),
+    default=None,
+)
+@click.option(
+    "--manifest",
+    "manifest_file_path",
+    help=(
+        "A custom manifest file specifying the paths of log files to process from the S3 bucket that would not be "
+        "discovered by the natural nesting pattern. Typically used in cases where the storage pattern was swapped "
+        "from flat to nested at a particular point in time."
+    ),
+    required=False,
+    type=click.Path(writable=False),
     default=None,
 )
 def _extract_cli(
-    directory: str, limit: int | None = None, workers: int = -2, mode: typing.Literal["dandi"] | None = None
+    directory: str,
+    limit: int | None = None,
+    workers: int = -2,
+    mode: typing.Literal["dandi", "dandi-remote"] | None = None,
+    manifest_file_path: str | None = None,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -71,11 +88,20 @@ def _extract_cli(
     match mode:
         case "dandi":
             extractor = DandiS3LogAccessExtractor()
+            extractor.extract_directory(directory=directory, limit=limit, workers=workers)
+        case "dandi-remote":
+            extractor = RemoteS3LogAccessExtractor()
+            extractor.extract_s3(
+                s3_url=directory,
+                date_limit=limit,
+                file_limit=limit,
+                workers=workers,
+                mode="dandi",
+                manifest_file_path=manifest_file_path,
+            )
         case _:
             extractor = S3LogAccessExtractor()
-
-    # TODO: figure out better way to intercept Ctrl+C
-    extractor.extract_directory(directory=directory, limit=limit, workers=workers)
+            extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
 # s3logextraction stop
@@ -243,7 +269,7 @@ def _testing_generate_cli() -> None:
 @click.argument("directory", type=click.Path(writable=True))
 def _generate_benchmark_cli(directory: str) -> None:
     """
-    Generate a ~5GB benchmark of the S3 log extraction to use for performance testing.
+    Generate a ~120 MB benchmark of the S3 log extraction to use for performance testing.
 
     DIRECTORY : The path to the folder where the benchmark will be stored.
     """
