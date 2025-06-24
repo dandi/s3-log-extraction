@@ -1,14 +1,13 @@
 import collections
 import concurrent.futures
 import json
-import os
 import pathlib
 import random
 import shutil
 import sys
 import tempfile
 
-import fsspec
+# import fsspec
 import tqdm
 import yaml
 
@@ -106,7 +105,7 @@ class RemoteS3LogAccessExtractor:
 
     def extract_s3_url(self, s3_url: str) -> None:
         if self.stop_file_path.exists():
-            print(f"Extraction stopped on process {os.getpid()} - exiting...")
+            # print(f"Extraction stopped on process {os.getpid()} - exiting...")
             return
 
         if self.s3_url_processing_end_record.get(s3_url, False):
@@ -117,8 +116,11 @@ class RemoteS3LogAccessExtractor:
             file_stream.write(f"{s3_url}\n")
 
         temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
-        with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
-            temporary_file_path.write_bytes(data=file_stream.read())
+        _deploy_subprocess(
+            command=f"s5cmd cp {s3_url} {temporary_file_path.absolute()}", error_message=f"Failed to download {s3_url}."
+        )
+        # with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
+        #     temporary_file_path.write_bytes(data=file_stream.read())
 
         self._run_extraction(file_path=temporary_file_path)
 
@@ -159,6 +161,7 @@ class RemoteS3LogAccessExtractor:
             "unit": "files",
             "smoothing": 0,
             "miniters": 1,
+            "leave": True,
         }
         if max_workers == 1:
             for s3_url in tqdm.tqdm(iterable=s3_urls_to_extract, **tqdm_style_kwargs):
