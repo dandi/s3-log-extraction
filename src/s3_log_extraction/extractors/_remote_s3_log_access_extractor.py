@@ -118,11 +118,12 @@ class RemoteS3LogAccessExtractor:
             file_stream.write(f"{s3_url}\n")
 
         temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
-        _deploy_subprocess(
-            command=f"s5cmd cp {s3_url} {temporary_file_path.absolute()}", error_message=f"Failed to download {s3_url}."
-        )
-        # with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
-        #     temporary_file_path.write_bytes(data=file_stream.read())
+        # _deploy_subprocess(
+        #     command=f"s5cmd cp {s3_url} {temporary_file_path.absolute()}",
+        #     error_message=f"Failed to download {s3_url}."
+        # )
+        with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
+            temporary_file_path.write_bytes(data=file_stream.read())
 
         self._run_extraction(file_path=temporary_file_path)
 
@@ -171,31 +172,7 @@ class RemoteS3LogAccessExtractor:
         else:
             print("\nDeploying tasks...\n\n")
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(
-                        _parallel_extract_s3_url,
-                        stop_file_path=self.stop_file_path,
-                        skip=self.s3_url_processing_end_record.get(s3_url, False),  # Not entirely sure this is needed
-                        s3_url_processing_start_record_file_path=self.s3_url_processing_start_record_file_path,
-                        temporary_directory=self.temporary_directory,
-                        s3_url=s3_url,
-                        gawk_base=self.gawk_base,
-                        absolute_script_path=str(self._relative_script_path.absolute()),
-                        gawk_env=self._awk_env,
-                        s3_url_processing_end_record_file_path=self.s3_url_processing_end_record_file_path,
-                    )
-                    for s3_url in s3_urls_to_extract
-                ]
-                for _ in tqdm.tqdm(
-                    iterable=concurrent.futures.as_completed(fs=futures),
-                    **tqdm_style_kwargs,
-                ):
-                    pass
-                # list(
-                #     tqdm.tqdm(
-                #         iterable=executor.map(self.extract_s3_url,  s3_urls_to_extract, **tqdm_style_kwargs)
-                #     )
-                # )
+                list(tqdm.tqdm(iterable=executor.map(self.extract_s3_url, s3_urls_to_extract, **tqdm_style_kwargs)))
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
@@ -352,46 +329,3 @@ class RemoteS3LogAccessExtractor:
         parsed_file_path.unlink(missing_ok=True)
         with parsed_file_path.open(mode="w") as file_stream:
             json.dump(obj=dict(manifest), fp=file_stream)
-
-
-def _parallel_extract_s3_url(
-    stop_file_path: pathlib.Path,
-    skip: bool,
-    s3_url_processing_start_record_file_path: pathlib.Path,
-    temporary_directory: pathlib.Path,
-    s3_url: str,
-    gawk_base: str,
-    absolute_script_path: str,
-    gawk_env: dict[str, str],
-    s3_url_processing_end_record_file_path: pathlib.Path,
-) -> None:
-    """To reduce memory overhead per process."""
-    if stop_file_path.exists():
-        return
-
-    if skip is True:
-        return
-
-    # Record the start of the extraction step
-    with s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
-        file_stream.write(f"{s3_url}\n")
-
-    temporary_file_path = temporary_directory / s3_url.split("/")[-1]
-    # _deploy_subprocess(
-    #     command=f"s5cmd cp {s3_url} {temporary_file_path.absolute()}", error_message=f"Failed to download {s3_url}."
-    # )
-    with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
-        temporary_file_path.write_bytes(data=file_stream.read())
-
-    absolute_file_path = str(temporary_file_path.absolute())
-    gawk_command = f"{gawk_base} --file {absolute_script_path} {absolute_file_path}"
-    _deploy_subprocess(
-        command=gawk_command,
-        environment_variables=gawk_env,
-        error_message=f"Extraction failed on {absolute_file_path}.",
-    )
-
-    # Record final success and cleanup
-    with s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
-        file_stream.write(f"{s3_url}\n")
-    temporary_file_path.unlink()
