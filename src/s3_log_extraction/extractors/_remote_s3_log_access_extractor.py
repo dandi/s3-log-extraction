@@ -172,7 +172,7 @@ class RemoteS3LogAccessExtractor:
         else:
             print("\nDeploying tasks...\n\n")
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                list(tqdm.tqdm(iterable=executor.map(self.extract_s3_url, s3_urls_to_extract, **tqdm_style_kwargs)))
+                list(tqdm.tqdm(iterable=executor.map(self.extract_s3_url, s3_urls_to_extract), **tqdm_style_kwargs))
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
