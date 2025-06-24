@@ -1,16 +1,19 @@
-import calendar
 import collections
+import concurrent.futures
 import json
+import os
 import pathlib
-import shutil
+import random
+import sys
 import tempfile
-import typing
 
+import fsspec
 import tqdm
 import yaml
 
-from ._utils import _deploy_subprocess, _handle_aws_credentials
-from ..config import get_cache_directory, get_records_directory
+from ._globals import _STOP_EXTRACTION_FILE_NAME
+from ._utils import _deploy_subprocess, _handle_aws_credentials, _handle_gawk_base, _handle_max_workers
+from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
 
 class RemoteS3LogAccessExtractor:
@@ -37,8 +40,50 @@ class RemoteS3LogAccessExtractor:
     """
 
     def __init__(self, cache_directory: pathlib.Path | None = None) -> None:
-        cache_directory = cache_directory or get_cache_directory()
-        self.records_directory = get_records_directory(cache_directory=cache_directory)
+        self.gawk_base = _handle_gawk_base()
+
+        self.cache_directory = cache_directory or get_cache_directory()
+        self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
+        self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
+        self.records_directory = get_records_directory(cache_directory=self.cache_directory)
+        self.temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
+
+        class_name = self.__class__.__name__
+        s3_url_processing_start_record_file_name = f"{class_name}_s3-url-processing-start.txt"
+        self.s3_url_processing_start_record_file_path = (
+            self.records_directory / s3_url_processing_start_record_file_name
+        )
+        s3_url_processing_end_record_file_name = f"{class_name}_s3-url-processing-end.txt"
+        self.s3_url_processing_end_record_file_path = self.records_directory / s3_url_processing_end_record_file_name
+
+        # TODO: does this hold after bundling?
+        awk_filename = "_generic_extraction.awk" if sys.platform != "win32" else "_generic_extraction_windows.awk"
+        self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
+        self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
+
+        self.s3_url_processing_end_record = dict()
+        s3_url_processing_record_difference = set()
+        if (
+            self.s3_url_processing_start_record_file_path.exists()
+            and self.s3_url_processing_end_record_file_path.exists()
+        ):
+            s3_url_processing_start_record = {
+                file_path for file_path in self.s3_url_processing_start_record_file_path.read_text().splitlines()
+            }
+            self.s3_url_processing_end_record = {
+                file_path: True for file_path in self.s3_url_processing_end_record_file_path.read_text().splitlines()
+            }
+            s3_url_processing_record_difference = s3_url_processing_start_record - set(
+                self.s3_url_processing_end_record.keys()
+            )
+        if len(s3_url_processing_record_difference) > 0:
+            # TODO: an advanced feature for the future could be looking at the timestamp of the 'started' log
+            # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
+            message = (
+                "\nRecord corruption from previous run detected - "
+                "please call `s3_log_extraction reset extraction` to clean the extraction cache and records.\n\n"
+            )
+            raise ValueError(message)
 
         self.processed_years: dict[str, bool] = dict()
         self.processed_years_record_file_path = self.records_directory / "processed_years.yaml"
@@ -58,25 +103,92 @@ class RemoteS3LogAccessExtractor:
             with self.processed_dates_record_file_path.open(mode="r") as file_stream:
                 self.processed_dates = yaml.safe_load(stream=file_stream)
 
-    def extract_s3(
+    def extract_s3_url(self, s3_url: str) -> None:
+        if self.stop_file_path.exists():
+            print(f"Extraction stopped on process {os.getpid()} - exiting...")
+            return
+
+        if self.s3_url_processing_end_record.get(s3_url, False):
+            return
+
+        # Record the start of the extraction step
+        with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(s3_url)
+
+        temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
+        with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
+            temporary_file_path.write_bytes(data=file_stream.read())
+
+        self._run_extraction(file_path=temporary_file_path)
+
+        # Record final success and cleanup
+        self.s3_url_processing_end_record[s3_url] = True
+        with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
+            file_stream.write(s3_url)
+        temporary_file_path.unlink()
+
+    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
+        absolute_script_path = str(self._relative_script_path.absolute())
+        absolute_file_path = str(file_path.absolute())
+
+        gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
+        _deploy_subprocess(
+            command=gawk_command,
+            environment_variables=self._awk_env,
+            error_message=f"Extraction failed on {file_path}.",
+        )
+
+    def extract_s3_bucket(
         self,
         *,
-        s3_url: str,
-        date_limit: int | None = None,
-        file_limit: int | None = None,
+        s3_root: str,
+        limit: int | None = None,
         workers: int = -2,
-        mode: typing.Literal["dandi"] | None = None,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
-        """
-        The protocol for iteratively downloading log files from a nested S3 structure.
-
-        This is the preferred method of extracting S3 logs, as it allows for more efficient processing of large numbers
-        of log files.
-
-        Will skip the last two days which have logs available, assuming they are still being processed by AWS.
-        """
         _handle_aws_credentials()
+        max_workers = _handle_max_workers(workers=workers)
+
+        unprocessed_s3_urls = self.get_unprocessed_s3_urls(manifest_file_path=manifest_file_path, s3_root=s3_root)
+        s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
+
+        tqdm_style_kwargs = {
+            "total": len(s3_urls_to_extract),
+            "desc": "Running extraction on remote S3 logs: ",
+            "unit": "files",
+            "smoothing": 0,
+            "miniters": 1,
+        }
+        if max_workers == 1:
+            for s3_url in tqdm.tqdm(iterable=s3_urls_to_extract, **tqdm_style_kwargs):
+                self.extract_s3_url(s3_url=s3_url)
+        else:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                list(
+                    tqdm.tqdm(
+                        iterable=executor.map(self.extract_s3_url, map(str, s3_urls_to_extract)), **tqdm_style_kwargs
+                    )
+                )
+
+        self._update_records()
+
+    def get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
+        unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
+            manifest_file_path=manifest_file_path, s3_root=s3_root
+        )
+        unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
+
+        unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
+
+        # Randomize the order of the remote files for the progress bar to be more accurate
+        random.shuffle(x=unprocessed_s3_urls)
+
+        return unprocessed_s3_urls
+
+    def _get_unprocessed_s3_urls_from_manifest(
+        self, manifest_file_path: pathlib.Path | None, s3_root: str
+    ) -> list[str]:
+        s3_base = s3_root.split("/")[:2]
 
         manifest = dict()
         manifest_file_path = pathlib.Path(manifest_file_path) if manifest_file_path is not None else None
@@ -84,129 +196,103 @@ class RemoteS3LogAccessExtractor:
             with manifest_file_path.open(mode="r") as file_stream:
                 manifest = json.load(fp=file_stream)
 
-        dates_with_logs = [date for date in manifest.keys()]
-        date_to_download_type = {date: "run" for date in manifest.keys()}
+        dates_from_manifest = [date for date in manifest.keys()]
+        unprocessed_dates = list(set(dates_from_manifest) - set(self.processed_dates.keys()))
 
+        unprocessed_s3_urls = [
+            f"{s3_base}/{filename}"
+            for date in tqdm.tqdm(
+                iterable=unprocessed_dates,
+                total=len(unprocessed_dates),
+                desc="Assembling local manifest",
+                unit="dates",
+                smoothing=0,
+                miniters=1,
+                leave=False,
+            )
+            for filename in manifest[date]
+        ]
+        return unprocessed_s3_urls
+
+    def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
         years_result = _deploy_subprocess(
-            command=f"s5cmd ls {s3_url}/", error_message=f"Failed to scan years of nested structure at {s3_url}."
+            command=f"s5cmd ls {s3_root}/", error_message=f"Failed to scan years of nested structure at {s3_root}."
         )
-        years_from_nested = {line.split(" ")[-1].rstrip("/\n") for line in years_result.splitlines()}
-        years_from_manifest = {f"{date.split("-")[0]}" for date in manifest.keys()}
-        years = years_from_nested | years_from_manifest
+        years = {line.split(" ")[-1].rstrip("/\n") for line in years_result.splitlines()}
         unprocessed_years = list(years - set(self.processed_years.keys()))
 
+        dates_with_logs = []
         unprocessed_months_per_year = dict()
-        for year in tqdm.tqdm(
-            iterable=unprocessed_years,
-            total=len(unprocessed_years),
-            desc="Assembling nested manifest",
-            unit="years",
-            smoothing=0,
-            miniters=1,
-            leave=False,
-        ):
-            months_result = _deploy_subprocess(command=f"s5cmd ls {s3_url}/{year}/", ignore_errors=True)
+        for year in unprocessed_years:
+            subdirectory = f"{s3_root}/{year}/"
+            months_result = _deploy_subprocess(
+                command=f"s5cmd ls {subdirectory}", error_message=f"Failed to list structure of {subdirectory}."
+            )
             if months_result is None:
                 continue
 
-            months_from_nested = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
-            months_from_manifest = {f"{date.split('-')[1]}" for date in manifest.keys() if date.startswith(year)}
-            months = months_from_nested | months_from_manifest
+            months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
             unprocessed_months_per_year[year] = list(
                 months - set(self.processed_months_per_year.get(year, dict()).keys())
             )
 
             for month in unprocessed_months_per_year[year]:
-                days_result = _deploy_subprocess(command=f"s5cmd ls {s3_url}/{year}/{month}/", ignore_errors=True)
+                subdirectory = f"{s3_root}/{year}/{month}/"
+                days_result = _deploy_subprocess(
+                    command=f"s5cmd ls {subdirectory}", error_message=f"Failed to list structure of {subdirectory}."
+                )
                 if days_result is None:
                     continue
 
-                dates_from_nested = {
-                    f"{year}-{month}-{line.split(" ")[-1].rstrip("/\n")}" for line in days_result.splitlines()
-                }
-                dates_from_manifest = {date for date in manifest.keys() if date.startswith(f"{year}-{month}-")}
-                dates = dates_from_nested | dates_from_manifest
-                new_dates = list(dates - set(self.processed_dates.keys()))
+                dates = [f"{year}-{month}-{line.split(" ")[-1].rstrip("/\n")}" for line in days_result.splitlines()]
+                dates_with_logs.extend(dates)
 
-                dates_with_logs.extend(new_dates)
-                date_to_download_type.update({date: "cp" for date in new_dates})
+        new_dates = list(set(dates_with_logs) - set(self.processed_dates.keys()))
+        sorted_new_dates = sorted(list(new_dates))
+        unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
-        sorted_dates_with_logs = sorted(dates_with_logs)
-        unprocessed_dates = sorted_dates_with_logs[:-2]  # Give a 2-day buffer to allow AWS to catch up
-        dates_to_process = unprocessed_dates[:date_limit] if date_limit is not None else unprocessed_dates
-
-        s3_base = s3_url.split("/")[2]
-        temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
         for date in tqdm.tqdm(
-            iterable=dates_to_process,
-            total=len(dates_to_process),
-            desc="Downloading and extracting S3 logs",
-            unit="days",
+            iterable=unprocessed_dates,
+            total=len(unprocessed_dates),
+            desc="Assembling remote manifest",
+            unit="dates",
             smoothing=0,
             miniters=1,
+            leave=False,
         ):
-            date_directory = temporary_directory / date
-            date_directory.mkdir(exist_ok=True)
-            date_directory_string = date_directory.absolute().as_posix()
-
             year, month, day = date.split("-")
-            s3_subdirectory = f"{s3_url}/{year}/{month}/{day}"
-
-            if date_to_download_type[date] == "cp":
-                s5cmd_cp_command = f"s5cmd cp {s3_subdirectory}/* {date_directory}"
-            else:
-                s5cmd_batch_file_path = date_directory / "s5cmd_batch.txt"
-                s5cmd_batch_file_path.write_text(
-                    "\n".join(
-                        [
-                            f"cp s3://{s3_base}/{filename} {date_directory_string}/{filename}"
-                            for filename in manifest[date]
-                        ]
-                    )
-                )
-                s5cmd_cp_command = f"s5cmd run {s5cmd_batch_file_path}"
-            _deploy_subprocess(
-                command=s5cmd_cp_command,
-                error_message=f"Failed to download days of nested structure at {s3_subdirectory}.",
+            subdirectory = f"{s3_root}/{year}/{month}/{day}/"
+            s3_urls_result = _deploy_subprocess(
+                command=f"s5cmd ls {subdirectory}", error_message=f"Failed to list structure of {subdirectory}."
             )
+            if s3_urls_result is None:
+                continue
+            s3_urls = [line.split(" ")[-1].rstrip("\n") for line in s3_urls_result.splitlines()]
 
-            # It might seem a tad silly to call our own CLI from here, but it is the most straightforward way
-            # to leverage the more efficient file-wise parallelism
-            limit_flag = f" --limit {file_limit}" if file_limit is not None else ""
-            workers_flag = f" --workers {workers}" if workers != -2 else ""
-            mode_flag = f" --mode {mode}" if mode is not None else ""
-            s3logextraction_command = f"s3logextraction extract {date_directory}{limit_flag}{workers_flag}{mode_flag}"
-            _deploy_subprocess(
-                command=s3logextraction_command,
-                error_message=f"Failed to extract content of S3 logs from {s3_subdirectory}.",
-            )
+        unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
+        return unprocessed_s3_urls
 
-            self.processed_dates[date] = True
-            with self.processed_dates_record_file_path.open("a") as file_stream:
-                file_stream.write(f'"{date}": True\n')
-
-            shutil.rmtree(path=date_directory)
-        shutil.rmtree(path=temporary_directory)
-
-        # Update records
-        for year, months in unprocessed_months_per_year.items():
-            for month in months:
-                processed_days_this_month = [
-                    processed_date
-                    for processed_date in self.processed_dates.keys()
-                    if processed_date.startswith(f"{year}-{month}-")
-                ]
-                total_days_this_month = calendar.monthrange(int(year), int(month))[1]
-                if len(processed_days_this_month) == total_days_this_month:
-                    self.processed_months_per_year[year][month] = True
-
-            if len(self.processed_months_per_year.get(year, dict())) == 12:
-                self.processed_years[year] = True
-
-        with self.processed_months_per_year_record_file_path.open("w") as file_stream:
-            yaml.dump(data=self.processed_months_per_year, stream=file_stream)
-        with self.processed_years_record_file_path.open("w") as file_stream:
-            yaml.dump(data=self.processed_years, stream=file_stream)
+    def _update_records(self) -> None:
+        pass
+        # TODO
+        # for year, months in unprocessed_months_per_year.items():
+        #     for month in months:
+        #         processed_days_this_month = [
+        #             processed_date
+        #             for processed_date in self.processed_dates.keys()
+        #             if processed_date.startswith(f"{year}-{month}-")
+        #         ]
+        #         total_days_this_month = calendar.monthrange(int(year), int(month))[1]
+        #         if len(processed_days_this_month) == total_days_this_month:
+        #             self.processed_months_per_year[year][month] = True
+        #
+        #     if len(self.processed_months_per_year.get(year, dict())) == 12:
+        #         self.processed_years[year] = True
+        #
+        # with self.processed_months_per_year_record_file_path.open("w") as file_stream:
+        #     yaml.dump(data=self.processed_months_per_year, stream=file_stream)
+        # with self.processed_years_record_file_path.open("w") as file_stream:
+        #     yaml.dump(data=self.processed_years, stream=file_stream)
 
     @staticmethod
     def parse_manifest(*, file_path: str | pathlib.Path) -> None:

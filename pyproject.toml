@@ -44,6 +44,8 @@ s3logextraction = "s3_log_extraction._command_line_interface._cli:_s3logextracti
 
 [project.optional-dependencies]
 remote = [
+    "fsspec",
+    "s3fs",
     "s5cmd",
 ]
 dev = [
