@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import random
+import shutil
 import sys
 import tempfile
 
@@ -113,7 +114,7 @@ class RemoteS3LogAccessExtractor:
 
         # Record the start of the extraction step
         with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(s3_url)
+            file_stream.write(f"{s3_url}\n")
 
         temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
         with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
@@ -124,7 +125,7 @@ class RemoteS3LogAccessExtractor:
         # Record final success and cleanup
         self.s3_url_processing_end_record[s3_url] = True
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(s3_url)
+            file_stream.write(f"{s3_url}\n")
         temporary_file_path.unlink()
 
     def _run_extraction(self, *, file_path: pathlib.Path) -> None:
@@ -171,6 +172,7 @@ class RemoteS3LogAccessExtractor:
                 )
 
         self._update_records()
+        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
         unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
@@ -188,7 +190,7 @@ class RemoteS3LogAccessExtractor:
     def _get_unprocessed_s3_urls_from_manifest(
         self, manifest_file_path: pathlib.Path | None, s3_root: str
     ) -> list[str]:
-        s3_base = s3_root.split("/")[:2]
+        s3_base = "/".join(s3_root.split("/")[:3])
 
         manifest = dict()
         manifest_file_path = pathlib.Path(manifest_file_path) if manifest_file_path is not None else None
@@ -224,9 +226,9 @@ class RemoteS3LogAccessExtractor:
         dates_with_logs = []
         unprocessed_months_per_year = dict()
         for year in unprocessed_years:
-            subdirectory = f"{s3_root}/{year}/"
+            subdirectory = f"{s3_root}/{year}"
             months_result = _deploy_subprocess(
-                command=f"s5cmd ls {subdirectory}", error_message=f"Failed to list structure of {subdirectory}."
+                command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
             if months_result is None:
                 continue
@@ -237,9 +239,9 @@ class RemoteS3LogAccessExtractor:
             )
 
             for month in unprocessed_months_per_year[year]:
-                subdirectory = f"{s3_root}/{year}/{month}/"
+                subdirectory = f"{s3_root}/{year}/{month}"
                 days_result = _deploy_subprocess(
-                    command=f"s5cmd ls {subdirectory}", error_message=f"Failed to list structure of {subdirectory}."
+                    command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
                 )
                 if days_result is None:
                     continue
@@ -261,13 +263,13 @@ class RemoteS3LogAccessExtractor:
             leave=False,
         ):
             year, month, day = date.split("-")
-            subdirectory = f"{s3_root}/{year}/{month}/{day}/"
+            subdirectory = f"{s3_root}/{year}/{month}/{day}"
             s3_urls_result = _deploy_subprocess(
-                command=f"s5cmd ls {subdirectory}", error_message=f"Failed to list structure of {subdirectory}."
+                command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
             if s3_urls_result is None:
                 continue
-            s3_urls = [line.split(" ")[-1].rstrip("\n") for line in s3_urls_result.splitlines()]
+            s3_urls = [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
 
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
@@ -308,7 +310,7 @@ class RemoteS3LogAccessExtractor:
         for line in tqdm.tqdm(
             iterable=lines,
             total=len(lines),
-            desc="Assembling additional manifest",
+            desc="Parsing local manifest",
             unit="files",
             smoothing=0,
             leave=False,
