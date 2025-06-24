@@ -91,7 +91,7 @@ def _extract_cli(
     match mode:
         case "remote":
             extractor = RemoteS3LogAccessExtractor()
-            extractor.extract_s3(
+            extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
                 workers=workers,
@@ -102,7 +102,7 @@ def _extract_cli(
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
         case "dandi-remote":
             extractor = DandiRemoteS3LogAccessExtractor()
-            extractor.extract_s3(
+            extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
                 workers=workers,
