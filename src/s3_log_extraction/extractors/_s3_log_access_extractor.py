@@ -1,5 +1,4 @@
 import concurrent.futures
-import os
 import pathlib
 import sys
 
@@ -81,7 +80,6 @@ class S3LogAccessExtractor:
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         if self.stop_file_path.exists() is True:
-            print(f"Extraction stopped on process {os.getpid()} - exiting...")
             return
 
         file_path = pathlib.Path(file_path)
@@ -117,7 +115,6 @@ class S3LogAccessExtractor:
             "desc": "Running extraction on S3 logs: ",
             "unit": "files",
             "smoothing": 0,
-            "miniters": 1,
         }
         if max_workers == 1:
             for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):

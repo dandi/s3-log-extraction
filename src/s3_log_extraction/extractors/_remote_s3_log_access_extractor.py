@@ -107,7 +107,6 @@ class RemoteS3LogAccessExtractor:
 
     def extract_s3_url(self, s3_url: str) -> None:
         if self.stop_file_path.exists():
-            # print(f"Extraction stopped on process {os.getpid()} - exiting...")
             return
 
         if self.s3_url_processing_end_record.get(s3_url, False):
@@ -118,10 +117,6 @@ class RemoteS3LogAccessExtractor:
             file_stream.write(f"{s3_url}\n")
 
         temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
-        # _deploy_subprocess(
-        #     command=f"s5cmd cp {s3_url} {temporary_file_path.absolute()}",
-        #     error_message=f"Failed to download {s3_url}."
-        # )
         with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
             temporary_file_path.write_bytes(data=file_stream.read())
 
@@ -163,7 +158,6 @@ class RemoteS3LogAccessExtractor:
             "desc": "Running extraction on remote S3 logs: ",
             "unit": "files",
             "smoothing": 0,
-            "miniters": 1,
             "leave": True,
         }
         if max_workers == 1:
