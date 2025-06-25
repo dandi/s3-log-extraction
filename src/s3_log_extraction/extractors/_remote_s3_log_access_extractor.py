@@ -120,7 +120,7 @@ class RemoteS3LogAccessExtractor:
 
                     futures = [
                         executor.submit(
-                            self._extract_s3_url,
+                            _extract_s3_url,
                             s3_url=s3_url,
                             stop_file_path=self.stop_file_path,
                             temporary_directory=self.temporary_directory,
