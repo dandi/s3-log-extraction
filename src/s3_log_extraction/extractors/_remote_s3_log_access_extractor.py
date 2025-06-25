@@ -86,8 +86,6 @@ class RemoteS3LogAccessExtractor:
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
 
-        self._check_records_consistency()
-
         unprocessed_s3_urls = self._get_unprocessed_s3_urls(manifest_file_path=manifest_file_path, s3_root=s3_root)
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
@@ -96,21 +94,27 @@ class RemoteS3LogAccessExtractor:
             "desc": "Running extraction on remote S3 logs",
             "unit": "files",
             "smoothing": 0,
-            "leave": False,
+            "leave": True,
         }
         if max_workers == 1:
             for s3_url in tqdm.tqdm(iterable=s3_urls_to_extract, **tqdm_style_kwargs):
                 self._extract_s3_url(s3_url=s3_url)
         else:
+            tqdm_style_kwargs["leave"] = False
+
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 for batch_index, batch in enumerate(batches):
+                    if self.stop_file_path.exists():
+                        return
+
                     tqdm_style_kwargs["desc"] = (
                         f"Running extraction on remote S3 logs (batch {batch_index+1} of {number_of_batches})"
                     )
+                    tqdm_style_kwargs["total"] = len(batch)
                     list(
                         tqdm.tqdm(
                             iterable=executor.map(self._extract_s3_url, batch),
@@ -122,6 +126,8 @@ class RemoteS3LogAccessExtractor:
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
+        self._check_records_consistency()
+
         self.processed_dates: dict[str, bool] = dict()
         processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
         if processed_dates_record_file_path.exists():
@@ -134,7 +140,9 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
         unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
 
-        del self.processed_dates  # Free memory
+        # Free memory
+        del self.processed_dates
+        del self.s3_url_processing_end_record
 
         # Randomize the order of the remote files for the progress bar to be more accurate
         random.shuffle(x=unprocessed_s3_urls)
@@ -257,9 +265,6 @@ class RemoteS3LogAccessExtractor:
         if self.stop_file_path.exists():
             return
 
-        if self.s3_url_processing_end_record.get(s3_url, False):
-            return
-
         # Record the start of the extraction step
         with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{s3_url}\n")
@@ -271,7 +276,6 @@ class RemoteS3LogAccessExtractor:
         self._run_extraction(file_path=temporary_file_path)
 
         # Record final success and cleanup
-        self.s3_url_processing_end_record[s3_url] = True
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{s3_url}\n")
         temporary_file_path.unlink()
