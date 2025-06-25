@@ -88,7 +88,6 @@ class RemoteS3LogAccessExtractor:
 
         unprocessed_s3_urls = self._get_unprocessed_s3_urls(manifest_file_path=manifest_file_path, s3_root=s3_root)
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
-        del unprocessed_s3_urls  # Free memory
 
         tqdm_style_kwargs = {
             "total": len(s3_urls_to_extract),
@@ -103,12 +102,12 @@ class RemoteS3LogAccessExtractor:
         else:
             tqdm_style_kwargs["leave"] = False
 
+            absolute_script_path = str(self._relative_script_path.absolute())
+
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
-            del s3_urls_to_extract  # Free memory
-
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 for batch_index, batch in enumerate(batches):
                     if self.stop_file_path.exists():
@@ -118,18 +117,36 @@ class RemoteS3LogAccessExtractor:
                         f"Running extraction on remote S3 logs (batch {batch_index+1} of {number_of_batches})"
                     )
                     tqdm_style_kwargs["total"] = len(batch)
-                    list(
-                        tqdm.tqdm(
-                            iterable=executor.map(self._extract_s3_url, batch),
-                            **tqdm_style_kwargs,
+
+                    futures = [
+                        executor.submit(
+                            self._extract_s3_url,
+                            s3_url=s3_url,
+                            stop_file_path=self.stop_file_path,
+                            temporary_directory=self.temporary_directory,
+                            s3_url_processing_start_record_file_path=self.s3_url_processing_start_record_file_path,
+                            s3_url_processing_end_record_file_path=self.s3_url_processing_end_record_file_path,
+                            absolute_script_path=absolute_script_path,
+                            gawk_base=self.gawk_base,
+                            gawk_environment=self._awk_env,
                         )
+                        for s3_url in batch
+                    ]
+                    collections.deque(
+                        tqdm.tqdm(iterable=concurrent.futures.as_completed(futures), **tqdm_style_kwargs), maxlen=0
                     )
+                    # list(
+                    #     tqdm.tqdm(
+                    #         iterable=executor.map(self._extract_s3_url, batch),
+                    #         **tqdm_style_kwargs,
+                    #     )
+                    # )
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
-        self._check_records_consistency()
+        self._get_end_record_and_check_consistency()
 
         self.processed_dates: dict[str, bool] = dict()
         processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
@@ -143,14 +160,37 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
         unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
 
-        # Free memory
-        del self.processed_dates
-        del self.s3_url_processing_end_record
+        del self.s3_url_processing_end_record  # Free memory
 
         # Randomize the order of the remote files for the progress bar to be more accurate
         random.shuffle(x=unprocessed_s3_urls)
 
         return unprocessed_s3_urls
+
+    def _get_end_record_and_check_consistency(self) -> None:
+        self.s3_url_processing_end_record = dict()
+        s3_url_processing_record_difference = set()
+        if (
+            self.s3_url_processing_start_record_file_path.exists()
+            and self.s3_url_processing_end_record_file_path.exists()
+        ):
+            s3_url_processing_start_record = {
+                file_path for file_path in self.s3_url_processing_start_record_file_path.read_text().splitlines()
+            }
+            self.s3_url_processing_end_record = {
+                file_path: True for file_path in self.s3_url_processing_end_record_file_path.read_text().splitlines()
+            }
+            s3_url_processing_record_difference = s3_url_processing_start_record - set(
+                self.s3_url_processing_end_record.keys()
+            )
+        if len(s3_url_processing_record_difference) > 0:
+            # IDEA: an advanced feature for the future could be looking at the timestamp of the 'started' log
+            # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
+            message = (
+                "\nRecord corruption from previous run detected - "
+                "please call `s3_log_extraction reset extraction` to clean the extraction cache and records.\n\n"
+            )
+            raise ValueError(message)
 
     def _get_unprocessed_s3_urls_from_manifest(
         self, manifest_file_path: pathlib.Path | None, s3_root: str
@@ -166,7 +206,7 @@ class RemoteS3LogAccessExtractor:
         dates_from_manifest = [date for date in manifest.keys()]
         unprocessed_dates = list(set(dates_from_manifest) - set(self.processed_dates.keys()))
 
-        unprocessed_s3_urls = [
+        s3_urls = [
             f"{s3_base}/{filename}"
             for date in tqdm.tqdm(
                 iterable=unprocessed_dates,
@@ -179,6 +219,8 @@ class RemoteS3LogAccessExtractor:
             )
             for filename in manifest[date]
         ]
+
+        unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
@@ -239,60 +281,35 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
 
-    def _check_records_consistency(self) -> None:
-        self.s3_url_processing_end_record = dict()
-        s3_url_processing_record_difference = set()
-        if (
-            self.s3_url_processing_start_record_file_path.exists()
-            and self.s3_url_processing_end_record_file_path.exists()
-        ):
-            s3_url_processing_start_record = {
-                file_path for file_path in self.s3_url_processing_start_record_file_path.read_text().splitlines()
-            }
-            self.s3_url_processing_end_record = {
-                file_path: True for file_path in self.s3_url_processing_end_record_file_path.read_text().splitlines()
-            }
-            s3_url_processing_record_difference = s3_url_processing_start_record - set(
-                self.s3_url_processing_end_record.keys()
-            )
-        if len(s3_url_processing_record_difference) > 0:
-            # TODO: an advanced feature for the future could be looking at the timestamp of the 'started' log
-            # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
-            message = (
-                "\nRecord corruption from previous run detected - "
-                "please call `s3_log_extraction reset extraction` to clean the extraction cache and records.\n\n"
-            )
-            raise ValueError(message)
-
-    def _extract_s3_url(self, s3_url: str) -> None:
-        if self.stop_file_path.exists():
-            return
-
-        # Record the start of the extraction step
-        with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{s3_url}\n")
-
-        temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
-        with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
-            temporary_file_path.write_bytes(data=file_stream.read())
-
-        self._run_extraction(file_path=temporary_file_path)
-
-        # Record final success and cleanup
-        with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{s3_url}\n")
-        temporary_file_path.unlink()
-
-    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
-        absolute_script_path = str(self._relative_script_path.absolute())
-        absolute_file_path = str(file_path.absolute())
-
-        gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
-        _deploy_subprocess(
-            command=gawk_command,
-            environment_variables=self._awk_env,
-            error_message=f"Extraction failed on {file_path}.",
-        )
+    # def _extract_s3_url(self, s3_url: str) -> None:
+    #     if self.stop_file_path.exists():
+    #         return
+    #
+    #     # Record the start of the extraction step
+    #     with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
+    #         file_stream.write(f"{s3_url}\n")
+    #
+    #     temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
+    #     with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
+    #         temporary_file_path.write_bytes(data=file_stream.read())
+    #
+    #     self._run_extraction(file_path=temporary_file_path)
+    #
+    #     # Record final success and cleanup
+    #     with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
+    #         file_stream.write(f"{s3_url}\n")
+    #     temporary_file_path.unlink()
+    #
+    # def _run_extraction(self, *, file_path: pathlib.Path) -> None:
+    #     absolute_script_path = str(self._relative_script_path.absolute())
+    #     absolute_file_path = str(file_path.absolute())
+    #
+    #     gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
+    #     _deploy_subprocess(
+    #         command=gawk_command,
+    #         environment_variables=self._awk_env,
+    #         error_message=f"Extraction failed on {file_path}.",
+    #     )
 
     def _update_records(self) -> None:
         pass
@@ -346,3 +363,40 @@ class RemoteS3LogAccessExtractor:
         parsed_file_path.unlink(missing_ok=True)
         with parsed_file_path.open(mode="w") as file_stream:
             json.dump(obj=dict(manifest), fp=file_stream)
+
+
+def _extract_s3_url(
+    *,
+    s3_url: str,
+    stop_file_path,
+    temporary_directory,
+    s3_url_processing_start_record_file_path,
+    s3_url_processing_end_record_file_path,
+    absolute_script_path,  # str(self._relative_script_path.absolute())
+    gawk_base,
+    gawk_environment,  # self._awk_env
+) -> None:
+    if stop_file_path.exists():
+        return
+
+    # Record the start of the extraction step
+    with s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
+        file_stream.write(f"{s3_url}\n")
+
+    temporary_file_path = temporary_directory / s3_url.split("/")[-1]
+    with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
+        temporary_file_path.write_bytes(data=file_stream.read())
+
+    absolute_file_path = str(temporary_file_path.absolute())
+
+    gawk_command = f"{gawk_base} --file {absolute_script_path} {absolute_file_path}"
+    _deploy_subprocess(
+        command=gawk_command,
+        environment_variables=gawk_environment,
+        error_message=f"Extraction failed on {absolute_file_path}.",
+    )
+
+    # Record final success and cleanup
+    with s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
+        file_stream.write(f"{s3_url}\n")
+    temporary_file_path.unlink()

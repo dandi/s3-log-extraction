@@ -59,7 +59,7 @@ class S3LogAccessExtractor:
                 self.file_processing_end_record.keys()
             )
         if len(file_processing_record_difference) > 0:
-            # TODO: an advanced feature for the future could be looking at the timestamp of the 'started' log
+            # IDEA: an advanced feature for the future could be looking at the timestamp of the 'started' log
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
             message = (
                 "\nRecord corruption from previous run detected - "
