@@ -107,13 +107,13 @@ class RemoteS3LogAccessExtractor:
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                for batch_index, batch_slice in enumerate(batches):
+                for batch_index, batch in enumerate(batches):
                     tqdm_style_kwargs["desc"] = (
                         f"Running extraction on remote S3 logs (batch {batch_index+1} of {number_of_batches})"
                     )
                     list(
                         tqdm.tqdm(
-                            iterable=executor.map(self._extract_s3_url, s3_urls_to_extract[batch_slice]),
+                            iterable=executor.map(self._extract_s3_url, batch),
                             **tqdm_style_kwargs,
                         )
                     )
