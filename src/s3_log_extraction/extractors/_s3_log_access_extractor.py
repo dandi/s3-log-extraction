@@ -112,7 +112,7 @@ class S3LogAccessExtractor:
 
         tqdm_style_kwargs = {
             "total": len(files_to_extract),
-            "desc": "Running extraction on S3 logs: ",
+            "desc": "Running extraction on S3 logs",
             "unit": "files",
             "smoothing": 0,
         }

@@ -1,6 +1,7 @@
 import collections
 import concurrent.futures
 import json
+import math
 import pathlib
 import random
 import shutil
@@ -8,8 +9,6 @@ import sys
 import tempfile
 
 import fsspec
-
-# import fsspec
 import tqdm
 import yaml
 
@@ -75,18 +74,13 @@ class RemoteS3LogAccessExtractor:
             with self.processed_months_per_year_record_file_path.open(mode="r") as file_stream:
                 self.processed_months_per_year = yaml.safe_load(stream=file_stream)
 
-        self.processed_dates: dict[str, bool] = dict()
-        self.processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
-        if self.processed_dates_record_file_path.exists():
-            with self.processed_dates_record_file_path.open(mode="r") as file_stream:
-                self.processed_dates = yaml.safe_load(stream=file_stream)
-
     def extract_s3_bucket(
         self,
         *,
         s3_root: str,
         limit: int | None = None,
         workers: int = -2,
+        batch_size: int = 100_000,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
         _handle_aws_credentials()
@@ -99,29 +93,48 @@ class RemoteS3LogAccessExtractor:
 
         tqdm_style_kwargs = {
             "total": len(s3_urls_to_extract),
-            "desc": "Running extraction on remote S3 logs: ",
+            "desc": "Running extraction on remote S3 logs",
             "unit": "files",
             "smoothing": 0,
-            "leave": True,
+            "leave": False,
         }
         if max_workers == 1:
             for s3_url in tqdm.tqdm(iterable=s3_urls_to_extract, **tqdm_style_kwargs):
                 self._extract_s3_url(s3_url=s3_url)
         else:
-            print("\nDeploying tasks...\n\n")
+            number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
+            batches = [
+                s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
+            ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                list(tqdm.tqdm(iterable=executor.map(self._extract_s3_url, s3_urls_to_extract), **tqdm_style_kwargs))
+                for batch_index, batch_slice in enumerate(batches):
+                    tqdm_style_kwargs["desc"] = (
+                        f"Running extraction on remote S3 logs (batch {batch_index+1} of {number_of_batches})"
+                    )
+                    list(
+                        tqdm.tqdm(
+                            iterable=executor.map(self._extract_s3_url, s3_urls_to_extract[batch_slice]),
+                            **tqdm_style_kwargs,
+                        )
+                    )
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
+        self.processed_dates: dict[str, bool] = dict()
+        processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
+        if processed_dates_record_file_path.exists():
+            with processed_dates_record_file_path.open(mode="r") as file_stream:
+                self.processed_dates = yaml.safe_load(stream=file_stream)
+
         unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
             manifest_file_path=manifest_file_path, s3_root=s3_root
         )
         unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
-
         unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
+
+        del self.processed_dates  # Free memory
 
         # Randomize the order of the remote files for the progress bar to be more accurate
         random.shuffle(x=unprocessed_s3_urls)
@@ -281,7 +294,7 @@ class RemoteS3LogAccessExtractor:
         #     for month in months:
         #         processed_days_this_month = [
         #             processed_date
-        #             for processed_date in self.processed_dates.keys()
+        #             for processed_date in processed_dates.keys()
         #             if processed_date.startswith(f"{year}-{month}-")
         #         ]
         #         total_days_this_month = calendar.monthrange(int(year), int(month))[1]
