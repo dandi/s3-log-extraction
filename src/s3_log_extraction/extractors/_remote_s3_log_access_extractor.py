@@ -88,6 +88,7 @@ class RemoteS3LogAccessExtractor:
 
         unprocessed_s3_urls = self._get_unprocessed_s3_urls(manifest_file_path=manifest_file_path, s3_root=s3_root)
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
+        del unprocessed_s3_urls  # Free memory
 
         tqdm_style_kwargs = {
             "total": len(s3_urls_to_extract),
@@ -106,6 +107,8 @@ class RemoteS3LogAccessExtractor:
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
+            del s3_urls_to_extract  # Free memory
+
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 for batch_index, batch in enumerate(batches):
                     if self.stop_file_path.exists():
