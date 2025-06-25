@@ -42,7 +42,7 @@ def stop_extraction(cache_directory: str | pathlib.Path | None = None, max_timeo
     stop_file_path = extraction_directory / _STOP_EXTRACTION_FILE_NAME
     stop_file_path.touch()
 
-    update_delay_in_seconds = 10
+    update_delay_in_seconds = 5
     time_so_far_in_seconds = 0
     while time_so_far_in_seconds < max_timeout_in_seconds:
         if any(get_running_pids()):
