@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 import fsspec
+import psutil
 import tqdm
 import yaml
 
@@ -379,6 +380,9 @@ def _extract_s3_url(
     if stop_file_path.exists():
         return
 
+    print_memory_usage()
+    return
+
     # Record the start of the extraction step
     with s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
         file_stream.write(f"{s3_url}\n")
@@ -400,3 +404,15 @@ def _extract_s3_url(
     with s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
         file_stream.write(f"{s3_url}\n")
     temporary_file_path.unlink()
+
+
+def print_memory_usage():
+    process = psutil.Process()
+    mem_info = process.memory_info()
+    print(f"[MEM] RSS: {mem_info.rss / (1024 ** 2):.2f} MB, VMS: {mem_info.vms / (1024 ** 2):.2f} MB")
+    for var_name, value in locals().items():
+        try:
+            size = sys.getsizeof(value)
+        except Exception:
+            size = "N/A"
+        print(f"[MEM] {var_name}: {size} bytes ({type(value)})")
