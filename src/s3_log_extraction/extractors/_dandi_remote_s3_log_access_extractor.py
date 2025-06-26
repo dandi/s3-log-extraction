@@ -1,14 +1,14 @@
 import pathlib
 import sys
 
-from ._s3_log_access_extractor import S3LogAccessExtractor
+from ._remote_s3_log_access_extractor import RemoteS3LogAccessExtractor
 from .._regex import DROGON_IP_REGEX_ENCRYPTED
 from ..encryption_utils import decrypt_bytes
 
 
-class DandiS3LogAccessExtractor(S3LogAccessExtractor):
+class DandiRemoteS3LogAccessExtractor(RemoteS3LogAccessExtractor):
     """
-    A DANDI-specific extractor of basic access information contained in raw S3 logs.
+    A DANDI-specific extractor of basic access information contained in remotely stored raw S3 logs.
 
     This class is not a full parser of all fields but instead is optimized for targeting the most relevant
     information for reporting summaries of access.

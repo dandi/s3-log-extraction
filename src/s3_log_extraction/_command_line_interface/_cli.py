@@ -6,7 +6,13 @@ import typing
 import click
 
 from ..config import reset_extraction, set_cache_directory
-from ..extractors import DandiS3LogAccessExtractor, RemoteS3LogAccessExtractor, S3LogAccessExtractor, stop_extraction
+from ..extractors import (
+    DandiRemoteS3LogAccessExtractor,
+    DandiS3LogAccessExtractor,
+    RemoteS3LogAccessExtractor,
+    S3LogAccessExtractor,
+    stop_extraction,
+)
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
     generate_all_dandiset_summaries,
@@ -52,7 +58,7 @@ def _s3logextraction_cli():
         "By default, objects will be processed using the generic structure."
     ),
     required=False,
-    type=click.Choice(choices=["dandi", "dandi-remote"]),
+    type=click.Choice(choices=["remote", "dandi", "dandi-remote"]),
     default=None,
 )
 @click.option(
@@ -71,7 +77,7 @@ def _extract_cli(
     directory: str,
     limit: int | None = None,
     workers: int = -2,
-    mode: typing.Literal["dandi", "dandi-remote"] | None = None,
+    mode: typing.Literal["remote", "dandi", "dandi-remote"] | None = None,
     manifest_file_path: str | None = None,
 ) -> None:
     """
@@ -83,17 +89,23 @@ def _extract_cli(
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
     match mode:
+        case "remote":
+            extractor = RemoteS3LogAccessExtractor()
+            extractor.extract_s3_bucket(
+                s3_root=directory,
+                limit=limit,
+                workers=workers,
+                manifest_file_path=manifest_file_path,
+            )
         case "dandi":
             extractor = DandiS3LogAccessExtractor()
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
         case "dandi-remote":
-            extractor = RemoteS3LogAccessExtractor()
-            extractor.extract_s3(
-                s3_url=directory,
-                date_limit=limit,
-                file_limit=limit,
+            extractor = DandiRemoteS3LogAccessExtractor()
+            extractor.extract_s3_bucket(
+                s3_root=directory,
+                limit=limit,
                 workers=workers,
-                mode="dandi",
                 manifest_file_path=manifest_file_path,
             )
         case _:
