@@ -5,7 +5,7 @@ import typing
 
 import click
 
-from ..config import reset_extraction, set_cache_directory
+from ..config import get_summary_directory, reset_extraction, set_cache_directory
 from ..extractors import (
     DandiRemoteS3LogAccessExtractor,
     DandiS3LogAccessExtractor,
@@ -17,6 +17,8 @@ from ..ip_utils import index_ips, update_index_to_region_codes, update_region_co
 from ..summarize import (
     generate_all_dandiset_summaries,
     generate_all_dandiset_totals,
+    generate_all_dataset_summaries,
+    generate_all_dataset_totals,
     generate_archive_summaries,
     generate_archive_totals,
 )
@@ -215,6 +217,7 @@ def _update_ip_coordinates_cli() -> None:
     "--mode",
     help=(
         "Generate condensed summaries of activity across the extracted data per object key. "
+        "Defaults to grouping summaries by top level prefix."
         "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
         "Mode 'archive' aggregates over all dataset summaries."
     ),
@@ -225,17 +228,14 @@ def _update_ip_coordinates_cli() -> None:
 def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
     """
     Generate condensed summaries of activity.
-
-    TODO
     """
     match mode:
         case "dandi":
             generate_all_dandiset_summaries()
         case "archive":
-            generate_archive_summaries()
+            generate_archive_summaries(get_summary_directory())
         case _:
-            message = "The generic mode is not yet implemented - please raise an issue to discuss."
-            click.echo(message=message, err=True)
+            generate_all_dataset_summaries()
 
 
 # s3logextraction update totals
@@ -256,10 +256,9 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
         case "dandi":
             generate_all_dandiset_totals()
         case "archive":
-            generate_archive_totals()
+            generate_archive_totals(get_summary_directory())
         case _:
-            message = "The generic mode is not yet implemented - please raise an issue to discuss."
-            click.echo(message=message, err=True)
+            generate_all_dataset_totals()
 
 
 # s3logextraction testing

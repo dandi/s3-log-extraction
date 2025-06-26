@@ -104,7 +104,9 @@ class S3LogAccessExtractor:
         max_workers = _handle_max_workers(workers=workers)
 
         all_log_files = {
-            str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
+            str(file_path.absolute())
+            for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
+            if file_path.is_file()
         }
         unextracted_files = all_log_files - set(self.file_processing_end_record.keys())
 
