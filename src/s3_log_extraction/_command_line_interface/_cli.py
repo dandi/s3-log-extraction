@@ -7,9 +7,6 @@ import click
 
 <<<<<<< enh/directory_based_totals
 from ..config import get_summary_directory, reset_extraction, set_cache_directory
-from ..extractors import DandiS3LogAccessExtractor, RemoteS3LogAccessExtractor, S3LogAccessExtractor, stop_extraction
-=======
-from ..config import reset_extraction, set_cache_directory
 from ..extractors import (
     DandiRemoteS3LogAccessExtractor,
     DandiS3LogAccessExtractor,
