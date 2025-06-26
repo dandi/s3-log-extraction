@@ -90,34 +90,39 @@ class RemoteS3LogAccessExtractor:
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
         tqdm_style_kwargs = {
-            "total": len(s3_urls_to_extract),
             "desc": "Running extraction on remote S3 logs",
             "unit": "files",
             "smoothing": 0,
-            "leave": True,
         }
         if max_workers == 1:
-            for s3_url in tqdm.tqdm(iterable=s3_urls_to_extract, **tqdm_style_kwargs):
+            for s3_url in tqdm.tqdm(
+                iterable=s3_urls_to_extract, total=len(s3_urls_to_extract), leave=True, **tqdm_style_kwargs
+            ):
                 self._extract_s3_url(s3_url=s3_url)
         else:
-            tqdm_style_kwargs["leave"] = False
-
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                for batch_index, batch in enumerate(batches):
+                for batch in tqdm.tqdm(
+                    iterable=batches,
+                    total=len(batches),
+                    desc="Extracting in batches",
+                    unit="batches",
+                    smoothing=0,
+                    position=0,
+                    leave=True,
+                ):
                     if self.stop_file_path.exists():
                         return
 
-                    tqdm_style_kwargs["desc"] = (
-                        f"Running extraction on remote S3 logs (batch {batch_index+1} of {number_of_batches})"
-                    )
                     tqdm_style_kwargs["total"] = len(batch)
                     list(
                         tqdm.tqdm(
                             iterable=executor.map(self._extract_s3_url, batch),
+                            position=1,
+                            leave=False,
                             **tqdm_style_kwargs,
                         )
                     )
