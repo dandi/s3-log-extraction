@@ -2,20 +2,24 @@ import json
 import pathlib
 
 import pandas
+import pydantic
+
+from ..config import get_summary_directory
 
 
+@pydantic.validate_call
 def generate_all_dandiset_totals(
-    summary_directory: str | pathlib.Path,
+    summary_directory: str | pathlib.Path | None = None,
 ) -> None:
     """
-    Generate top-level totals of summarized access activity for all dandisets.
+    Generate top-level totals of summarized access activity for all Dandisets.
 
     Parameters
     ----------
     summary_directory : pathlib.Path
-        Path to the folder containing all Dandiset summaries of the S3 access logs.
+        Path to the folder containing all previously generated summaries of the S3 access logs.
     """
-    summary_directory = pathlib.Path(summary_directory)
+    summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
 
     # TODO: record progress over
 

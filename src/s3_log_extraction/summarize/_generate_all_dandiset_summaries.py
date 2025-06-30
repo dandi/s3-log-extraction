@@ -4,6 +4,7 @@ import pathlib
 
 import dandi.dandiapi
 import pandas
+import pydantic
 import tqdm
 import yaml
 
@@ -11,13 +12,22 @@ from ..config import get_cache_directory, get_extraction_directory, get_summary_
 from ..ip_utils import load_ip_cache
 
 
-def generate_all_dandiset_summaries() -> None:
-    client = dandi.dandiapi.DandiAPIClient()
+@pydantic.validate_call
+def generate_all_dandiset_summaries(summary_directory: str | pathlib.Path | None = None) -> None:
+    """
+    Generate top-level summaries of access activity for all Dandisets.
 
-    summary_directory = get_summary_directory()
+    Parameters
+    ----------
+    summary_directory : pathlib.Path
+        Path to the folder that will contain all Dandiset summaries of the S3 access logs.
+    """
+    summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
+
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
+    client = dandi.dandiapi.DandiAPIClient()
     dandiset_id_to_asset_directories, blob_id_to_asset_path = (
         _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(client=client)
     )
