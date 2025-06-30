@@ -77,7 +77,7 @@ class S3LogAccessExtractor:
         directory: str | pathlib.Path,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 100_000,
+        batch_size: int = 50_000,
     ) -> None:
         directory = pathlib.Path(directory)
         max_workers = _handle_max_workers(workers=workers)

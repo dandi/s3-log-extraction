@@ -81,7 +81,7 @@ class RemoteS3LogAccessExtractor:
         s3_root: str,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 100_000,
+        batch_size: int = 50_000,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
         _handle_aws_credentials()
@@ -120,6 +120,7 @@ class RemoteS3LogAccessExtractor:
                     leave=True,
                 ):
                     if self.stop_file_path.exists():
+                        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
                         return
 
                     tqdm_style_kwargs["total"] = len(batch)
@@ -282,9 +283,16 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
 
-    def _extract_s3_url(self, s3_url: str, disable_stop: bool = True) -> None:
+    def _extract_s3_url(
+        self, s3_url: str, disable_stop: bool = True, extraction_directory: pathlib.Path | None = None
+    ) -> None:
         if disable_stop is False and self.stop_file_path.exists():
             return
+
+        # Should only be utilized during parallel mode
+        if extraction_directory is not None:
+            extraction_directory = self.temporary_directory / os.getpid()
+            extraction_directory.mkdir(exist_ok=True)
 
         # Record the start of the extraction step
         with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
@@ -294,14 +302,17 @@ class RemoteS3LogAccessExtractor:
         with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
             temporary_file_path.write_bytes(data=file_stream.read())
 
-        self._run_extraction(file_path=temporary_file_path)
+        self._run_extraction(file_path=temporary_file_path, extraction_directory=extraction_directory)
 
         # Record final success and cleanup
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{s3_url}\n")
         temporary_file_path.unlink()
 
-    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
+    def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
+        if extraction_directory is not None:
+            self._awk_env["EXTRACTION_DIRECTORY"] = str(extraction_directory)
+
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
