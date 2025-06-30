@@ -81,7 +81,7 @@ class RemoteS3LogAccessExtractor:
         s3_root: str,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 50_000,
+        batch_size: int = 20_000,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
         _handle_aws_credentials()
