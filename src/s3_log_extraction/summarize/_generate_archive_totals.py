@@ -24,7 +24,7 @@ def generate_archive_totals(
     summary_file_path = summary_directory / "archive_summary_by_region.tsv"
     summary = pandas.read_table(filepath_or_buffer=summary_file_path)
 
-    unique_countries = {}
+    unique_countries = dict()
     for region in summary["region"]:
         if region in ["VPN", "GitHub", "unknown"]:
             continue
