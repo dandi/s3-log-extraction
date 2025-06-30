@@ -121,7 +121,7 @@ class RemoteS3LogAccessExtractor:
 
                     tqdm_style_kwargs["total"] = len(batch)
                     futures = [
-                        executor.submit(self._extract_s3_url, s3_url=s3_url, disable_stop=True, parallel=True)
+                        executor.submit(self._extract_s3_url, s3_url=s3_url, disable_stop=True, parallel_mode=True)
                         for s3_url in batch
                     ]
                     for _ in tqdm.tqdm(
