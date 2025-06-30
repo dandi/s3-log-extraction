@@ -100,15 +100,15 @@ class S3LogAccessExtractor:
             for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
                 self.extract_file(file_path=file_path, disable_stop=False)
         else:
-            pid_specific_extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
-            pid_specific_extraction_directory.mkdir(exist_ok=True)
-            self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
-
             number_of_batches = math.ceil(len(files_to_extract) / batch_size)
             batches = [
                 files_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                pid_specific_extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
+                pid_specific_extraction_directory.mkdir(exist_ok=True)
+                self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
+
                 for batch in tqdm.tqdm(
                     iterable=batches,
                     total=len(batches),

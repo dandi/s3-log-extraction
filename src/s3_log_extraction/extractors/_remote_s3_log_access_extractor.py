@@ -101,15 +101,15 @@ class RemoteS3LogAccessExtractor:
             ):
                 self._extract_s3_url(s3_url=s3_url, disable_stop=False)
         else:
-            pid_specific_extraction_directory = self.temporary_directory / f"pid-{os.getpid()}"
-            pid_specific_extraction_directory.mkdir(exist_ok=True)
-            self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
-
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                pid_specific_extraction_directory = self.temporary_directory / f"pid-{os.getpid()}"
+                pid_specific_extraction_directory.mkdir(exist_ok=True)
+                self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
+
                 for batch in tqdm.tqdm(
                     iterable=batches,
                     total=len(batches),
