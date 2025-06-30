@@ -10,51 +10,79 @@ packages = ["src/s3_log_extraction"]
 
 [project]
 name = "s3-log-extraction"
-version="1.1.0"
+version="1.1.1"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
 description = "Fast extraction of access summary data for S3 logs."
 readme = "README.md"
-keywords = ["aws", "s3", "log", "download tracking", "geolocation"]
-license = {file = "license.txt"}
+keywords = [
+    "AWS",
+    "S3",
+    "logging",
+    "access stats",
+    "usage analysis",
+    "download tracking",
+    "geolocation",
+    "open data",
+]
+license = {file = "LICENSE.txt"}
 requires-python = ">=3.12"
 dependencies = [
     "pandas",
     "tqdm",
-    "ipinfo",
-    "opencage",
     "PyYAML",
     "click",
     "natsort",
-    "dandi",
     "psutil",
     "cryptography",
 ]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: BSD License",
     "Intended Audience :: Developers",
     "Operating System :: Unix",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "License :: OSI Approved :: MIT License",
 ]
+
+[project.urls]
+Homepage = "https://dandi.github.io/access-page/"
+Documentation = "https://github.com/dandi/s3-log-extraction/blob/master/README.md"
+Repository = "https://github.com/dandi/s3-log-extraction/"
+Issues = "https://github.com/dandi/s3-log-extraction/issues"
+Changelog = "https://github.com/dandi/s3-log-extraction/blob/master/CHANGELOG.md"
 
 [project.scripts]
 s3logextraction = "s3_log_extraction._command_line_interface._cli:_s3logextraction_cli"
 
 [project.optional-dependencies]
+geolocation = [
+    "ipinfo",
+    "opencage",
+]
 remote = [
     "fsspec",
     "s3fs",
     "s5cmd",
 ]
-dev = [
-    "pytest-cov",
-    "pytest-env",
-    "ipython<9.0.0",  # coloriaze error in pycharm
-    "pre-commit",
+dandi = [
+    "dandi",
 ]
-all = ["s3_log_extraction[dev,remote]"]
+all = ["s3_log_extraction[geolocation,remote,dandi]"]
+
+[dependency-groups]
+test = ["pytest"]
+coverage = ["pytest-cov", "pytest-env"]
+dev = ["ipython", "pre-commit"]
+all = [
+    {include-group = "test"},
+    {include-group = "coverage"},
+    {include-group = "dev"}
+]
 
 
 

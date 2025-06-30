@@ -23,6 +23,7 @@ def _request_cidr_range(service_name: str) -> dict:
             raise NotImplementedError("Azure CIDR address fetching is not yet implemented!")
         case "VPN":
             # Very nice public and maintained listing! Hope this stays stable.
+            # As of 6/29/
             vpn_cidr_request = (
                 requests.get(
                     url="https://raw.githubusercontent.com/josephrocca/is-vpn/main/vpn-or-datacenter-ipv4-ranges.txt"
