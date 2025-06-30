@@ -20,8 +20,10 @@ def generate_archive_totals(
         Path to the folder containing all previously generated summaries of the S3 access logs.
     """
     summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
+    archive_directory = summary_directory / "archive_summaries"
+    archive_directory.mkdir(exist_ok=True)
 
-    summary_file_path = summary_directory / "archive_summary_by_region.tsv"
+    summary_file_path = archive_directory / "by_region.tsv"
     summary = pandas.read_table(filepath_or_buffer=summary_file_path)
 
     unique_countries = dict()

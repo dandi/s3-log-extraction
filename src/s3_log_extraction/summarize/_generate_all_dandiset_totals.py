@@ -8,7 +8,7 @@ from ..config import get_summary_directory
 
 
 @pydantic.validate_call
-def generate_all_dandiset_totals(
+def generate_dandiset_totals(
     summary_directory: str | pathlib.Path | None = None,
 ) -> None:
     """
@@ -51,6 +51,6 @@ def generate_all_dandiset_totals(
             "number_of_unique_countries": number_of_unique_countries,
         }
 
-    top_level_summary_file_path = summary_directory / "all_dandiset_totals.json"
+    top_level_summary_file_path = summary_directory / "totals.json"
     with top_level_summary_file_path.open(mode="w") as io:
         json.dump(obj=all_dandiset_totals, fp=io)

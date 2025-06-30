@@ -13,7 +13,7 @@ from ..ip_utils import load_ip_cache
 
 
 @pydantic.validate_call
-def generate_all_dandiset_summaries(summary_directory: str | pathlib.Path | None = None) -> None:
+def generate_dandiset_summaries(summary_directory: str | pathlib.Path | None = None) -> None:
     """
     Generate top-level summaries of access activity for all Dandisets.
 
