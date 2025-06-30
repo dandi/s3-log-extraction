@@ -99,17 +99,13 @@ class RemoteS3LogAccessExtractor:
             for s3_url in tqdm.tqdm(
                 iterable=s3_urls_to_extract, total=len(s3_urls_to_extract), leave=True, **tqdm_style_kwargs
             ):
-                self._extract_s3_url(s3_url=s3_url, disable_stop=False)
+                self._extract_s3_url(s3_url=s3_url)
         else:
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
             ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                pid_specific_extraction_directory = self.temporary_directory / f"pid-{os.getpid()}"
-                pid_specific_extraction_directory.mkdir(exist_ok=True)
-                self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
-
                 for batch in tqdm.tqdm(
                     iterable=batches,
                     total=len(batches),
@@ -124,25 +120,27 @@ class RemoteS3LogAccessExtractor:
                         return
 
                     tqdm_style_kwargs["total"] = len(batch)
-                    list(
-                        tqdm.tqdm(
-                            iterable=executor.map(self._extract_s3_url, batch),
-                            position=1,
-                            leave=False,
-                            **tqdm_style_kwargs,
-                        )
-                    )
+                    futures = [
+                        executor.submit(self._extract_s3_url, s3_url=s3_url, disable_stop=True, parallel=True)
+                        for s3_url in batch
+                    ]
+                    for _ in tqdm.tqdm(
+                        iterable=concurrent.futures.as_completed(futures),
+                        position=1,
+                        leave=False,
+                        **tqdm_style_kwargs,
+                    ):
+                        pass
 
-                    for file_path in pid_specific_extraction_directory.rglob(pattern="*.txt"):
-                        relative_file_path = file_path.relative_to(pid_specific_extraction_directory)
-                        destination_file_path = self.extraction_directory / relative_file_path
+                    for file_path in self.temporary_directory.rglob(pattern="*.txt"):
+                        relative_file_path = file_path.relative_to(self.temporary_directory).parts[1:]
+                        destination_file_path = self.extraction_directory / pathlib.Path(*relative_file_path)
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                         content = file_path.read_bytes()
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
                         file_path.unlink()
-            shutil.rmtree(path=pid_specific_extraction_directory)
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
@@ -284,13 +282,17 @@ class RemoteS3LogAccessExtractor:
         return unprocessed_s3_urls
 
     def _extract_s3_url(
-        self, s3_url: str, disable_stop: bool = True, extraction_directory: pathlib.Path | None = None
+        self,
+        s3_url: str,
+        disable_stop: bool = False,
+        parallel_mode: bool = False,
     ) -> None:
         if disable_stop is False and self.stop_file_path.exists():
             return
 
-        # Should only be utilized during parallel mode
-        if extraction_directory is not None:
+        # Wish I didn't have to ensure this per job
+        extraction_directory = None
+        if parallel_mode is True:
             extraction_directory = self.temporary_directory / os.getpid()
             extraction_directory.mkdir(exist_ok=True)
 
