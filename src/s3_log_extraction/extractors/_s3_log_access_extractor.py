@@ -101,7 +101,7 @@ class S3LogAccessExtractor:
         }
         if max_workers == 1:
             for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
-                self.extract_file(file_path=file_path, disable_stop=False)
+                self.extract_file(file_path=file_path)
         else:
             number_of_batches = math.ceil(len(files_to_extract) / batch_size)
             batches = [
