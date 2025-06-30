@@ -121,7 +121,7 @@ class RemoteS3LogAccessExtractor:
 
                     tqdm_style_kwargs["total"] = len(batch)
                     futures = [
-                        executor.submit(self._extract_s3_url, s3_url=s3_url, disable_stop=True, parallel_mode=True)
+                        executor.submit(self._extract_s3_url, s3_url=s3_url, enable_stop=False, parallel_mode=True)
                         for s3_url in batch
                     ]
                     for _ in tqdm.tqdm(
@@ -132,18 +132,28 @@ class RemoteS3LogAccessExtractor:
                     ):
                         pass
 
-                    for file_path in self.temporary_directory.rglob(pattern="*.txt"):
-                        relative_file_path = file_path.relative_to(self.temporary_directory).parts[1:]
-                        destination_file_path = self.extraction_directory / pathlib.Path(*relative_file_path)
+                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    for file_path in tqdm.tqdm(
+                        iterable=files_to_copy,
+                        total=len(files_to_copy),
+                        desc="Copying files from child processes",
+                        unit="files",
+                        smoothing=0,
+                        position=1,
+                        leave=False,
+                    ):
+                        relative_parts = file_path.relative_to(self.temporary_directory).parts[1:]
+                        relative_file_path = pathlib.Path(*relative_parts)
+                        destination_file_path = self.extraction_directory / relative_file_path
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                         content = file_path.read_bytes()
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
-                        file_path.unlink()
+                        # file_path.unlink()
 
         self._update_records()
-        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+        # shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
         self._get_end_record_and_check_consistency()
@@ -284,10 +294,10 @@ class RemoteS3LogAccessExtractor:
     def _extract_s3_url(
         self,
         s3_url: str,
-        disable_stop: bool = False,
+        enable_stop: bool = True,
         parallel_mode: bool = False,
     ) -> None:
-        if disable_stop is False and self.stop_file_path.exists():
+        if enable_stop is True and self.stop_file_path.exists():
             return
 
         # Wish I didn't have to ensure this per job
@@ -309,7 +319,7 @@ class RemoteS3LogAccessExtractor:
         # Record final success and cleanup
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{s3_url}\n")
-        temporary_file_path.unlink()
+        # temporary_file_path.unlink()
 
     def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
         if extraction_directory is not None:
