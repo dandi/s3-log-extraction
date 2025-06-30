@@ -24,9 +24,7 @@ def load_index_to_ip() -> dict[int, str]:
             file_stream.write(empty_encrypted_content)
         return {}
 
-    with ips_index_cache_file_path.open(mode="rb") as file_stream:
-        encrypted_content = file_stream.read()
-
+    encrypted_content = ips_index_cache_file_path.read_bytes()
     decrypted_content = decrypt_bytes(encrypted_data=encrypted_content)
 
     index_to_ip = yaml.safe_load(stream=decrypted_content) or {}
@@ -47,9 +45,7 @@ def save_index_to_ip(*, index_to_ip: dict[int, str]) -> None:
 
     data = yaml.dump(data=index_to_ip).encode(encoding="utf-8")
     encrypted_content = encrypt_bytes(data=data)
-
-    with ip_index_cache_file_path.open(mode="wb") as file_stream:
-        file_stream.write(encrypted_content)
+    ip_index_cache_file_path.write_bytes(data=encrypted_content)
 
 
 def load_ip_cache(

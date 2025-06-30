@@ -4,6 +4,7 @@ import os
 import typing
 
 import click
+import pydantic
 
 from ..config import reset_extraction, set_cache_directory
 from ..extractors import (
@@ -21,6 +22,12 @@ from ..summarize import (
     generate_archive_totals,
 )
 from ..testing import generate_benchmark
+from ..validate import (
+    ExtractionHeuristicPreValidator,
+    HttpEmptySplitPreValidator,
+    HttpSplitCountPreValidator,
+    TimestampsParsingPreValidator,
+)
 
 
 # s3logextraction
@@ -286,3 +293,30 @@ def _generate_benchmark_cli(directory: str) -> None:
     DIRECTORY : The path to the folder where the benchmark will be stored.
     """
     generate_benchmark(directory=directory)
+
+
+# s3logextraction validate < protocol > < directory >
+@_s3logextraction_cli.command(name="validate")
+@click.argument(
+    "protocol",
+    type=click.Choice(["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]),
+)
+@click.argument("directory", type=click.Path(writable=False))
+def _validate_cli(
+    protocol: typing.Literal["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"],
+    directory: pydantic.DirectoryPath,
+) -> None:
+    """Run a pre-validation protocol."""
+    match protocol:
+        case "http_empty_split":
+            validator = HttpEmptySplitPreValidator()
+            validator.validate_directory(directory=directory)
+        case "http_split_count":
+            validator = HttpSplitCountPreValidator()
+            validator.validate_directory(directory=directory)
+        case "extraction_heuristic":
+            validator = ExtractionHeuristicPreValidator()
+            validator.validate_directory(directory=directory)
+        case "timestamps_parsing":
+            validator = TimestampsParsingPreValidator()
+            validator.validate_directory(directory=directory)

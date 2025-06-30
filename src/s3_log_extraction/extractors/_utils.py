@@ -49,11 +49,6 @@ def _handle_max_workers(*, workers: int) -> int:
         warnings.warn(message=message, stacklevel=2)
         workers = -2
 
-    if workers != 1 and sys.platform == "win32":
-        message = "Parallelism is not supported on Windows - forcing the number of workers to 1."
-        warnings.warn(message=message, stacklevel=2)
-        workers = 1
-
     cpu_count = os.cpu_count()
     if workers < 0:
         max_workers = workers % cpu_count + 1

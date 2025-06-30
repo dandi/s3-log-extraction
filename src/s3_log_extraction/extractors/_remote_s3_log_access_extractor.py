@@ -2,6 +2,7 @@ import collections
 import concurrent.futures
 import json
 import math
+import os
 import pathlib
 import random
 import shutil
@@ -80,7 +81,7 @@ class RemoteS3LogAccessExtractor:
         s3_root: str,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 100_000,
+        batch_size: int = 20_000,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
         _handle_aws_credentials()
@@ -115,17 +116,46 @@ class RemoteS3LogAccessExtractor:
                     leave=True,
                 ):
                     if self.stop_file_path.exists():
+                        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
                         return
 
                     tqdm_style_kwargs["total"] = len(batch)
-                    list(
-                        tqdm.tqdm(
-                            iterable=executor.map(self._extract_s3_url, batch),
-                            position=1,
-                            leave=False,
-                            **tqdm_style_kwargs,
-                        )
+                    futures = [
+                        executor.submit(self._extract_s3_url, s3_url=s3_url, enable_stop=False, parallel_mode=True)
+                        for s3_url in batch
+                    ]
+                    collections.deque(
+                        (
+                            future.result()
+                            for future in tqdm.tqdm(
+                                iterable=concurrent.futures.as_completed(futures),
+                                position=1,
+                                leave=False,
+                                **tqdm_style_kwargs,
+                            )
+                        ),
+                        maxlen=0,
                     )
+
+                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    for file_path in tqdm.tqdm(
+                        iterable=files_to_copy,
+                        total=len(files_to_copy),
+                        desc="Copying files from child processes",
+                        unit="files",
+                        smoothing=0,
+                        position=1,
+                        leave=False,
+                    ):
+                        relative_parts = file_path.relative_to(self.temporary_directory).parts[1:]
+                        relative_file_path = pathlib.Path(*relative_parts)
+                        destination_file_path = self.extraction_directory / relative_file_path
+                        destination_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        content = file_path.read_bytes()
+                        with destination_file_path.open(mode="ab") as file_stream:
+                            file_stream.write(content)
+                        file_path.unlink()
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
@@ -266,9 +296,20 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
 
-    def _extract_s3_url(self, s3_url: str) -> None:
-        if self.stop_file_path.exists():
+    def _extract_s3_url(
+        self,
+        s3_url: str,
+        enable_stop: bool = True,
+        parallel_mode: bool = False,
+    ) -> None:
+        if enable_stop is True and self.stop_file_path.exists():
             return
+
+        # Wish I didn't have to ensure this per job
+        extraction_directory = None
+        if parallel_mode is True:
+            extraction_directory = self.temporary_directory / str(os.getpid())
+            extraction_directory.mkdir(exist_ok=True)
 
         # Record the start of the extraction step
         with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
@@ -278,14 +319,17 @@ class RemoteS3LogAccessExtractor:
         with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
             temporary_file_path.write_bytes(data=file_stream.read())
 
-        self._run_extraction(file_path=temporary_file_path)
+        self._run_extraction(file_path=temporary_file_path, extraction_directory=extraction_directory)
 
         # Record final success and cleanup
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{s3_url}\n")
         temporary_file_path.unlink()
 
-    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
+    def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
+        if extraction_directory is not None:
+            self._awk_env["EXTRACTION_DIRECTORY"] = str(extraction_directory)
+
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
