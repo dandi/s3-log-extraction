@@ -137,7 +137,9 @@ class RemoteS3LogAccessExtractor:
                         maxlen=0,
                     )
 
-                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    files_to_copy = [
+                        path for path in self.temporary_directory.rglob(pattern="*.txt") if path.is_file() is True
+                    ]
                     for file_path in tqdm.tqdm(
                         iterable=files_to_copy,
                         total=len(files_to_copy),
