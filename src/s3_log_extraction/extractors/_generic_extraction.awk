@@ -37,7 +37,7 @@ BEGIN {
 
     datetime = pre_uri_fields[3]
     parsed_timestamp = \
-        substr(datetime, 11, 2) \  # Year
+        substr(datetime, 11, 2) \  # Last two digits of year
         MONTH_TO_NUMERIC[substr(datetime, 5, 3)] \  # Month
         substr(datetime, 2, 2) \  # Day
         substr(datetime, 14, 2) \  # Hour
