@@ -1,5 +1,7 @@
+import collections
 import concurrent.futures
 import math
+import os
 import pathlib
 import random
 import shutil
@@ -38,6 +40,7 @@ class S3LogAccessExtractor:
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_records_directory(cache_directory=self.cache_directory)
+        self.temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         class_name = self.__class__.__name__
         file_processing_start_record_file_name = f"{class_name}_file-processing-start.txt"
@@ -122,17 +125,35 @@ class S3LogAccessExtractor:
                         return
 
                     tqdm_style_kwargs["total"] = len(batch)
-                    list(
-                        tqdm.tqdm(
-                            iterable=executor.map(self.extract_file, batch),
-                            position=1,
-                            leave=False,
-                            **tqdm_style_kwargs,
-                        )
+                    futures = [
+                        executor.submit(self.extract_file, file_path=file_path, enable_stop=False, parallel_mode=True)
+                        for file_path in batch
+                    ]
+                    collections.deque(
+                        (
+                            future.result()
+                            for future in tqdm.tqdm(
+                                iterable=concurrent.futures.as_completed(futures),
+                                position=1,
+                                leave=False,
+                                **tqdm_style_kwargs,
+                            )
+                        ),
+                        maxlen=0,
                     )
 
-                    for file_path in pid_specific_extraction_directory.rglob(pattern="*.txt"):
-                        relative_file_path = file_path.relative_to(pid_specific_extraction_directory)
+                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    for file_path in tqdm.tqdm(
+                        iterable=files_to_copy,
+                        total=len(files_to_copy),
+                        desc="Copying files from child processes",
+                        unit="files",
+                        smoothing=0,
+                        position=1,
+                        leave=False,
+                    ):
+                        relative_parts = file_path.relative_to(self.temporary_directory).parts[1:]
+                        relative_file_path = pathlib.Path(*relative_parts)
                         destination_file_path = self.extraction_directory / relative_file_path
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -140,11 +161,20 @@ class S3LogAccessExtractor:
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
                         file_path.unlink()
-            shutil.rmtree(path=pid_specific_extraction_directory)
 
-    def extract_file(self, file_path: str | pathlib.Path, disable_stop: bool = True) -> None:
-        if disable_stop is False and self.stop_file_path.exists() is True:
+        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+
+    def extract_file(
+        self, file_path: str | pathlib.Path, enable_stop: bool = True, parallel_mode: bool = False
+    ) -> None:
+        if enable_stop is True and self.stop_file_path.exists() is True:
             return
+
+        # Wish I didn't have to ensure this per job
+        extraction_directory = None
+        if parallel_mode is True:
+            extraction_directory = self.temporary_directory / str(os.getpid())
+            extraction_directory.mkdir(exist_ok=True)
 
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
@@ -156,14 +186,17 @@ class S3LogAccessExtractor:
         with self.file_processing_start_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
-        self._run_extraction(file_path=file_path)
+        self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
 
         # Record final success and cleanup
         self.file_processing_end_record[absolute_file_path] = True
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
-    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
+    def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
+        if extraction_directory is not None:
+            self._awk_env["EXTRACTION_DIRECTORY"] = str(extraction_directory)
+
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
