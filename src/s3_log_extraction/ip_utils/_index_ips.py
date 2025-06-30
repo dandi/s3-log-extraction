@@ -1,3 +1,5 @@
+import random
+
 import numpy
 import numpy.random
 import tqdm
@@ -28,6 +30,8 @@ def index_ips(*, seed: int = None) -> None:
     indexed_ips = {ip for ip in index_to_ip.values()}
 
     full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
+    random.shuffle(full_ip_file_paths)
+
     for full_ip_file_path in tqdm.tqdm(
         iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="files", smoothing=0
     ):
@@ -54,12 +58,11 @@ def index_ips(*, seed: int = None) -> None:
             ip_to_index[ip] = new_index
             indexed_ips.update(ip_to_index)
 
-        full_indexed_ips = [f"{ip_to_index[ip]}\n" for ip in full_ips]
+        full_indexed_ips = [f"{ip_to_index[ip]}" for ip in full_ips]
 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
         indexed_ips_file_path.write_text("\n".join(full_indexed_ips))
 
-    # TODO: add validation for unexpected ip file combinations
     save_index_to_ip(index_to_ip=index_to_ip)
 
     # TODO: add delayed optional cleanup

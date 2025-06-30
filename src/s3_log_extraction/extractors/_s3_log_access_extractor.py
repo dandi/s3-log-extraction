@@ -1,6 +1,12 @@
+import collections
 import concurrent.futures
+import math
+import os
 import pathlib
+import random
+import shutil
 import sys
+import tempfile
 
 import natsort
 import tqdm
@@ -34,6 +40,7 @@ class S3LogAccessExtractor:
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_records_directory(cache_directory=self.cache_directory)
+        self.temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         class_name = self.__class__.__name__
         file_processing_start_record_file_name = f"{class_name}_file-processing-start.txt"
@@ -67,20 +74,107 @@ class S3LogAccessExtractor:
             )
             raise ValueError(message)
 
-    def _run_extraction(self, *, file_path: pathlib.Path) -> None:
-        absolute_script_path = str(self._relative_script_path.absolute())
-        absolute_file_path = str(file_path.absolute())
+    def extract_directory(
+        self,
+        *,
+        directory: str | pathlib.Path,
+        limit: int | None = None,
+        workers: int = -2,
+        batch_size: int = 20_000,
+    ) -> None:
+        directory = pathlib.Path(directory)
+        max_workers = _handle_max_workers(workers=workers)
 
-        gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
-        _deploy_subprocess(
-            command=gawk_command,
-            environment_variables=self._awk_env,
-            error_message=f"Extraction failed on {file_path}.",
-        )
+        all_log_files = {
+            str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
+        }
+        unextracted_files = list(all_log_files - set(self.file_processing_end_record.keys()))
 
-    def extract_file(self, file_path: str | pathlib.Path) -> None:
-        if self.stop_file_path.exists() is True:
+        files_to_extract = unextracted_files[:limit] if limit is not None else unextracted_files
+        random.shuffle(files_to_extract)
+
+        tqdm_style_kwargs = {
+            "total": len(files_to_extract),
+            "desc": "Running extraction on S3 logs",
+            "unit": "files",
+            "smoothing": 0,
+        }
+        if max_workers == 1:
+            for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
+                self.extract_file(file_path=file_path, disable_stop=False)
+        else:
+            number_of_batches = math.ceil(len(files_to_extract) / batch_size)
+            batches = [
+                files_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
+            ]
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                pid_specific_extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
+                pid_specific_extraction_directory.mkdir(exist_ok=True)
+                self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
+
+                for batch in tqdm.tqdm(
+                    iterable=batches,
+                    total=len(batches),
+                    desc="Extracting in batches",
+                    unit="batches",
+                    smoothing=0,
+                    position=0,
+                    leave=True,
+                ):
+                    if self.stop_file_path.exists():
+                        return
+
+                    tqdm_style_kwargs["total"] = len(batch)
+                    futures = [
+                        executor.submit(self.extract_file, file_path=file_path, enable_stop=False, parallel_mode=True)
+                        for file_path in batch
+                    ]
+                    collections.deque(
+                        (
+                            future.result()
+                            for future in tqdm.tqdm(
+                                iterable=concurrent.futures.as_completed(futures),
+                                position=1,
+                                leave=False,
+                                **tqdm_style_kwargs,
+                            )
+                        ),
+                        maxlen=0,
+                    )
+
+                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    for file_path in tqdm.tqdm(
+                        iterable=files_to_copy,
+                        total=len(files_to_copy),
+                        desc="Copying files from child processes",
+                        unit="files",
+                        smoothing=0,
+                        position=1,
+                        leave=False,
+                    ):
+                        relative_parts = file_path.relative_to(self.temporary_directory).parts[1:]
+                        relative_file_path = pathlib.Path(*relative_parts)
+                        destination_file_path = self.extraction_directory / relative_file_path
+                        destination_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        content = file_path.read_bytes()
+                        with destination_file_path.open(mode="ab") as file_stream:
+                            file_stream.write(content)
+                        file_path.unlink()
+
+        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+
+    def extract_file(
+        self, file_path: str | pathlib.Path, enable_stop: bool = True, parallel_mode: bool = False
+    ) -> None:
+        if enable_stop is True and self.stop_file_path.exists() is True:
             return
+
+        # Wish I didn't have to ensure this per job
+        extraction_directory = None
+        if parallel_mode is True:
+            extraction_directory = self.temporary_directory / str(os.getpid())
+            extraction_directory.mkdir(exist_ok=True)
 
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
@@ -92,37 +186,24 @@ class S3LogAccessExtractor:
         with self.file_processing_start_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
-        self._run_extraction(file_path=file_path)
+        self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
 
         # Record final success and cleanup
         self.file_processing_end_record[absolute_file_path] = True
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
-    def extract_directory(self, *, directory: str | pathlib.Path, limit: int | None = None, workers: int = -2) -> None:
-        directory = pathlib.Path(directory)
-        max_workers = _handle_max_workers(workers=workers)
 
-        all_log_files = {
-            str(file_path.absolute())
-            for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
-            if file_path.is_file()
-        }
-        unextracted_files = all_log_files - set(self.file_processing_end_record.keys())
+    def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
+        if extraction_directory is not None:
+            self._awk_env["EXTRACTION_DIRECTORY"] = str(extraction_directory)
 
-        files_to_extract = list(unextracted_files)[:limit] if limit is not None else unextracted_files
+        absolute_script_path = str(self._relative_script_path.absolute())
+        absolute_file_path = str(file_path.absolute())
 
-        tqdm_style_kwargs = {
-            "total": len(files_to_extract),
-            "desc": "Running extraction on S3 logs",
-            "unit": "files",
-            "smoothing": 0,
-        }
-        if max_workers == 1:
-            for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
-                self.extract_file(file_path=file_path)
-        else:
-            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                list(
-                    tqdm.tqdm(iterable=executor.map(self.extract_file, map(str, files_to_extract)), **tqdm_style_kwargs)
-                )
+        gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
+        _deploy_subprocess(
+            command=gawk_command,
+            environment_variables=self._awk_env,
+            error_message=f"Extraction failed on {file_path}.",
+        )

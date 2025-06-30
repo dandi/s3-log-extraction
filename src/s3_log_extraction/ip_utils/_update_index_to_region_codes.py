@@ -26,7 +26,7 @@ def update_index_to_region_codes() -> str | None:
         iterable=indexes_to_update,
         total=len(indexes_to_update),
         desc="Fetching IP regions",
-        unit="IP addresses",
+        unit=" IP addresses",
         smoothing=0,
     ):
         ip_address = index_to_ip[ip_index]
