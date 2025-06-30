@@ -155,10 +155,10 @@ class RemoteS3LogAccessExtractor:
                         content = file_path.read_bytes()
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
-                        # file_path.unlink()
+                        file_path.unlink()
 
         self._update_records()
-        # shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
         self._get_end_record_and_check_consistency()
@@ -308,7 +308,7 @@ class RemoteS3LogAccessExtractor:
         # Wish I didn't have to ensure this per job
         extraction_directory = None
         if parallel_mode is True:
-            extraction_directory = self.temporary_directory / os.getpid()
+            extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
 
         # Record the start of the extraction step
@@ -324,7 +324,7 @@ class RemoteS3LogAccessExtractor:
         # Record final success and cleanup
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(f"{s3_url}\n")
-        # temporary_file_path.unlink()
+        temporary_file_path.unlink()
 
     def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
         if extraction_directory is not None:
