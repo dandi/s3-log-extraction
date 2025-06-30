@@ -29,7 +29,7 @@ def generate_dandiset_totals(
             continue  # TODO: use better structure for separating mapped activity from summaries
         dandiset_id = dandiset_id_folder_path.name
 
-        summary_file_path = summary_directory / dandiset_id / "dandiset_summary_by_region.tsv"
+        summary_file_path = summary_directory / dandiset_id / "by_region.tsv"
         summary = pandas.read_table(filepath_or_buffer=summary_file_path)
 
         unique_countries = dict()
