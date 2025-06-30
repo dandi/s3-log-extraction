@@ -193,7 +193,6 @@ class S3LogAccessExtractor:
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
-
     def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
         if extraction_directory is not None:
             self._awk_env["EXTRACTION_DIRECTORY"] = str(extraction_directory)
