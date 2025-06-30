@@ -99,7 +99,7 @@ class RemoteS3LogAccessExtractor:
             for s3_url in tqdm.tqdm(
                 iterable=s3_urls_to_extract, total=len(s3_urls_to_extract), leave=True, **tqdm_style_kwargs
             ):
-                self._extract_s3_url(s3_url=s3_url)
+                self._extract_s3_url(s3_url=s3_url, disable_stop=False)
         else:
             pid_specific_extraction_directory = self.temporary_directory / f"pid-{os.getpid()}"
             pid_specific_extraction_directory.mkdir(exist_ok=True)
@@ -282,8 +282,8 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
 
-    def _extract_s3_url(self, s3_url: str) -> None:
-        if self.stop_file_path.exists():
+    def _extract_s3_url(self, s3_url: str, disable_stop: bool = True) -> None:
+        if disable_stop is False and self.stop_file_path.exists():
             return
 
         # Record the start of the extraction step

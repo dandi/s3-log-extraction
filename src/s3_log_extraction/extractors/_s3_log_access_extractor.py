@@ -98,7 +98,7 @@ class S3LogAccessExtractor:
         }
         if max_workers == 1:
             for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
-                self.extract_file(file_path=file_path)
+                self.extract_file(file_path=file_path, disable_stop=False)
         else:
             pid_specific_extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
             pid_specific_extraction_directory.mkdir(exist_ok=True)
@@ -142,8 +142,8 @@ class S3LogAccessExtractor:
                         file_path.unlink()
             shutil.rmtree(path=pid_specific_extraction_directory)
 
-    def extract_file(self, file_path: str | pathlib.Path) -> None:
-        if self.stop_file_path.exists() is True:
+    def extract_file(self, file_path: str | pathlib.Path, disable_stop: bool = True) -> None:
+        if disable_stop is False and self.stop_file_path.exists() is True:
             return
 
         file_path = pathlib.Path(file_path)
