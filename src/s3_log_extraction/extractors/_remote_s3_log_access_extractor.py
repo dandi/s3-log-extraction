@@ -126,7 +126,8 @@ class RemoteS3LogAccessExtractor:
                     ]
                     collections.deque(
                         (
-                            tqdm.tqdm(
+                            future.result()
+                            for future in tqdm.tqdm(
                                 iterable=concurrent.futures.as_completed(futures),
                                 position=1,
                                 leave=False,
