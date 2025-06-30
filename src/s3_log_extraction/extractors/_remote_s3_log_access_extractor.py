@@ -2,6 +2,7 @@ import collections
 import concurrent.futures
 import json
 import math
+import os
 import pathlib
 import random
 import shutil
@@ -100,6 +101,10 @@ class RemoteS3LogAccessExtractor:
             ):
                 self._extract_s3_url(s3_url=s3_url)
         else:
+            pid_specific_extraction_directory = self.temporary_directory / f"pid-{os.getpid()}"
+            pid_specific_extraction_directory.mkdir(exist_ok=True)
+            self._awk_env["EXTRACTION_DIRECTORY"] = str(pid_specific_extraction_directory)
+
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
             batches = [
                 s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
@@ -126,6 +131,16 @@ class RemoteS3LogAccessExtractor:
                             **tqdm_style_kwargs,
                         )
                     )
+
+                    for file_path in pid_specific_extraction_directory.rglob(pattern="*.txt"):
+                        relative_file_path = file_path.relative_to(pid_specific_extraction_directory)
+                        destination_file_path = self.extraction_directory / relative_file_path
+                        destination_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        content = file_path.read_bytes()
+                        with destination_file_path.open(mode="ab") as file_stream:
+                            file_stream.write(content)
+                        file_path.unlink()
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
