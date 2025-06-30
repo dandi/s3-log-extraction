@@ -141,6 +141,7 @@ class RemoteS3LogAccessExtractor:
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
                         file_path.unlink()
+            shutil.rmtree(path=pid_specific_extraction_directory)
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)

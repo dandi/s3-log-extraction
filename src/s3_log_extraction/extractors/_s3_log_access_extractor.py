@@ -2,6 +2,7 @@ import concurrent.futures
 import math
 import pathlib
 import random
+import shutil
 import sys
 import tempfile
 
@@ -139,6 +140,7 @@ class S3LogAccessExtractor:
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
                         file_path.unlink()
+            shutil.rmtree(path=pid_specific_extraction_directory)
 
     def extract_file(self, file_path: str | pathlib.Path) -> None:
         if self.stop_file_path.exists() is True:
