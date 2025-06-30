@@ -295,8 +295,8 @@ def _generate_benchmark_cli(directory: str) -> None:
     generate_benchmark(directory=directory)
 
 
-# s3logextraction validate
-@_s3logextraction_cli.command(name="prevalidate")
+# s3logextraction validate < protocol > < directory >
+@_s3logextraction_cli.command(name="validate")
 @click.argument(
     "protocol",
     type=click.Choice(["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]),
