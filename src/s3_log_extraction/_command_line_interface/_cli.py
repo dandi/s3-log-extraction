@@ -16,10 +16,10 @@ from ..extractors import (
 )
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
-    generate_all_dandiset_summaries,
-    generate_all_dandiset_totals,
     generate_archive_summaries,
     generate_archive_totals,
+    generate_dandiset_summaries,
+    generate_dandiset_totals,
 )
 from ..testing import generate_benchmark
 from ..validate import (
@@ -237,7 +237,7 @@ def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None
     """
     match mode:
         case "dandi":
-            generate_all_dandiset_summaries()
+            generate_dandiset_summaries()
         case "archive":
             generate_archive_summaries()
         case _:
@@ -261,7 +261,7 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
     """Generate grand totals of all extracted data."""
     match mode:
         case "dandi":
-            generate_all_dandiset_totals()
+            generate_dandiset_totals()
         case "archive":
             generate_archive_totals()
         case _:
