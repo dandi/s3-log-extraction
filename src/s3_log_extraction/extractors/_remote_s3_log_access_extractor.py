@@ -124,13 +124,17 @@ class RemoteS3LogAccessExtractor:
                         executor.submit(self._extract_s3_url, s3_url=s3_url, enable_stop=False, parallel_mode=True)
                         for s3_url in batch
                     ]
-                    for _ in tqdm.tqdm(
-                        iterable=concurrent.futures.as_completed(futures),
-                        position=1,
-                        leave=False,
-                        **tqdm_style_kwargs,
-                    ):
-                        pass
+                    collections.deque(
+                        (
+                            tqdm.tqdm(
+                                iterable=concurrent.futures.as_completed(futures),
+                                position=1,
+                                leave=False,
+                                **tqdm_style_kwargs,
+                            )
+                        ),
+                        maxlen=0,
+                    )
 
                     files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
                     for file_path in tqdm.tqdm(
