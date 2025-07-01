@@ -1,7 +1,7 @@
 import collections
 import concurrent.futures
+import itertools
 import json
-import math
 import os
 import pathlib
 import random
@@ -81,7 +81,7 @@ class RemoteS3LogAccessExtractor:
         s3_root: str,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 20_000,
+        batch_size: int = 5_000,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
         _handle_aws_credentials()
@@ -101,10 +101,7 @@ class RemoteS3LogAccessExtractor:
             ):
                 self._extract_s3_url(s3_url=s3_url)
         else:
-            number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
-            batches = [
-                s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
-            ]
+            batches = itertools.batched(iterable=s3_urls_to_extract, n=batch_size)
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 for batch in tqdm.tqdm(
                     iterable=batches,

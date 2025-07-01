@@ -1,6 +1,6 @@
 import collections
 import concurrent.futures
-import math
+import itertools
 import os
 import pathlib
 import random
@@ -80,7 +80,7 @@ class S3LogAccessExtractor:
         directory: str | pathlib.Path,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 20_000,
+        batch_size: int = 5_000,
     ) -> None:
         directory = pathlib.Path(directory)
         max_workers = _handle_max_workers(workers=workers)
@@ -103,10 +103,7 @@ class S3LogAccessExtractor:
             for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
                 self.extract_file(file_path=file_path)
         else:
-            number_of_batches = math.ceil(len(files_to_extract) / batch_size)
-            batches = [
-                files_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
-            ]
+            batches = itertools.batched(iterable=files_to_extract, n=batch_size)
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 pid_specific_extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
                 pid_specific_extraction_directory.mkdir(exist_ok=True)
