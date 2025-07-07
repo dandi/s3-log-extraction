@@ -28,9 +28,7 @@ def generate_dandiset_summaries(summary_directory: str | pathlib.Path | None = N
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
     client = dandi.dandiapi.DandiAPIClient()
-    dandiset_id_to_asset_directories, blob_id_to_asset_path = (
-        _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(client=client)
-    )
+    dandiset_id_to_asset_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
     dandisets = list(client.get_dandisets())
     for dandiset in tqdm.tqdm(
@@ -65,9 +63,8 @@ def generate_dandiset_summaries(summary_directory: str | pathlib.Path | None = N
     )
 
 
-def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
+def _get_dandi_asset_info(
     *,
-    client: dandi.dandiapi.DandiAPIClient,
     use_cache: bool = True,
 ) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
     cache_directory = get_cache_directory()
@@ -92,6 +89,8 @@ def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
         with monthly_blob_id_to_asset_path_cache_file_path.open(mode="r") as file_stream:
             blob_id_to_asset_path = yaml.safe_load(stream=file_stream)
     else:
+        client = dandi.dandiapi.DandiAPIClient()
+
         asset_id_to_asset = dict()
         blob_id_to_asset_path = dict()
         asset_id_to_dandiset_ids = collections.defaultdict(set)
@@ -196,7 +195,7 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
     )
     summary_table.sort_values(by="date", inplace=True)
     summary_table.index = range(len(summary_table))
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
 def _summarize_dandiset_by_asset(
@@ -227,7 +226,7 @@ def _summarize_dandiset_by_asset(
             "bytes_sent": list(summarized_activity_by_asset.values()),
         }
     )
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
 def _summarize_dandiset_by_region(
@@ -244,7 +243,8 @@ def _summarize_dandiset_by_region(
 
         indexed_ips_file_path = asset_directory / "indexed_ips.txt"
         indexed_ips = [ip_index.strip() for ip_index in indexed_ips_file_path.read_text().splitlines()]
-        regions = [index_to_region.get(ip_index.strip(), "unknown") for ip_index in indexed_ips]
+        regions = [index_to_region["ip_index"] for ip_index in indexed_ips]
+        # regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
         all_regions.extend(regions)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
@@ -265,4 +265,4 @@ def _summarize_dandiset_by_region(
             "bytes_sent": list(summarized_activity_by_region.values()),
         }
     )
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
