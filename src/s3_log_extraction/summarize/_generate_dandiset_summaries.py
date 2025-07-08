@@ -1,7 +1,7 @@
 import collections
+import concurrent.futures
 import datetime
 import pathlib
-import time
 
 import dandi.dandiapi
 import pandas
@@ -9,12 +9,13 @@ import pydantic
 import tqdm
 import yaml
 
+from .._parallel._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
 @pydantic.validate_call
-def generate_dandiset_summaries(summary_directory: str | pathlib.Path | None = None) -> None:
+def generate_dandiset_summaries(*, summary_directory: str | pathlib.Path | None = None, workers: int = -2) -> None:
     """
     Generate top-level summaries of access activity for all Dandisets.
 
@@ -24,34 +25,67 @@ def generate_dandiset_summaries(summary_directory: str | pathlib.Path | None = N
         Path to the folder that will contain all Dandiset summaries of the S3 access logs.
     """
     summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
+    max_workers = _handle_max_workers(workers=workers)
 
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    client = dandi.dandiapi.DandiAPIClient()
     dandiset_id_to_asset_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
+    # TODO: cache even the dandiset listing and leverage etags
+    client = dandi.dandiapi.DandiAPIClient()
     dandisets = list(client.get_dandisets())
-    for dandiset in tqdm.tqdm(
-        iterable=dandisets,
-        total=len(dandisets),
-        desc="Summarizing Dandisets",
-        position=0,
-        leave=True,
-        mininterval=5.0,
-        smoothing=0,
-        unit="dandisets",
-    ):
-        dandiset_id = dandiset.identifier
-        asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
 
-        _summarize_dandiset(
-            dandiset_id=dandiset_id,
-            asset_directories=asset_directories,
-            summary_directory=summary_directory,
-            index_to_region=index_to_region,
-            blob_id_to_asset_path=blob_id_to_asset_path,
-        )
+    if max_workers == 1:
+        for dandiset in tqdm.tqdm(
+            iterable=dandisets,
+            total=len(dandisets),
+            desc="Summarizing Dandisets",
+            position=0,
+            leave=True,
+            mininterval=5.0,
+            smoothing=0,
+            unit="dandisets",
+        ):
+            dandiset_id = dandiset.identifier
+            asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
+
+            _summarize_dandiset(
+                dandiset_id=dandiset_id,
+                asset_directories=asset_directories,
+                summary_directory=summary_directory,
+                index_to_region=index_to_region,
+                blob_id_to_asset_path=blob_id_to_asset_path,
+            )
+    else:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(
+                    _summarize_dandiset,
+                    dandiset_id=dandiset.identifier,
+                    asset_directories=dandiset_id_to_asset_directories.get(dandiset.identifier, []),
+                    summary_directory=summary_directory,
+                    index_to_region=index_to_region,
+                    blob_id_to_asset_path=blob_id_to_asset_path,
+                )
+                for dandiset in dandisets
+            ]
+            collections.deque(
+                (
+                    future.result()
+                    for future in tqdm.tqdm(
+                        iterable=concurrent.futures.as_completed(futures),
+                        total=len(dandisets),
+                        desc="Summarizing Dandisets",
+                        position=0,
+                        leave=True,
+                        mininterval=5.0,
+                        smoothing=0,
+                        unit="dandisets",
+                    )
+                ),
+                maxlen=0,
+            )
 
     # Special key for multiple associations
     dandiset_id = "undetermined"
@@ -144,29 +178,19 @@ def _summarize_dandiset(
     index_to_region: dict[int, str],
     blob_id_to_asset_path: dict[str, str],
 ) -> None:
-    print(f"Processing Dandiset {dandiset_id} with {len(asset_directories)} assets")
-    print("Processing by day")
-    start = time.time()
     _summarize_dandiset_by_day(
         asset_directories=asset_directories, summary_file_path=summary_directory / dandiset_id / "by_day.tsv"
     )
-    print(f"Took {time.time() - start:.2f} seconds to summarize by day")
-    start = time.time()
-    print("Processing by asset")
     _summarize_dandiset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_asset.tsv",
         blob_id_to_asset_path=blob_id_to_asset_path,
     )
-    print(f"Took {time.time() - start:.2f} seconds to summarize by asset")
-    start = time.time()
-    print("Processing by region")
     _summarize_dandiset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_region.tsv",
         index_to_region=index_to_region,
     )
-    print(f"Took {time.time() - start:.2f} seconds to summarize by region")
 
 
 def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
@@ -180,11 +204,6 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
         timestamps_file_path = asset_directory / "timestamps.txt"
-        # datetime apparently taking forever
-        # dates = [
-        #     datetime.datetime.strptime(timestamp.strip(), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
-        #     for timestamp in timestamps_file_path.read_text().splitlines()
-        # ]
         dates = [
             _timestamp_to_date_format(timestamp=timestamp)
             for timestamp in timestamps_file_path.read_text().splitlines()
