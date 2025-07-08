@@ -37,6 +37,7 @@ def generate_dandiset_totals(
             if region in ["VPN", "GitHub", "unknown"]:
                 continue
 
+            print(region)
             country_code, region_name = region.split("/")
             if "AWS" in country_code:
                 country_code = region_name.split("-")[0].upper()
