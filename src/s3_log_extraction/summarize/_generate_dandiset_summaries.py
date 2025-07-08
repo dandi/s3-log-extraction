@@ -1,6 +1,7 @@
 import collections
 import datetime
 import pathlib
+import time
 
 import dandi.dandiapi
 import pandas
@@ -145,21 +146,27 @@ def _summarize_dandiset(
 ) -> None:
     print(f"Processing Dandiset {dandiset_id} with {len(asset_directories)} assets")
     print("Processing by day")
+    start = time.time()
     _summarize_dandiset_by_day(
         asset_directories=asset_directories, summary_file_path=summary_directory / dandiset_id / "by_day.tsv"
     )
+    print(f"Took {time.time() - start:.2f} seconds to summarize by day")
+    start = time.time()
     print("Processing by asset")
     _summarize_dandiset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_asset.tsv",
         blob_id_to_asset_path=blob_id_to_asset_path,
     )
+    print(f"Took {time.time() - start:.2f} seconds to summarize by asset")
+    start = time.time()
     print("Processing by region")
     _summarize_dandiset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_region.tsv",
         index_to_region=index_to_region,
     )
+    print(f"Took {time.time() - start:.2f} seconds to summarize by day")
 
 
 def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
