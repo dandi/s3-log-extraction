@@ -15,7 +15,9 @@ from ..ip_utils import load_ip_cache
 
 
 @pydantic.validate_call
-def generate_dandiset_summaries(*, summary_directory: str | pathlib.Path | None = None, workers: int = -2) -> None:
+def generate_dandiset_summaries(
+    *, summary_directory: str | pathlib.Path | None = None, skip: list[str] | None = None, workers: int = -2
+) -> None:
     """
     Generate top-level summaries of access activity for all Dandisets.
 
@@ -23,6 +25,11 @@ def generate_dandiset_summaries(*, summary_directory: str | pathlib.Path | None 
     ----------
     summary_directory : pathlib.Path
         Path to the folder that will contain all Dandiset summaries of the S3 access logs.
+    workers : int
+        Number of workers to use for parallel processing.
+        If -1, use all available cores. If -2, use all cores minus one.
+        If 1, run in serial mode.
+        Default is -2.
     """
     summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
     max_workers = _handle_max_workers(workers=workers)
@@ -34,12 +41,14 @@ def generate_dandiset_summaries(*, summary_directory: str | pathlib.Path | None 
 
     # TODO: cache even the dandiset listing and leverage etags
     client = dandi.dandiapi.DandiAPIClient()
-    dandisets = list(client.get_dandisets())
+    all_dandisets = client.get_dandisets()
+    dandisets_to_exclude = set(skip) if skip is not None else set()
+    dandiset_to_summarize = set(all_dandisets) - dandisets_to_exclude
 
     if max_workers == 1:
         for dandiset in tqdm.tqdm(
-            iterable=dandisets,
-            total=len(dandisets),
+            iterable=dandiset_to_summarize,
+            total=len(dandiset_to_summarize),
             desc="Summarizing Dandisets",
             position=0,
             leave=True,
@@ -68,14 +77,14 @@ def generate_dandiset_summaries(*, summary_directory: str | pathlib.Path | None 
                     index_to_region=index_to_region,
                     blob_id_to_asset_path=blob_id_to_asset_path,
                 )
-                for dandiset in dandisets
+                for dandiset in dandiset_to_summarize
             ]
             collections.deque(
                 (
                     future.result()
                     for future in tqdm.tqdm(
                         iterable=concurrent.futures.as_completed(futures),
-                        total=len(dandisets),
+                        total=len(dandiset_to_summarize),
                         desc="Summarizing Dandisets",
                         position=0,
                         leave=True,

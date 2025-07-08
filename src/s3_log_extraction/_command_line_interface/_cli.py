@@ -229,15 +229,19 @@ def _update_ip_coordinates_cli() -> None:
     type=click.Choice(choices=["dandi", "archive"]),
     default=None,
 )
-def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
-    """
-    Generate condensed summaries of activity.
-
-    TODO
-    """
+@click.option(
+    "--skip",
+    help="A comma-separated list of directories to skip when generating summaries.",
+    required=False,
+    type=click.STRING,
+    default=None,
+)
+def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None, skip: str | None = None) -> None:
+    """Generate condensed summaries of activity."""
     match mode:
         case "dandi":
-            generate_dandiset_summaries()
+            skip_as_list = skip.split(",") if skip is not None else []
+            generate_dandiset_summaries(skip=skip_as_list)
         case "archive":
             generate_archive_summaries()
         case _:
