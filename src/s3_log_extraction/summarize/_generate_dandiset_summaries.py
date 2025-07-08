@@ -242,8 +242,7 @@ def _summarize_dandiset_by_region(
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
         indexed_ips_file_path = asset_directory / "indexed_ips.txt"
-        indexed_ips = [ip_index.strip() for ip_index in indexed_ips_file_path.read_text().splitlines()]
-        # regions = [index_to_region[ip_index] for ip_index in indexed_ips]
+        indexed_ips = [int(ip_index.strip()) for ip_index in indexed_ips_file_path.read_text().splitlines()]
         regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
         all_regions.extend(regions)
 

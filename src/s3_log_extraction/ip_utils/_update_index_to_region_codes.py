@@ -56,7 +56,7 @@ def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
                 index_not_in_services=index_not_in_services,
             )
 
-            if region_code == "unknown":
+            if region_code is None:
                 continue
 
             # API limit reached; do not cache and wait for it to reset
@@ -70,7 +70,7 @@ def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
 
 def _get_region_code_from_ip_index(
     ip_index: int, ip_address: str, ipinfo_handler: ipinfo.Handler, index_not_in_services: dict[int, bool]
-) -> str:
+) -> str | None:
     # Determine if IP address belongs to GitHub, AWS, Google, or known VPNs
     # Azure not yet easily doable; keep an eye on
     # https://learn.microsoft.com/en-us/answers/questions/1410071/up-to-date-azure-public-api-to-get-azure-ip-ranges
@@ -105,15 +105,13 @@ def _get_region_code_from_ip_index(
 
         match (country is None, region is None):
             case (True, True):
-                region_string = "unknown"
+                region_string = None
             case (True, False):
                 region_string = region
             case (False, True):
                 region_string = country
             case (False, False):
                 region_string = f"{country}/{region}"
-            case _:
-                region_string = ""
 
         return region_string
     except ipinfo.exceptions.RequestQuotaExceededError:  # pragma: no cover
