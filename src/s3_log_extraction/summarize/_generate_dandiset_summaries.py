@@ -143,14 +143,18 @@ def _summarize_dandiset(
     index_to_region: dict[int, str],
     blob_id_to_asset_path: dict[str, str],
 ) -> None:
+    print(f"Processing Dandiset {dandiset_id} with {len(asset_directories)} assets")
+    print("Processing by day")
     _summarize_dandiset_by_day(
         asset_directories=asset_directories, summary_file_path=summary_directory / dandiset_id / "by_day.tsv"
     )
+    print("Processing by asset")
     _summarize_dandiset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_asset.tsv",
         blob_id_to_asset_path=blob_id_to_asset_path,
     )
+    print("Processing by region")
     _summarize_dandiset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dandiset_id / "by_region.tsv",
