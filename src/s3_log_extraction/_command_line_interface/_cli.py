@@ -249,8 +249,8 @@ def _update_summaries_cli(
     """Generate condensed summaries of activity."""
     match mode:
         case "dandi":
-            pick_as_list = pick.split(",") if pick is not None else []
-            skip_as_list = skip.split(",") if skip is not None else []
+            pick_as_list = pick.split(",") if pick is not None else None
+            skip_as_list = skip.split(",") if skip is not None else None
             generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list)
         case "archive":
             generate_archive_summaries()
