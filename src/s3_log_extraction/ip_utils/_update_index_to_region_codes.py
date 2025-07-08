@@ -37,6 +37,9 @@ def update_index_to_region_codes() -> str | None:
             index_not_in_services=index_not_in_services,
         )
 
+        if region_code == "unknown":
+            continue
+
         # API limit reached; do not cache and wait for it to reset
         if region_code == "TBD":
             continue
