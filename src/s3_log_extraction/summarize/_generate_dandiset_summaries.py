@@ -166,7 +166,7 @@ def _summarize_dandiset(
         summary_file_path=summary_directory / dandiset_id / "by_region.tsv",
         index_to_region=index_to_region,
     )
-    print(f"Took {time.time() - start:.2f} seconds to summarize by day")
+    print(f"Took {time.time() - start:.2f} seconds to summarize by region")
 
 
 def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
@@ -180,8 +180,13 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
         timestamps_file_path = asset_directory / "timestamps.txt"
+        # datetime apparently taking forever
+        # dates = [
+        #     datetime.datetime.strptime(timestamp.strip(), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
+        #     for timestamp in timestamps_file_path.read_text().splitlines()
+        # ]
         dates = [
-            datetime.datetime.strptime(str(timestamp.strip()), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
+            _timestamp_to_date_format(timestamp=timestamp)
             for timestamp in timestamps_file_path.read_text().splitlines()
         ]
         all_dates.extend(dates)
@@ -207,6 +212,11 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
     summary_table.sort_values(by="date", inplace=True)
     summary_table.index = range(len(summary_table))
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
+
+
+def _timestamp_to_date_format(*, timestamp: str) -> str:
+    date = f"20{timestamp[:2]}-{timestamp[2:4]}-{timestamp[4:6]}"
+    return date
 
 
 def _summarize_dandiset_by_asset(
