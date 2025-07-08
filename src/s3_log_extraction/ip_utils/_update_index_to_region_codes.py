@@ -1,4 +1,6 @@
 import ipaddress
+import itertools
+import math
 import os
 
 import ipinfo
@@ -10,7 +12,7 @@ from ._ip_cache import get_ip_cache_directory, load_index_to_ip, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 
-def update_index_to_region_codes() -> str | None:
+def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
     """Update the `indexed_region_codes.yaml` file in the cache directory."""
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", None)
     if ipinfo_api_key is None:
@@ -18,37 +20,52 @@ def update_index_to_region_codes() -> str | None:
         raise ValueError(message)  # pragma: no cover
     ipinfo_handler = ipinfo.getHandler(access_token=ipinfo_api_key)
 
+    ip_cache_directory = get_ip_cache_directory()
+    indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
+
     index_to_ip = load_index_to_ip()
     index_not_in_services = load_ip_cache(cache_type="index_not_in_services")
     index_to_region = load_ip_cache(cache_type="index_to_region")
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
-    for ip_index in tqdm.tqdm(
-        iterable=indexes_to_update,
-        total=len(indexes_to_update),
-        desc="Fetching IP regions",
-        unit=" IP addresses",
+
+    number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
+    for ip_index_batch in tqdm.tqdm(
+        iterable=itertools.batched(iterable=indexes_to_update, n=batch_size),
+        total=number_of_batches,
+        desc="Fetching IP regions in batches",
+        unit="batches",
         smoothing=0,
+        position=0,
+        leave=False,
     ):
-        ip_address = index_to_ip[ip_index]
-        region_code = _get_region_code_from_ip_index(
-            ip_index=ip_index,
-            ip_address=ip_address,
-            ipinfo_handler=ipinfo_handler,
-            index_not_in_services=index_not_in_services,
-        )
+        for ip_index in tqdm.tqdm(
+            iterable=ip_index_batch,
+            total=batch_size,
+            desc="Fetching IP regions",
+            unit=" IP addresses",
+            smoothing=0,
+            position=1,
+            leave=False,
+        ):
+            ip_address = index_to_ip[ip_index]
 
-        if region_code == "unknown":
-            continue
+            region_code = _get_region_code_from_ip_index(
+                ip_index=ip_index,
+                ip_address=ip_address,
+                ipinfo_handler=ipinfo_handler,
+                index_not_in_services=index_not_in_services,
+            )
 
-        # API limit reached; do not cache and wait for it to reset
-        if region_code == "TBD":
-            continue
-        index_to_region[ip_index] = region_code
+            if region_code == "unknown":
+                continue
 
-    ip_cache_directory = get_ip_cache_directory()
-    indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
-    with indexed_regions_file_path.open(mode="w") as file_stream:
-        yaml.dump(data=index_to_region, stream=file_stream)
+            # API limit reached; do not cache and wait for it to reset
+            if region_code == "TBD":
+                continue
+            index_to_region[ip_index] = region_code
+
+            with indexed_regions_file_path.open(mode="w") as file_stream:
+                yaml.dump(data=index_to_region, stream=file_stream)
 
 
 def _get_region_code_from_ip_index(
