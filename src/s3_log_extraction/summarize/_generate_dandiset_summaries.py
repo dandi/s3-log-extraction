@@ -53,10 +53,11 @@ def generate_dandiset_summaries(
     # TODO: cache even the dandiset listing and leverage etags
     if pick is None:
         client = dandi.dandiapi.DandiAPIClient()
-        all_dandisets = client.get_dandisets()
-        dandisets_to_exclude = {dandiset_id: True for dandiset_id in all_dandisets}
+        dandisets_to_exclude = {dandiset_id: True for dandiset_id in skip}
         dandiset_to_summarize = [
-            dandiset for dandiset in all_dandisets if dandisets_to_exclude.get(dandiset.identifier, False) is False
+            dandiset
+            for dandiset in client.get_dandisets()
+            if dandisets_to_exclude.get(dandiset.identifier, False) is False
         ]
     else:
         dandiset_to_summarize = pick
