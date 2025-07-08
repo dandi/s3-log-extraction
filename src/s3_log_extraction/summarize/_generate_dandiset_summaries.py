@@ -56,7 +56,7 @@ def generate_dandiset_summaries(
         all_dandisets = client.get_dandisets()
         dandisets_to_exclude = {dandiset_id: True for dandiset_id in all_dandisets}
         dandiset_to_summarize = [
-            dandiset for dandiset in all_dandisets if dandisets_to_exclude.get(dandiset.identifier, False) is True
+            dandiset for dandiset in all_dandisets if dandisets_to_exclude.get(dandiset.identifier, False) is False
         ]
     else:
         dandiset_to_summarize = pick
