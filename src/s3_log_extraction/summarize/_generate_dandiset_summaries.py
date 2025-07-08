@@ -16,7 +16,11 @@ from ..ip_utils import load_ip_cache
 
 @pydantic.validate_call
 def generate_dandiset_summaries(
-    *, summary_directory: str | pathlib.Path | None = None, skip: list[str] | None = None, workers: int = -2
+    *,
+    summary_directory: str | pathlib.Path | None = None,
+    pick: list[str] | None = None,
+    skip: list[str] | None = None,
+    workers: int = -2,
 ) -> None:
     """
     Generate top-level summaries of access activity for all Dandisets.
@@ -30,8 +34,15 @@ def generate_dandiset_summaries(
         If -1, use all available cores. If -2, use all cores minus one.
         If 1, run in serial mode.
         Default is -2.
+    pick : list of strings, optional
+        A list of Dandiset IDs to exclusively select when generating summaries.
+    skip : list of strings, optional
+        A list of Dandiset IDs to exclude when generating summaries.
     """
     summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
+    if pick is not None and skip is not None:
+        message = "Cannot specify both `pick` and `skip` parameters simultaneously."
+        raise ValueError(message)
     max_workers = _handle_max_workers(workers=workers)
 
     index_to_region = load_ip_cache(cache_type="index_to_region")
@@ -40,10 +51,15 @@ def generate_dandiset_summaries(
     dandiset_id_to_asset_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
     # TODO: cache even the dandiset listing and leverage etags
-    client = dandi.dandiapi.DandiAPIClient()
-    all_dandisets = client.get_dandisets()
-    dandisets_to_exclude = set(skip) if skip is not None else set()
-    dandiset_to_summarize = set(all_dandisets) - dandisets_to_exclude
+    if pick is None:
+        client = dandi.dandiapi.DandiAPIClient()
+        all_dandisets = client.get_dandisets()
+        dandisets_to_exclude = {dandiset_id: True for dandiset_id in all_dandisets}
+        dandiset_to_summarize = [
+            dandiset for dandiset in all_dandisets if dandisets_to_exclude.get(dandiset.identifier, False) is True
+        ]
+    else:
+        dandiset_to_summarize = pick
 
     if max_workers == 1:
         for dandiset in tqdm.tqdm(
