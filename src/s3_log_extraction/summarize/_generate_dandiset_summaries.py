@@ -53,24 +53,19 @@ def generate_dandiset_summaries(
     # TODO: cache even the dandiset listing and leverage etags
     client = dandi.dandiapi.DandiAPIClient()
     if pick is None:
-        dandisets_to_exclude = {dandiset_id: True for dandiset_id in skip}
-        dandiset_to_summarize = [
-            dandiset
+        dandiset_ids_to_exclude = {dandiset_id: True for dandiset_id in skip}
+        dandiset_ids_to_summarize = [
+            dandiset.identifier
             for dandiset in client.get_dandisets()
-            if dandisets_to_exclude.get(dandiset.identifier, False) is False
+            if dandiset_ids_to_exclude.get(dandiset.identifier, False) is False
         ]
     else:
-        dandisets_to_include = {dandiset_id: True for dandiset_id in pick}
-        dandiset_to_summarize = [
-            dandiset
-            for dandiset in client.get_dandisets()
-            if dandisets_to_include.get(dandiset.identifier, False) is False
-        ]
+        dandiset_ids_to_summarize = pick
 
     if max_workers == 1:
-        for dandiset in tqdm.tqdm(
-            iterable=dandiset_to_summarize,
-            total=len(dandiset_to_summarize),
+        for dandiset_id in tqdm.tqdm(
+            iterable=dandiset_ids_to_summarize,
+            total=len(dandiset_ids_to_summarize),
             desc="Summarizing Dandisets",
             position=0,
             leave=True,
@@ -78,7 +73,6 @@ def generate_dandiset_summaries(
             smoothing=0,
             unit="dandisets",
         ):
-            dandiset_id = dandiset.identifier
             asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
 
             _summarize_dandiset(
@@ -93,20 +87,20 @@ def generate_dandiset_summaries(
             futures = [
                 executor.submit(
                     _summarize_dandiset,
-                    dandiset_id=dandiset.identifier,
-                    asset_directories=dandiset_id_to_asset_directories.get(dandiset.identifier, []),
+                    dandiset_id=dandiset_id,
+                    asset_directories=dandiset_id_to_asset_directories.get(dandiset_id, []),
                     summary_directory=summary_directory,
                     index_to_region=index_to_region,
                     blob_id_to_asset_path=blob_id_to_asset_path,
                 )
-                for dandiset in dandiset_to_summarize
+                for dandiset_id in dandiset_ids_to_summarize
             ]
             collections.deque(
                 (
                     future.result()
                     for future in tqdm.tqdm(
                         iterable=concurrent.futures.as_completed(futures),
-                        total=len(dandiset_to_summarize),
+                        total=len(dandiset_ids_to_summarize),
                         desc="Summarizing Dandisets",
                         position=0,
                         leave=True,
