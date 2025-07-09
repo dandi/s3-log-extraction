@@ -51,8 +51,8 @@ def generate_dandiset_summaries(
     dandiset_id_to_asset_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
     # TODO: cache even the dandiset listing and leverage etags
+    client = dandi.dandiapi.DandiAPIClient()
     if pick is None:
-        client = dandi.dandiapi.DandiAPIClient()
         dandisets_to_exclude = {dandiset_id: True for dandiset_id in skip}
         dandiset_to_summarize = [
             dandiset
@@ -60,7 +60,12 @@ def generate_dandiset_summaries(
             if dandisets_to_exclude.get(dandiset.identifier, False) is False
         ]
     else:
-        dandiset_to_summarize = pick
+        dandisets_to_include = {dandiset_id: True for dandiset_id in pick}
+        dandiset_to_summarize = [
+            dandiset
+            for dandiset in client.get_dandisets()
+            if dandisets_to_include.get(dandiset.identifier, False) is False
+        ]
 
     if max_workers == 1:
         for dandiset in tqdm.tqdm(
