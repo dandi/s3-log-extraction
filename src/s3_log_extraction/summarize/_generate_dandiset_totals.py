@@ -39,7 +39,7 @@ def generate_dandiset_totals(
 
             region_split = region.split("/")
             country_code = region_split[0]
-            region_code = region_split[1:]
+            region_code = "-".join(region_split[1:])
             if "AWS" in country_code:
                 country_code = region_code.split("-")[0].upper()
 
