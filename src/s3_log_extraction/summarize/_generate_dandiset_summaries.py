@@ -1,48 +1,116 @@
 import collections
+import concurrent.futures
 import datetime
 import pathlib
 
 import dandi.dandiapi
 import pandas
+import pydantic
 import tqdm
 import yaml
 
+from .._parallel._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
-def generate_all_dandiset_summaries() -> None:
-    client = dandi.dandiapi.DandiAPIClient()
+@pydantic.validate_call
+def generate_dandiset_summaries(
+    *,
+    summary_directory: str | pathlib.Path | None = None,
+    pick: list[str] | None = None,
+    skip: list[str] | None = None,
+    workers: int = -2,
+) -> None:
+    """
+    Generate top-level summaries of access activity for all Dandisets.
 
-    summary_directory = get_summary_directory()
+    Parameters
+    ----------
+    summary_directory : pathlib.Path
+        Path to the folder that will contain all Dandiset summaries of the S3 access logs.
+    workers : int
+        Number of workers to use for parallel processing.
+        If -1, use all available cores. If -2, use all cores minus one.
+        If 1, run in serial mode.
+        Default is -2.
+    pick : list of strings, optional
+        A list of Dandiset IDs to exclusively select when generating summaries.
+    skip : list of strings, optional
+        A list of Dandiset IDs to exclude when generating summaries.
+    """
+    summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
+    if pick is not None and skip is not None:
+        message = "Cannot specify both `pick` and `skip` parameters simultaneously."
+        raise ValueError(message)
+    max_workers = _handle_max_workers(workers=workers)
+
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    dandiset_id_to_asset_directories, blob_id_to_asset_path = (
-        _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(client=client)
-    )
+    dandiset_id_to_asset_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
-    dandisets = list(client.get_dandisets())
-    for dandiset in tqdm.tqdm(
-        iterable=dandisets,
-        total=len(dandisets),
-        desc="Summarizing Dandisets",
-        position=0,
-        leave=True,
-        mininterval=5.0,
-        smoothing=0,
-        unit="dandisets",
-    ):
-        dandiset_id = dandiset.identifier
-        asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
+    # TODO: cache even the dandiset listing and leverage etags
+    client = dandi.dandiapi.DandiAPIClient()
+    if pick is None:
+        dandiset_ids_to_exclude = {dandiset_id: True for dandiset_id in skip}
+        dandiset_ids_to_summarize = [
+            dandiset.identifier
+            for dandiset in client.get_dandisets()
+            if dandiset_ids_to_exclude.get(dandiset.identifier, False) is False
+        ]
+    else:
+        dandiset_ids_to_summarize = pick
 
-        _summarize_dandiset(
-            dandiset_id=dandiset_id,
-            asset_directories=asset_directories,
-            summary_directory=summary_directory,
-            index_to_region=index_to_region,
-            blob_id_to_asset_path=blob_id_to_asset_path,
-        )
+    if max_workers == 1:
+        for dandiset_id in tqdm.tqdm(
+            iterable=dandiset_ids_to_summarize,
+            total=len(dandiset_ids_to_summarize),
+            desc="Summarizing Dandisets",
+            position=0,
+            leave=True,
+            mininterval=5.0,
+            smoothing=0,
+            unit="dandisets",
+        ):
+            asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
+
+            _summarize_dandiset(
+                dandiset_id=dandiset_id,
+                asset_directories=asset_directories,
+                summary_directory=summary_directory,
+                index_to_region=index_to_region,
+                blob_id_to_asset_path=blob_id_to_asset_path,
+            )
+    else:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(
+                    _summarize_dandiset,
+                    dandiset_id=dandiset_id,
+                    asset_directories=dandiset_id_to_asset_directories.get(dandiset_id, []),
+                    summary_directory=summary_directory,
+                    index_to_region=index_to_region,
+                    blob_id_to_asset_path=blob_id_to_asset_path,
+                )
+                for dandiset_id in dandiset_ids_to_summarize
+            ]
+            collections.deque(
+                (
+                    future.result()
+                    for future in tqdm.tqdm(
+                        iterable=concurrent.futures.as_completed(futures),
+                        total=len(dandiset_ids_to_summarize),
+                        desc="Summarizing Dandisets",
+                        position=0,
+                        leave=True,
+                        mininterval=5.0,
+                        smoothing=0,
+                        unit="dandisets",
+                    )
+                ),
+                maxlen=0,
+            )
 
     # Special key for multiple associations
     dandiset_id = "undetermined"
@@ -55,9 +123,8 @@ def generate_all_dandiset_summaries() -> None:
     )
 
 
-def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
+def _get_dandi_asset_info(
     *,
-    client: dandi.dandiapi.DandiAPIClient,
     use_cache: bool = True,
 ) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
     cache_directory = get_cache_directory()
@@ -82,6 +149,8 @@ def _get_dandiset_id_to_asset_directories_and_blob_id_to_asset_path(
         with monthly_blob_id_to_asset_path_cache_file_path.open(mode="r") as file_stream:
             blob_id_to_asset_path = yaml.safe_load(stream=file_stream)
     else:
+        client = dandi.dandiapi.DandiAPIClient()
+
         asset_id_to_asset = dict()
         blob_id_to_asset_path = dict()
         asset_id_to_dandiset_ids = collections.defaultdict(set)
@@ -161,7 +230,7 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
 
         timestamps_file_path = asset_directory / "timestamps.txt"
         dates = [
-            datetime.datetime.strptime(str(timestamp.strip()), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
+            _timestamp_to_date_format(timestamp=timestamp)
             for timestamp in timestamps_file_path.read_text().splitlines()
         ]
         all_dates.extend(dates)
@@ -186,7 +255,12 @@ def _summarize_dandiset_by_day(*, asset_directories: list[pathlib.Path], summary
     )
     summary_table.sort_values(by="date", inplace=True)
     summary_table.index = range(len(summary_table))
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
+
+
+def _timestamp_to_date_format(*, timestamp: str) -> str:
+    date = f"20{timestamp[:2]}-{timestamp[2:4]}-{timestamp[4:6]}"
+    return date
 
 
 def _summarize_dandiset_by_asset(
@@ -217,7 +291,7 @@ def _summarize_dandiset_by_asset(
             "bytes_sent": list(summarized_activity_by_asset.values()),
         }
     )
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
 def _summarize_dandiset_by_region(
@@ -233,8 +307,8 @@ def _summarize_dandiset_by_region(
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
         indexed_ips_file_path = asset_directory / "indexed_ips.txt"
-        indexed_ips = [ip_index.strip() for ip_index in indexed_ips_file_path.read_text().splitlines()]
-        regions = [index_to_region.get(ip_index.strip(), "unknown") for ip_index in indexed_ips]
+        indexed_ips = [int(ip_index.strip()) for ip_index in indexed_ips_file_path.read_text().splitlines()]
+        regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
         all_regions.extend(regions)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
@@ -255,4 +329,4 @@ def _summarize_dandiset_by_region(
             "bytes_sent": list(summarized_activity_by_region.values()),
         }
     )
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)

@@ -1,5 +1,6 @@
 import collections
 import concurrent.futures
+import itertools
 import json
 import math
 import os
@@ -14,7 +15,8 @@ import tqdm
 import yaml
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ._utils import _deploy_subprocess, _handle_aws_credentials, _handle_gawk_base, _handle_max_workers
+from ._utils import _deploy_subprocess, _handle_aws_credentials, _handle_gawk_base
+from .._parallel._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
 
@@ -81,7 +83,7 @@ class RemoteS3LogAccessExtractor:
         s3_root: str,
         limit: int | None = None,
         workers: int = -2,
-        batch_size: int = 20_000,
+        batch_size: int = 5_000,
         manifest_file_path: str | pathlib.Path | None = None,
     ) -> None:
         _handle_aws_credentials()
@@ -101,14 +103,12 @@ class RemoteS3LogAccessExtractor:
             ):
                 self._extract_s3_url(s3_url=s3_url)
         else:
+            batches = itertools.batched(iterable=s3_urls_to_extract, n=batch_size)
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
-            batches = [
-                s3_urls_to_extract[index * batch_size : (index + 1) * batch_size] for index in range(number_of_batches)
-            ]
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
                 for batch in tqdm.tqdm(
                     iterable=batches,
-                    total=len(batches),
+                    total=number_of_batches,
                     desc="Extracting in batches",
                     unit="batches",
                     smoothing=0,
@@ -137,7 +137,9 @@ class RemoteS3LogAccessExtractor:
                         maxlen=0,
                     )
 
-                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    files_to_copy = [
+                        path for path in self.temporary_directory.rglob(pattern="*.txt") if path.is_file() is True
+                    ]
                     for file_path in tqdm.tqdm(
                         iterable=files_to_copy,
                         total=len(files_to_copy),
@@ -156,6 +158,8 @@ class RemoteS3LogAccessExtractor:
                         with destination_file_path.open(mode="ab") as file_stream:
                             file_stream.write(content)
                         file_path.unlink()
+                    shutil.rmtree(path=self.temporary_directory)
+                    self.temporary_directory.mkdir()
 
         self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)

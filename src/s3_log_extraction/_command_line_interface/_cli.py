@@ -16,10 +16,10 @@ from ..extractors import (
 )
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
-    generate_all_dandiset_summaries,
-    generate_all_dandiset_totals,
     generate_archive_summaries,
     generate_archive_totals,
+    generate_dandiset_summaries,
+    generate_dandiset_totals,
 )
 from ..testing import generate_benchmark
 from ..validate import (
@@ -229,15 +229,29 @@ def _update_ip_coordinates_cli() -> None:
     type=click.Choice(choices=["dandi", "archive"]),
     default=None,
 )
-def _update_summaries_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
-    """
-    Generate condensed summaries of activity.
-
-    TODO
-    """
+@click.option(
+    "--pick",
+    help="A comma-separated list of directories to exclusively select when generating summaries.",
+    required=False,
+    type=click.STRING,
+    default=None,
+)
+@click.option(
+    "--skip",
+    help="A comma-separated list of directories to exclude when generating summaries.",
+    required=False,
+    type=click.STRING,
+    default=None,
+)
+def _update_summaries_cli(
+    mode: typing.Literal["dandi", "archive"] | None = None, pick: str | None = None, skip: str | None = None
+) -> None:
+    """Generate condensed summaries of activity."""
     match mode:
         case "dandi":
-            generate_all_dandiset_summaries()
+            pick_as_list = pick.split(",") if pick is not None else None
+            skip_as_list = skip.split(",") if skip is not None else None
+            generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list)
         case "archive":
             generate_archive_summaries()
         case _:
@@ -261,7 +275,7 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
     """Generate grand totals of all extracted data."""
     match mode:
         case "dandi":
-            generate_all_dandiset_totals()
+            generate_dandiset_totals()
         case "archive":
             generate_archive_totals()
         case _:
