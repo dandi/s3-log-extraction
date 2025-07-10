@@ -290,14 +290,17 @@ class RemoteS3LogAccessExtractor:
             miniters=1,
             leave=False,
         ):
+            print(date)
             year, month, day = date.split("-")
             subdirectory = f"{s3_root}/{year}/{month}/{day}"
             s3_urls_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
+            print(f"{s3_urls_result=}")
             if s3_urls_result is None:
                 continue
             s3_urls = [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
+            print(s3_urls)
 
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
