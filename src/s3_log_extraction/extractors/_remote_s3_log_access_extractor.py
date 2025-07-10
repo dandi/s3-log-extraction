@@ -277,7 +277,9 @@ class RemoteS3LogAccessExtractor:
 
         new_dates = list(set(dates_with_logs) - set(self.processed_dates.keys()))
         sorted_new_dates = sorted(list(new_dates))
+        print(sorted_new_dates)
         unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
+        print(sorted_new_dates)
 
         for date in tqdm.tqdm(
             iterable=unprocessed_dates,
