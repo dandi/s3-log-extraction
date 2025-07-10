@@ -178,7 +178,9 @@ class RemoteS3LogAccessExtractor:
             manifest_file_path=manifest_file_path, s3_root=s3_root
         )
         unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
+        print(f"{unprocessed_s3_urls_from_remote=}")
         unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
+        print(f"{unprocessed_s3_urls=}")
 
         del self.s3_url_processing_end_record  # Free memory
 
