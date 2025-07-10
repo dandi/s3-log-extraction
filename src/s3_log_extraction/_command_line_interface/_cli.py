@@ -16,7 +16,6 @@ from ..extractors import (
 )
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
-    generate__dataset_summaries,
     generate_all_dataset_totals,
     generate_archive_summaries,
     generate_archive_totals,
