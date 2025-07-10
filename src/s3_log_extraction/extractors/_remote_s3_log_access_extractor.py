@@ -178,9 +178,7 @@ class RemoteS3LogAccessExtractor:
             manifest_file_path=manifest_file_path, s3_root=s3_root
         )
         unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
-        print(unprocessed_s3_urls_from_remote)
         unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
-        print(unprocessed_s3_urls)
 
         del self.s3_url_processing_end_record  # Free memory
 
@@ -280,9 +278,7 @@ class RemoteS3LogAccessExtractor:
 
         new_dates = list(set(dates_with_logs) - set(self.processed_dates.keys()))
         sorted_new_dates = sorted(list(new_dates))
-        print(sorted_new_dates)
         unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
-        print(sorted_new_dates)
 
         for date in tqdm.tqdm(
             iterable=unprocessed_dates,
@@ -293,17 +289,14 @@ class RemoteS3LogAccessExtractor:
             miniters=1,
             leave=False,
         ):
-            print(date)
             year, month, day = date.split("-")
             subdirectory = f"{s3_root}/{year}/{month}/{day}"
             s3_urls_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
-            print(f"{s3_urls_result=}")
             if s3_urls_result is None:
                 continue
             s3_urls = [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
-            print(s3_urls)
 
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls
