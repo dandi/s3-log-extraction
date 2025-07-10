@@ -10,7 +10,7 @@ packages = ["src/s3_log_extraction"]
 
 [project]
 name = "s3-log-extraction"
-version="1.1.1"
+version="1.1.2"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
@@ -27,7 +27,7 @@ keywords = [
     "open data",
 ]
 license = {file = "LICENSE.txt"}
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "pandas",
     "tqdm",
@@ -40,7 +40,6 @@ dependencies = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: BSD License",
     "Intended Audience :: Developers",
