@@ -28,7 +28,7 @@ def generate_archive_summaries(
     all_dandiset_summaries_by_day = [
         pandas.read_table(filepath_or_buffer=dandiset_by_day_summary_file_path)
         for dandiset_by_day_summary_file_path in summary_directory.rglob(pattern="by_day.tsv")
-        if dandiset_by_day_summary_file_path.parent != "archive"
+        if dandiset_by_day_summary_file_path.parent.name != "archive"
     ]
     aggregated_dandiset_summaries_by_day = pandas.concat(objs=all_dandiset_summaries_by_day, ignore_index=True)
 
