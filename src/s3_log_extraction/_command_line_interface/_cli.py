@@ -16,6 +16,7 @@ from ..extractors import (
 )
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
+    generate_summaries,
     generate_all_dataset_totals,
     generate_archive_summaries,
     generate_archive_totals,
@@ -257,7 +258,7 @@ def _update_summaries_cli(
         case "archive":
             generate_archive_summaries(get_summary_directory())
         case _:
-            generate_all_dataset_summaries()
+            generate_summaries()
 
 
 # s3logextraction update totals
