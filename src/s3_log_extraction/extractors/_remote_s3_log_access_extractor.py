@@ -279,6 +279,7 @@ class RemoteS3LogAccessExtractor:
         sorted_new_dates = sorted(list(new_dates))
         unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
+        s3_urls = []
         for date in tqdm.tqdm(
             iterable=unprocessed_dates,
             total=len(unprocessed_dates),
@@ -295,7 +296,9 @@ class RemoteS3LogAccessExtractor:
             )
             if s3_urls_result is None:
                 continue
-            s3_urls = [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
+            s3_urls.extend(
+                [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
+            )
 
         unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
         return unprocessed_s3_urls

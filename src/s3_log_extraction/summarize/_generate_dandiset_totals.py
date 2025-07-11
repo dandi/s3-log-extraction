@@ -26,8 +26,11 @@ def generate_dandiset_totals(
     all_dandiset_totals = dict()
     for dandiset_id_folder_path in summary_directory.iterdir():
         if not dandiset_id_folder_path.is_dir():
-            continue  # TODO: use better structure for separating mapped activity from summaries
+            continue
+
         dandiset_id = dandiset_id_folder_path.name
+        if dandiset_id == "archive":
+            continue
 
         summary_file_path = summary_directory / dandiset_id / "by_region.tsv"
         summary = pandas.read_table(filepath_or_buffer=summary_file_path)
