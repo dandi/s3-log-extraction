@@ -31,6 +31,7 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     "TW/Takao": {"latitude": 22.6226696, "longitude": 120.2764261},
     "VN/Long An Povince": {"latitude": 10.56071680, "longitude": 106.64976230},
     "UY/Montevideo Department": {"latitude": -34.9058916, "longitude": -56.1913095},
+    "RU/Mordoviya Republic": {"latitude": 54.5, "longitude": 44},  # OpenCage mistakes with Missouri
     # Skip unknowable entries
     "GitHub": {"latitude": None, "longitude": None},
     "VPN": {"latitude": None, "longitude": None},
