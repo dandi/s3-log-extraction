@@ -127,7 +127,7 @@ Usage on the DANDI archive logs requires a bit more customization. This is mostl
 Begin by ensuring a special required environment variable is set:
 
 **S3_LOG_EXTRACTION_PASSWORD**
-  - Various sensitive information on Drogon is encrypted using this password, including...
+  - Various sensitive information on Drogon is encrypted using this password, including:
     - the regular expression for all associated Drogon IPs.
     - the IP index and geolocation caches.
 
