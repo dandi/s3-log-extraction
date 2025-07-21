@@ -1,19 +1,19 @@
-<p align="center">
-  <h1 align="center">S3 Log Extraction</h3>
-  <p align="center">
+<div align="center">
+<h1>S3 Log Extraction</h1>
+<p>
     <a href="https://pypi.org/project/s3_log_extraction/"><img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-E95420?style=flat&logo=ubuntu&logoColor=white"></a>
     <a href="https://pypi.org/project/s3_log_extraction/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/dandi_s3_log_parser.svg"></a>
     <a href="https://codecov.io/github/dandi/s3_log_extraction?branch=main"><img alt="codecov" src="https://codecov.io/github/dandi/s3_log_extraction/coverage.svg?branch=main"></a>
-  </p>
-  <p align="center">
+</p>
+<p>
     <a href="https://pypi.org/project/s3_log_extraction/"><img alt="PyPI latest release version" src="https://badge.fury.io/py/dandi_s3_log_parser.svg?id=py&kill_cache=1"></a>
     <a href="https://github.com/dandi/s3_log_extraction/blob/main/license.txt"><img alt="License: BSD-3" src="https://img.shields.io/pypi/l/dandi_s3_log_parser.svg"></a>
-  </p>
-  <p align="center">
+</p>
+<p>
     <a href="https://github.com/psf/black"><img alt="Python code style: Black" src="https://img.shields.io/badge/python_code_style-black-000000.svg"></a>
     <a href="https://github.com/astral-sh/ruff"><img alt="Python code style: Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"></a>
-  </p>
 </p>
+</div>
 
 Extraction of minimal information from consolidated raw S3 logs for public sharing and plotting.
 
@@ -60,13 +60,13 @@ flowchart TD
 [Optional] Configure a non-default cache directory on a mounted disk that has sufficient space (the default is placed under `~/.cache`). This will be the main location where extracted logs and other useful information will be stored.
 
 ```bash
-s3logextraction config cache set < new cache directory >
+s3logextraction config cache set <new cache directory>
 ```
 
 To extract the logs:
 
 ```bash
-s3logextraction extract < log directory >
+s3logextraction extract <log directory>
 ```
 
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
@@ -86,11 +86,11 @@ s3logextraction update ip indexes
 Next, ensure some required environment variables related to external services are set:
 
 1. **IPINFO_API_KEY**
-  - Access token for the [ipinfo.io](ipinfo.io) service.
-  - Extracts geographic region information in ISO 3166 format (e.g. "US/California") for anonymized statistics.
+   - Access token for the [ipinfo.io](https://ipinfo.io) service.
+   - Extracts geographic region information in ISO 3166 format (e.g. "US/California") for anonymized statistics.
 2. **OPENCAGE_API_KEY**
-  - Access token for the [opencagedata.com](opencagedata.com) service.
-  - Maps the ISO 3166 codes from the first step to latitude and longitude coordinates for the geographic heat maps used in visualizations.
+   - Access token for the [opencagedata.com](https://opencagedata.com/) service.
+   - Maps the ISO 3166 codes from the first step to latitude and longitude coordinates for the geographic heat maps used in visualizations.
 
 ```bash
 export IPINFO_API_KEY="your_token_here"
@@ -126,10 +126,10 @@ Usage on the DANDI archive logs requires a bit more customization. This is mostl
 
 Begin by ensuring a special required environment variable is set:
 
-1. **S3_LOG_EXTRACTION_PASSWORD**
-  - Various sensitive information on Drogon is encrypted using this password, including...
-  - ...the regular expression for all associated Drogon IPs.
-  - ...the IP index and geolocation caches.
+**S3_LOG_EXTRACTION_PASSWORD**
+  - Various sensitive information on Drogon is encrypted using this password, including:
+    - the regular expression for all associated Drogon IPs.
+    - the IP index and geolocation caches.
 
 This allows us to store full IP information in a persistent way (in case we need to go back and do a lookup) while still being secure.
 
@@ -162,16 +162,16 @@ s3logextraction update totals --mode archive
 
 If you're new to using AWS S3 buckets and haven't yet enabled the logging this project utilizes, you can follow these simple instructions to get started.
 
- 1) Log into your AWS console.
- 2) Create a new **PRIVATE** S3 bucket - typically the name of the new bucket is the name of the one you wish to enable logging on with `-logs` added to the end. For example, `dandiarchive-logs`.
-    - **NEVER** share this bucket publicly as it contains sensitive information.
- 4) Navigate back to the S3 bucket you wish to enable logging on.
- 5) Under the `Properties` tab, scroll down to the section called `Server access logging` and select `Edit`.
- 6) Toggle the selection to `Enable`, then specify the destination where logs will be stored as the new S3 bucket you created in step (2).
- 7) Recommended:
-    - Specify the `Log object key format` as the nested pattern shown below.
-    - Ensure the `Source of date used in log object key format` is the `S3 event time`.
-  ![image](https://github.com/user-attachments/assets/8e8de5fc-5a58-4dda-8866-8bf71277e2e7)
+1) Log into your AWS console.
+2) Create a new **PRIVATE** S3 bucket - typically the name of the new bucket is the name of the one you wish to enable logging on with `-logs` added to the end. For example, `dandiarchive-logs`.
+   - **NEVER** share this bucket publicly as it contains sensitive information.
+3) Navigate back to the S3 bucket you wish to enable logging on.
+4) Under the `Properties` tab, scroll down to the section called `Server access logging` and select `Edit`.
+5) Toggle the selection to `Enable`, then specify the destination where logs will be stored as the new S3 bucket you created in step (2).
+6) Recommended:
+   - Specify the `Log object key format` as the nested pattern shown below.
+   - Ensure the `Source of date used in log object key format` is the `S3 event time`.
+    ![image](https://github.com/user-attachments/assets/8e8de5fc-5a58-4dda-8866-8bf71277e2e7)
 
 
 
