@@ -85,7 +85,23 @@ all = [
     {include-group = "dev"}
 ]
 
+[tool.hatch.envs.test]
+#This is a temporary hack while waiting for hatch to support PEP 735, Dependency Groups,
+#  in creating environments. See https://github.com/pypa/hatch/pull/1922 for more
+#  details.
+post-install-commands = ["pip install --group test"]
 
+[tool.hatch.envs.coverage]
+#This is a temporary hack while waiting for hatch to support PEP 735, Dependency Groups,
+#  in creating environments. See https://github.com/pypa/hatch/pull/1922 for more
+#  details.
+post-install-commands = ["pip install --group coverage"]
+
+[tool.hatch.envs.dev]
+#This is a temporary hack while waiting for hatch to support PEP 735, Dependency Groups,
+#  in creating environments. See https://github.com/pypa/hatch/pull/1922 for more
+#  details.
+post-install-commands = ["pip install --group dev"]
 
 [tool.black]
 line-length = 120
