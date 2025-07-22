@@ -85,6 +85,9 @@ all = [
     {include-group = "dev"}
 ]
 
+[tool.hatch.envs.default]
+features = ["all"]
+
 [tool.hatch.envs.test]
 #This is a temporary hack while waiting for hatch to support PEP 735, Dependency Groups,
 #  in creating environments. See https://github.com/pypa/hatch/pull/1922 for more
