@@ -106,6 +106,13 @@ features = ["all"]
 #  details.
 post-install-commands = ["pip install --group dev"]
 
+[tool.hatch.envs.all]
+features = ["all"]
+#This is a temporary hack while waiting for hatch to support PEP 735, Dependency Groups,
+#  in creating environments. See https://github.com/pypa/hatch/pull/1922 for more
+#  details.
+post-install-commands = ["pip install --group all"]
+
 [tool.black]
 line-length = 120
 target-version = ['py312']
