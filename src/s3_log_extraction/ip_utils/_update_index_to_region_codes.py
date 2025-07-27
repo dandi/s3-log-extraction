@@ -105,6 +105,7 @@ def _get_region_code_from_ip_index(
         region = details.details.get("region", None)
 
         print(f"\n\n{details=}\n\n")
+        raise NotImplementedError("")
 
         match (country is None, region is None):
             case (True, True):
