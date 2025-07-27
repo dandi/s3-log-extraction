@@ -48,7 +48,7 @@ def generate_dandiset_summaries(
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    dandiset_id_to_asset_directories, blob_id_to_asset_path = _get_dandi_asset_info()
+    dandiset_id_to_blob_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
     # TODO: cache even the dandiset listing and leverage etags
     client = dandi.dandiapi.DandiAPIClient()
@@ -73,11 +73,11 @@ def generate_dandiset_summaries(
             smoothing=0,
             unit="dandisets",
         ):
-            asset_directories = dandiset_id_to_asset_directories.get(dandiset_id, [])
+            blob_directories = dandiset_id_to_blob_directories.get(dandiset_id, [])
 
             _summarize_dandiset(
                 dandiset_id=dandiset_id,
-                blob_directories=asset_directories,
+                blob_directories=blob_directories,
                 summary_directory=summary_directory,
                 index_to_region=index_to_region,
                 blob_id_to_asset_path=blob_id_to_asset_path,
@@ -88,7 +88,7 @@ def generate_dandiset_summaries(
                 executor.submit(
                     _summarize_dandiset,
                     dandiset_id=dandiset_id,
-                    asset_directories=dandiset_id_to_asset_directories.get(dandiset_id, []),
+                    blob_directories=dandiset_id_to_blob_directories.get(dandiset_id, []),
                     summary_directory=summary_directory,
                     index_to_region=index_to_region,
                     blob_id_to_asset_path=blob_id_to_asset_path,
@@ -116,7 +116,7 @@ def generate_dandiset_summaries(
     dandiset_id = "undetermined"
     _summarize_dandiset(
         dandiset_id=dandiset_id,
-        blob_directories=dandiset_id_to_asset_directories.get(dandiset_id, []),
+        blob_directories=dandiset_id_to_blob_directories.get(dandiset_id, []),
         summary_directory=summary_directory,
         index_to_region=index_to_region,
         blob_id_to_asset_path=blob_id_to_asset_path,
@@ -224,12 +224,12 @@ def _summarize_dandiset(
         blob_directories=blob_directories, summary_file_path=summary_directory / dandiset_id / "by_day.tsv"
     )
     _summarize_dandiset_by_asset(
-        asset_directories=blob_directories,
+        blob_directories=blob_directories,
         summary_file_path=summary_directory / dandiset_id / "by_asset.tsv",
         blob_id_to_asset_path=blob_id_to_asset_path,
     )
     _summarize_dandiset_by_region(
-        asset_directories=blob_directories,
+        blob_directories=blob_directories,
         summary_file_path=summary_directory / dandiset_id / "by_region.tsv",
         index_to_region=index_to_region,
     )
@@ -281,20 +281,20 @@ def _timestamp_to_date_format(*, timestamp: str) -> str:
 
 
 def _summarize_dandiset_by_asset(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, blob_id_to_asset_path: dict[str, str]
+    *, blob_directories: list[pathlib.Path], summary_file_path: pathlib.Path, blob_id_to_asset_path: dict[str, str]
 ) -> None:
     summarized_activity_by_asset = collections.defaultdict(int)
-    for asset_directory in asset_directories:
+    for blob_directory in blob_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
 
-        if not asset_directory.exists():
+        if not blob_directory.exists():
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
-        bytes_sent_file_path = asset_directory / "bytes_sent.txt"
+        bytes_sent_file_path = blob_directory / "bytes_sent.txt"
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
 
-        blob_id = asset_directory.name
+        blob_id = blob_directory.name
         asset_path = blob_id_to_asset_path[blob_id]
         summarized_activity_by_asset[asset_path] += sum(bytes_sent)
 
@@ -312,23 +312,23 @@ def _summarize_dandiset_by_asset(
 
 
 def _summarize_dandiset_by_region(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, index_to_region: dict[int, str]
+    *, blob_directories: list[pathlib.Path], summary_file_path: pathlib.Path, index_to_region: dict[int, str]
 ) -> None:
     all_regions = []
     all_bytes_sent = []
-    for asset_directory in asset_directories:
+    for blob_directory in blob_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
 
-        if not asset_directory.exists():
+        if not blob_directory.exists():
             continue  # No extracted logs found (possible asset was never accessed); skip to next asset
 
-        indexed_ips_file_path = asset_directory / "indexed_ips.txt"
+        indexed_ips_file_path = blob_directory / "indexed_ips.txt"
         indexed_ips = [int(ip_index.strip()) for ip_index in indexed_ips_file_path.read_text().splitlines()]
         regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
         all_regions.extend(regions)
 
-        bytes_sent_file_path = asset_directory / "bytes_sent.txt"
+        bytes_sent_file_path = blob_directory / "bytes_sent.txt"
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
         all_bytes_sent.extend(bytes_sent)
 
