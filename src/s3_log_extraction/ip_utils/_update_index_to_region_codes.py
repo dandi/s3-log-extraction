@@ -104,6 +104,8 @@ def _get_region_code_from_ip_index(
         country = details.details.get("country", None)
         region = details.details.get("region", None)
 
+        print(f"\n\n{details=}\n\n")
+
         match (country is None, region is None):
             case (True, True):
                 region_string = None

@@ -52,15 +52,17 @@ def generate_dandiset_summaries(
 
     # TODO: cache even the dandiset listing and leverage etags
     client = dandi.dandiapi.DandiAPIClient()
-    if pick is None:
+    if pick is None and skip is not None:
         dandiset_ids_to_exclude = {dandiset_id: True for dandiset_id in skip}
         dandiset_ids_to_summarize = [
             dandiset.identifier
             for dandiset in client.get_dandisets()
             if dandiset_ids_to_exclude.get(dandiset.identifier, False) is False
         ]
-    else:
+    elif pick is not None and skip is None:
         dandiset_ids_to_summarize = pick
+    else:
+        dandiset_ids_to_summarize = [dandiset.identifier for dandiset in client.get_dandisets()]
 
     if max_workers == 1:
         for dandiset_id in tqdm.tqdm(
