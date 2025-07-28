@@ -55,6 +55,10 @@ def update_region_code_coordinates() -> None:
         smoothing=0,
         unit="regions",
     ):
+        # Bogon IPs do not have coordinates, so skip
+        if country_and_region_code == "bogon":
+            continue
+
         coordinates = _get_coordinates_from_region_code(
             country_and_region_code=country_and_region_code,
             ipinfo_client=ipinfo_client,
