@@ -140,16 +140,16 @@ export S3_LOG_EXTRACTION_PASSWORD="ask_yarik_or_cody_for_password"
 In fresh environments, the cache should be specified as:
 
 ```bash
-s3_log_extraction set_cache /mnt/backup/dandi/s3-logs-extraction-cache
+s3logextraction config cache set /mnt/backup/dandi/s3-logs-extraction-cache
 ```
 
 To run all the steps (such as for daily updates):
 
 ```bash
-s3_log_extraction extract_logs /mnt/backup/dandi/dandiarchive-logs --mode dandi
-s3_log_extraction index_ips
-s3_log_extraction update_indexed_region_codes
-s3_log_extraction update_region_code_coordinates
+s3logextraction extract /mnt/backup/dandi/dandiarchive-logs --mode dandi
+s3logextraction update ip indexes
+s3logextraction update ip regions
+s3logextraction update ip coordinates
 s3logextraction update summaries --mode dandi
 s3logextraction update totals --mode dandi
 s3logextraction update summaries --mode archive
