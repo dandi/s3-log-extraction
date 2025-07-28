@@ -243,15 +243,29 @@ def _update_ip_coordinates_cli() -> None:
     type=click.STRING,
     default=None,
 )
+@click.option(
+    "--workers",
+    help=(
+        "The maximum number of workers to use for parallel processing. "
+        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc. "
+        "By default, "
+    ),
+    required=False,
+    type=click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    default=-2,
+)
 def _update_summaries_cli(
-    mode: typing.Literal["dandi", "archive"] | None = None, pick: str | None = None, skip: str | None = None
+    mode: typing.Literal["dandi", "archive"] | None = None,
+    pick: str | None = None,
+    skip: str | None = None,
+    workers: int = -2,
 ) -> None:
     """Generate condensed summaries of activity."""
     match mode:
         case "dandi":
             pick_as_list = pick.split(",") if pick is not None else None
             skip_as_list = skip.split(",") if skip is not None else None
-            generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list)
+            generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list, workers=workers)
         case "archive":
             generate_archive_summaries()
         case _:

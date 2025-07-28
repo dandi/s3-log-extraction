@@ -287,17 +287,15 @@ def _summarize_dandiset_by_asset(
 ) -> None:
     summarized_activity_by_asset = collections.defaultdict(int)
     for blob_directory in blob_directories:
-        # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
-        # Just copy the file over instead of reprocessing
+        blob_id = blob_directory.name
 
-        if not blob_directory.exists():
-            continue  # No extracted logs found (possible asset was never accessed); skip to next asset
+        # It is possible that this blob cannot be uniquely associated with an asset path within the Dandiset
+        # (the blob ID would not be in the asset path mapping in that case)
+        asset_path = blob_id_to_asset_path.get(blob_id, "undetermined")
 
         bytes_sent_file_path = blob_directory / "bytes_sent.txt"
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
 
-        blob_id = blob_directory.name
-        asset_path = blob_id_to_asset_path[blob_id]
         summarized_activity_by_asset[asset_path] += sum(bytes_sent)
 
     if len(summarized_activity_by_asset) == 0:
