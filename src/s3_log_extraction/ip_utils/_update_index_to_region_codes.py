@@ -8,8 +8,9 @@ import tqdm
 import yaml
 
 from ._globals import _KNOWN_SERVICES
-from ._ip_cache import get_ip_cache_directory, load_index_to_ip, load_ip_cache
+from ._ip_cache import load_index_to_ip, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
+from ..config import get_ip_cache_directory
 
 
 def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
@@ -105,7 +106,7 @@ def _get_region_code_from_ip_index(
 
         match (country is None, region is None):
             case (True, True):
-                region_string = None
+                region_string = "bogon" if details.details.get("bogon", False) is True else None
             case (True, False):
                 region_string = region
             case (False, True):
