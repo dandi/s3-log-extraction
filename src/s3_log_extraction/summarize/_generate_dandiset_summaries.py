@@ -289,6 +289,10 @@ def _summarize_dandiset_by_asset(
     for blob_directory in blob_directories:
         blob_id = blob_directory.name
 
+        # No extracted logs found (possible asset was never accessed); skip to next asset
+        if not blob_directory.exists():
+            continue
+
         # It is possible that this blob cannot be uniquely associated with an asset path within the Dandiset
         # (the blob ID would not be in the asset path mapping in that case)
         asset_path = blob_id_to_asset_path.get(blob_id, "undetermined")
