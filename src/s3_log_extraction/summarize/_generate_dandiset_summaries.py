@@ -260,6 +260,7 @@ def _summarize_dandiset(
 def _summarize_dandiset_by_day(*, blob_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
     all_dates = []
     all_bytes_sent = []
+    all_indexed_ips = []
     for blob_directory in blob_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
@@ -278,18 +279,24 @@ def _summarize_dandiset_by_day(*, blob_directories: list[pathlib.Path], summary_
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
         all_bytes_sent.extend(bytes_sent)
 
-    summarized_activity_by_day = collections.defaultdict(int)
-    for date, bytes_sent in zip(all_dates, all_bytes_sent):
-        summarized_activity_by_day[date] += bytes_sent
+        indexed_ips_file_path = blob_directory / "indexed_ips.txt"
+        indexed_ips = [int(ip_index.strip()) for ip_index in indexed_ips_file_path.read_text().splitlines()]
+        all_indexed_ips.extend(indexed_ips)
 
-    if len(summarized_activity_by_day) == 0:
+    date_to_bytes_sent_per_dandiset = collections.defaultdict(int)
+    date_to_unique_ips_per_dandiset = collections.defaultdict(int)
+    for date, bytes_sent, indexed_ips in zip(all_dates, all_bytes_sent, all_indexed_ips):
+        date_to_bytes_sent_per_dandiset[date] += bytes_sent
+        date_to_unique_ips_per_dandiset[date] += len(set(indexed_ips))
+
+    if len(date_to_bytes_sent_per_dandiset) == 0:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_table = pandas.DataFrame(
         data={
-            "date": list(summarized_activity_by_day.keys()),
-            "bytes_sent": list(summarized_activity_by_day.values()),
+            "date": list(date_to_bytes_sent_per_dandiset.keys()),
+            "bytes_sent": list(date_to_bytes_sent_per_dandiset.values()),
         }
     )
     summary_table.sort_values(by="date", inplace=True)
@@ -305,7 +312,8 @@ def _timestamp_to_date_format(*, timestamp: str) -> str:
 def _summarize_dandiset_by_asset(
     *, blob_directories: list[pathlib.Path], summary_file_path: pathlib.Path, blob_id_to_asset_path: dict[str, str]
 ) -> None:
-    summarized_activity_by_asset = collections.defaultdict(int)
+    asset_path_to_bytes_sent_per_dandiset = collections.defaultdict(int)
+    asset_path_to_unique_ips_per_dandiset = collections.defaultdict(int)
     for blob_directory in blob_directories:
         blob_id = blob_directory.name
 
@@ -318,18 +326,22 @@ def _summarize_dandiset_by_asset(
         asset_path = blob_id_to_asset_path.get(blob_id, "undetermined")
 
         bytes_sent_file_path = blob_directory / "bytes_sent.txt"
+        indexed_ips_file_path = blob_directory / "indexed_ips.txt"
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
+        indexed_ips = [int(value.strip()) for value in indexed_ips_file_path.read_text().splitlines()]
 
-        summarized_activity_by_asset[asset_path] += sum(bytes_sent)
+        asset_path_to_bytes_sent_per_dandiset[asset_path] += sum(bytes_sent)
+        asset_path_to_unique_ips_per_dandiset[asset_path] += len(set(indexed_ips))
 
-    if len(summarized_activity_by_asset) == 0:
+    if len(asset_path_to_bytes_sent_per_dandiset) == 0:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_table = pandas.DataFrame(
         data={
-            "asset_path": list(summarized_activity_by_asset.keys()),
-            "bytes_sent": list(summarized_activity_by_asset.values()),
+            "asset_path": list(asset_path_to_bytes_sent_per_dandiset.keys()),
+            "bytes_sent": list(asset_path_to_bytes_sent_per_dandiset.values()),
+            "number_of_unique_ips": list(asset_path_to_unique_ips_per_dandiset.values()),
         }
     )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
@@ -338,6 +350,7 @@ def _summarize_dandiset_by_asset(
 def _summarize_dandiset_by_region(
     *, blob_directories: list[pathlib.Path], summary_file_path: pathlib.Path, index_to_region: dict[int, str]
 ) -> None:
+    all_indexed_ips = []
     all_regions = []
     all_bytes_sent = []
     for blob_directory in blob_directories:
@@ -350,24 +363,29 @@ def _summarize_dandiset_by_region(
         indexed_ips_file_path = blob_directory / "indexed_ips.txt"
         indexed_ips = [int(ip_index.strip()) for ip_index in indexed_ips_file_path.read_text().splitlines()]
         regions = [index_to_region.get(ip_index, "unknown") for ip_index in indexed_ips]
+
+        all_indexed_ips.extend(indexed_ips)
         all_regions.extend(regions)
 
         bytes_sent_file_path = blob_directory / "bytes_sent.txt"
         bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
         all_bytes_sent.extend(bytes_sent)
 
-    summarized_activity_by_region = collections.defaultdict(int)
-    for region, bytes_sent in zip(all_regions, all_bytes_sent):
-        summarized_activity_by_region[region] += bytes_sent
+    region_to_bytes_sent_per_dandiset = collections.defaultdict(int)
+    region_to_unique_ips_per_dandiset = collections.defaultdict(int)
+    for indexed_ips, region, bytes_sent in zip(all_indexed_ips, all_regions, all_bytes_sent):
+        region_to_bytes_sent_per_dandiset[region] += bytes_sent
+        region_to_unique_ips_per_dandiset[region] += len(set(indexed_ips))
 
-    if len(summarized_activity_by_region) == 0:
+    if len(region_to_bytes_sent_per_dandiset) == 0:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_table = pandas.DataFrame(
         data={
-            "region": list(summarized_activity_by_region.keys()),
-            "bytes_sent": list(summarized_activity_by_region.values()),
+            "region": list(region_to_bytes_sent_per_dandiset.keys()),
+            "bytes_sent": list(region_to_bytes_sent_per_dandiset.values()),
+            "number_of_unique_ips": list(region_to_unique_ips_per_dandiset.values()),
         }
     )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
