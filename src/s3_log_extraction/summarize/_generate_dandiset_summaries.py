@@ -124,6 +124,16 @@ def generate_dandiset_summaries(
         blob_id_to_asset_path=blob_id_to_asset_path,
     )
 
+    # Special key for no current association
+    dandiset_id = "unassociated"
+    _summarize_dandiset(
+        dandiset_id=dandiset_id,
+        blob_directories=dandiset_id_to_blob_directories.get(dandiset_id, []),
+        summary_directory=summary_directory,
+        index_to_region=index_to_region,
+        blob_id_to_asset_path=blob_id_to_asset_path,
+    )
+
 
 def _get_dandi_asset_info(
     *,
@@ -200,6 +210,16 @@ def _get_dandi_asset_info(
             if len(associated_asset_paths) > 1:
                 continue
             blob_id_to_asset_path[blob_id] = next(iter(associated_asset_paths))
+
+        for timestamps_file_path in (extraction_directory / "blobs").rglob(pattern="timestamps.txt"):
+            blob_directory = timestamps_file_path.parent
+
+            if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
+                dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
+
+        for blob_directory in (extraction_directory / "zarr").iterdir():
+            if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
+                dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
 
         yaml_content = {
             dandiset_id: [str(blob_directory) for blob_directory in blob_directories]

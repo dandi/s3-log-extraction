@@ -99,7 +99,8 @@ def _get_region_code_from_ip_index(
 
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
-        details = ipinfo_handler.getDetails(ip_address=ip_address)
+        timeout_in_seconds = 10
+        details = ipinfo_handler.getDetails(ip_address=ip_address, timeout=timeout_in_seconds)
 
         country = details.details.get("country", None)
         region = details.details.get("region", None)
