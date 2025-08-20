@@ -30,9 +30,11 @@ def bundle_database():
     }
     blob_id_to_index = {value: key for key, value in blob_index_to_id.items()}
 
+    database_directory = sharing_directory / "extracted_activity.parquet"
+    database_directory.mkdir(exist_ok=True)
     for asset_type in ["blobs", "zarr"]:
         asset_type_key = asset_type[0]
-        asset_partition_directory = sharing_directory / f"asset_type={asset_type}"
+        asset_partition_directory = database_directory / f"asset_type={asset_type}"
         asset_partition_directory.mkdir(exist_ok=True)
 
         for blob_head in itertools.chain(range(10), list("abcdef")):
