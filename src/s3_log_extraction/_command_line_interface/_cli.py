@@ -7,6 +7,7 @@ import click
 import pydantic
 
 from ..config import reset_extraction, set_cache_directory
+from ..database import bundle_database
 from ..extractors import (
     DandiRemoteS3LogAccessExtractor,
     DandiS3LogAccessExtractor,
@@ -271,6 +272,13 @@ def _update_summaries_cli(
         case _:
             message = "The generic mode is not yet implemented - please raise an issue to discuss."
             click.echo(message=message, err=True)
+
+
+# s3logextraction update database
+@_update_cli.command(name="database")
+def _bundle_database_cli() -> None:
+    """Update (or create) a bundled database for easier sharing."""
+    bundle_database()
 
 
 # s3logextraction update totals
