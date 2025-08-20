@@ -39,9 +39,10 @@ def bundle_database():
             blob_head_partition_directory = asset_partition_directory / f"blob_head={blob_head}"
             blob_head_partition_directory.mkdir(exist_ok=True)
 
-            timestamps_file_paths_per_partition = (extraction_directory / asset_type).rglob(
-                pattern=f"{blob_head}*/**/timestamps.txt"
-            )
+            timestamps_file_paths_per_partition = [
+                file_path
+                for file_path in (extraction_directory / asset_type).rglob(pattern=f"{blob_head}*/**/timestamps.txt")
+            ]
 
             all_asset_types = []  # only the first character ('b' for blobs or 'z' for Zarr) is used to save RAM
             all_blob_heads = []  # 'head' = 'first character of ID'
