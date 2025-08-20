@@ -9,6 +9,8 @@ Added `s3_log_extraction.extractors.RemoteS3LogAccessExtractor` class for runnin
 
 Added parallelization option for UNIX systems, with all but one CPU requested by default.
 
+Now tracks 'unassociated' access activity for DANDI summaries, which includes all extracted log data for blobs that do not match to any currently known Dandiset.
+
 # Improvements
 
 Added `bogon` labeling for IP addresses that are not routable on the public internet, such as private IPs and reserved ranges. This improves the update iteration of the `s3logextraction update ip regions`.
