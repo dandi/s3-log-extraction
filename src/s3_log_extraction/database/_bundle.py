@@ -19,8 +19,10 @@ def bundle_database():
     sharing_directory = cache_directory / "sharing"
     sharing_directory.mkdir(exist_ok=True)
 
-    all_asset_timestamps_file_paths = itertools.chain(
-        (extraction_directory / asset_type).rglob(pattern="timestamps.txt") for asset_type in ["blobs", "zarr"]
+    all_asset_timestamps_file_paths = itertools.chain.from_iterable(
+        iterable=(
+            (extraction_directory / asset_type).rglob(pattern="timestamps.txt") for asset_type in ["blobs", "zarr"]
+        )
     )
 
     # We here refer to all IDs as 'blob IDs', even if they are Zarr assets
