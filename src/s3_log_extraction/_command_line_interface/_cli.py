@@ -7,6 +7,7 @@ import click
 import pydantic
 
 from ..config import get_summary_directory, reset_extraction, set_cache_directory
+from ..database import bundle_database
 from ..extractors import (
     DandiRemoteS3LogAccessExtractor,
     DandiS3LogAccessExtractor,
@@ -273,6 +274,13 @@ def _update_summaries_cli(
             generate_archive_summaries(get_summary_directory())
         case _:
             generate_summaries()
+
+
+# s3logextraction update database
+@_update_cli.command(name="database")
+def _bundle_database_cli() -> None:
+    """Update (or create) a bundled database for easier sharing."""
+    bundle_database()
 
 
 # s3logextraction update totals
