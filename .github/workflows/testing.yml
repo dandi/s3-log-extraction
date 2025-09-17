@@ -35,17 +35,17 @@ jobs:
       - name: Display installed packages and their sources for debugging
         run: pip list
 
-#      - name: Run pytest with coverage and printout coverage for debugging
-#        run: |
-#          pytest tests -vv -rsx --cov=dandi_s3_log_parser --cov-report xml:./coverage.xml
-#          cat ./coverage.xml
-#
-#      - name: Upload coverage to Codecov
-#        uses: codecov/codecov-action@v4
-#        with:
-#          token: ${{ secrets.CODECOV_CREDENTIALS }}
-#          file: ./coverage.xml
-#          flags: unittests
-#          name: codecov-umbrella
-#          fail_ci_if_error: true
-#          verbose: true
+      - name: Run pytest with coverage and printout coverage for debugging
+        run: |
+          pytest tests -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+          cat ./coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_CREDENTIALS }}
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+          verbose: true
