@@ -62,6 +62,7 @@ dependencies = [
     "cryptography",
     "pydantic",
     "polars",
+    "fsspec",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
