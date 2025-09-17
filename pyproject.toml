@@ -86,7 +86,10 @@ remote = [
 dandi = [
     "dandi",
 ]
-all = ["s3_log_extraction[geolocation,remote,dandi]"]
+sharing = [
+    "polars",
+]
+all = ["s3_log_extraction[geolocation,remote,dandi,sharing]"]
 
 [project.urls]
 Homepage = "https://dandi.github.io/access-page/"
