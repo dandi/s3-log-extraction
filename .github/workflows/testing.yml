@@ -30,7 +30,7 @@ jobs:
           pip install pytest-cov
 
       - name: Install local checkout
-        run: pip install --no-cache-dir .
+        run: pip install --no-cache-dir .[all] --dependency-group all
 
       - name: Display installed packages and their sources for debugging
         run: pip list
