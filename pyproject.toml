@@ -61,6 +61,7 @@ dependencies = [
     "psutil",
     "cryptography",
     "pydantic",
+    "polars",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
