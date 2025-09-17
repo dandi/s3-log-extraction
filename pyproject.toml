@@ -60,6 +60,7 @@ dependencies = [
     "natsort",
     "psutil",
     "cryptography",
+    "pydantic",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
