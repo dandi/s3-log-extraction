@@ -2,6 +2,10 @@
 
 # Upcoming
 
+
+
+# v1.1.0
+
 ## Features
 
 Added `s3_log_extraction.extractors.RemoteS3LogAccessExtractor` class for running extraction remotely rather than on local files.
