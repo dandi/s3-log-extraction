@@ -3,8 +3,8 @@
 import os
 import typing
 
-import rich_click
 import pydantic
+import rich_click
 
 from ..config import reset_extraction, set_cache_directory
 from ..database import bundle_database

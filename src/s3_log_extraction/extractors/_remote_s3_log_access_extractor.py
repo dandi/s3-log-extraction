@@ -10,8 +10,8 @@ import shutil
 import sys
 import tempfile
 
-import pydantic
 import fsspec
+import pydantic
 import tqdm
 import yaml
 
