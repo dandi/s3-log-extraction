@@ -3,7 +3,7 @@
 import os
 import typing
 
-import click
+import rich_click
 import pydantic
 
 from ..config import reset_extraction, set_cache_directory
@@ -32,22 +32,22 @@ from ..validate import (
 
 
 # s3logextraction
-@click.group()
+@rich_click.group()
 def _s3logextraction_cli():
     pass
 
 
 # s3logextraction extract < directory >
 @_s3logextraction_cli.command(name="extract")
-@click.argument("directory", type=click.Path(writable=False))
-@click.option(
+@rich_click.argument("directory", type=rich_click.Path(writable=False))
+@rich_click.option(
     "--limit",
     help="The maximum number of files to process. By default, all files will be processed.",
     required=False,
-    type=click.IntRange(min=1),
+    type=rich_click.IntRange(min=1),
     default=None,
 )
-@click.option(
+@rich_click.option(
     "--workers",
     help=(
         "The maximum number of workers to use for parallel processing. "
@@ -55,10 +55,10 @@ def _s3logextraction_cli():
         "By default, "
     ),
     required=False,
-    type=click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
 )
-@click.option(
+@rich_click.option(
     "--mode",
     help=(
         "Special parsing mode related to expected object key structure; "
@@ -66,10 +66,10 @@ def _s3logextraction_cli():
         "By default, objects will be processed using the generic structure."
     ),
     required=False,
-    type=click.Choice(choices=["remote", "dandi", "dandi-remote"]),
+    type=rich_click.Choice(choices=["remote", "dandi", "dandi-remote"]),
     default=None,
 )
-@click.option(
+@rich_click.option(
     "--manifest",
     "manifest_file_path",
     help=(
@@ -78,7 +78,7 @@ def _s3logextraction_cli():
         "from flat to nested at a particular point in time."
     ),
     required=False,
-    type=click.Path(writable=False),
+    type=rich_click.Path(writable=False),
     default=None,
 )
 def _extract_cli(
@@ -123,7 +123,7 @@ def _extract_cli(
 
 # s3logextraction stop
 @_s3logextraction_cli.command(name="stop")
-@click.option(
+@rich_click.option(
     "--timeout",
     "max_timeout_in_seconds",
     help=(
@@ -132,7 +132,7 @@ def _extract_cli(
         "Recall this command to start a new timeout."
     ),
     required=False,
-    type=click.IntRange(min=1),
+    type=rich_click.IntRange(min=1),
     default=600,  # 10 minutes
 )
 def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
@@ -160,7 +160,7 @@ def _cache_cli() -> None:
 
 # s3logextraction config cache set < directory >
 @_cache_cli.command(name="set")
-@click.argument("directory", type=click.Path(writable=True))
+@rich_click.argument("directory", type=rich_click.Path(writable=True))
 def _set_cache_cli(directory: str) -> None:
     """
     Set a non-default location for the cache directory.
@@ -219,7 +219,7 @@ def _update_ip_coordinates_cli() -> None:
 
 # s3logextraction update summaries
 @_update_cli.command(name="summaries")
-@click.option(
+@rich_click.option(
     "--mode",
     help=(
         "Generate condensed summaries of activity across the extracted data per object key. "
@@ -227,24 +227,24 @@ def _update_ip_coordinates_cli() -> None:
         "Mode 'archive' aggregates over all dataset summaries."
     ),
     required=False,
-    type=click.Choice(choices=["dandi", "archive"]),
+    type=rich_click.Choice(choices=["dandi", "archive"]),
     default=None,
 )
-@click.option(
+@rich_click.option(
     "--pick",
     help="A comma-separated list of directories to exclusively select when generating summaries.",
     required=False,
-    type=click.STRING,
+    type=rich_click.STRING,
     default=None,
 )
-@click.option(
+@rich_click.option(
     "--skip",
     help="A comma-separated list of directories to exclude when generating summaries.",
     required=False,
-    type=click.STRING,
+    type=rich_click.STRING,
     default=None,
 )
-@click.option(
+@rich_click.option(
     "--workers",
     help=(
         "The maximum number of workers to use for parallel processing. "
@@ -252,7 +252,7 @@ def _update_ip_coordinates_cli() -> None:
         "By default, "
     ),
     required=False,
-    type=click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
 )
 def _update_summaries_cli(
@@ -271,7 +271,7 @@ def _update_summaries_cli(
             generate_archive_summaries()
         case _:
             message = "The generic mode is not yet implemented - please raise an issue to discuss."
-            click.echo(message=message, err=True)
+            rich_click.echo(message=message, err=True)
 
 
 # s3logextraction update database
@@ -283,14 +283,14 @@ def _bundle_database_cli() -> None:
 
 # s3logextraction update totals
 @_update_cli.command(name="totals")
-@click.option(
+@rich_click.option(
     "--mode",
     help=(
         "Generate condensed summaries of activity across the extracted data per object key. "
         "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
     ),
     required=False,
-    type=click.Choice(choices=["dandi", "archive"]),
+    type=rich_click.Choice(choices=["dandi", "archive"]),
     default=None,
 )
 def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
@@ -302,7 +302,7 @@ def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -
             generate_archive_totals()
         case _:
             message = "The generic mode is not yet implemented - please raise an issue to discuss."
-            click.echo(message=message, err=True)
+            rich_click.echo(message=message, err=True)
 
 
 # s3logextraction testing
@@ -321,7 +321,7 @@ def _testing_generate_cli() -> None:
 
 # s3logextraction testing generate benchmark
 @_testing_generate_cli.command(name="benchmark")
-@click.argument("directory", type=click.Path(writable=True))
+@rich_click.argument("directory", type=rich_click.Path(writable=True))
 def _generate_benchmark_cli(directory: str) -> None:
     """
     Generate a ~120 MB benchmark of the S3 log extraction to use for performance testing.
@@ -333,11 +333,11 @@ def _generate_benchmark_cli(directory: str) -> None:
 
 # s3logextraction validate < protocol > < directory >
 @_s3logextraction_cli.command(name="validate")
-@click.argument(
+@rich_click.argument(
     "protocol",
-    type=click.Choice(["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]),
+    type=rich_click.Choice(["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]),
 )
-@click.argument("directory", type=click.Path(writable=False))
+@rich_click.argument("directory", type=rich_click.Path(writable=False))
 def _validate_cli(
     protocol: typing.Literal["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"],
     directory: pydantic.DirectoryPath,
