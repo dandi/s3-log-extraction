@@ -1,7 +1,6 @@
 import itertools
 import pathlib
 
-import polars
 import tqdm
 import yaml
 
@@ -14,6 +13,8 @@ def bundle_database():
 
     This makes it easier to share publicly.
     """
+    import polars
+
     cache_directory = get_cache_directory()
     extraction_directory = cache_directory / "extraction"
     sharing_directory = cache_directory / "sharing"

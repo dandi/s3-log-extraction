@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 import fsspec
+import pydantic
 import tqdm
 import yaml
 
@@ -370,7 +371,8 @@ class RemoteS3LogAccessExtractor:
         #     yaml.dump(data=self.processed_years, stream=file_stream)
 
     @staticmethod
-    def parse_manifest(*, file_path: str | pathlib.Path) -> None:
+    @pydantic.validate
+    def parse_manifest(*, file_path: pydantic.FilePath) -> None:
         """
         Read the manifest file and save it as a parsed JSON object, adjacent to the initial file.
 
