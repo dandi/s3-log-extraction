@@ -26,9 +26,18 @@ def assert_expected_extraction_content(
     for record_file in record_files:
         output_file = output_directory / record_file
         expected_file = expected_output_directory / record_file
+
+        test_directory = pathlib.Path(__file__).parent.parent.parent.parent / "tests"
+        expected_test_directory = pathlib.Path(r"E:\GitHub\s3-log-extraction\tests")
+
         with output_file.open(mode="r") as file_stream_1, expected_file.open(mode="r") as file_stream_2:
-            output_content = set(file_stream_1.read().splitlines())
-            expected_content = set(file_stream_2.read().splitlines())
+            output_content = set(
+                pathlib.Path(line).relative_to(test_directory) for line in file_stream_1.read().splitlines()
+            )
+            expected_content = set(
+                pathlib.Path(line).relative_to(expected_test_directory) for line in file_stream_2.read().splitlines()
+            )
+
             assert output_content == expected_content, (
                 f"Line set mismatch in {record_file}.\n"
                 f"Extra in output: {output_content - expected_content}\n"
