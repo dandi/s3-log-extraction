@@ -146,8 +146,12 @@ known-first-party = ["s3_log_extraction"]
 "src/s3_log_extraction/_hidden_top_level_imports.py" = ["F401"]  # Must perform imports here even if not exposed
 
 
-# None of these environment variables need to be 'correct' with respect to Drogon
+# None of these environment variables need to be 'correct' with respect to test suite
 [tool.pytest.ini_options]
+markers = [
+    "dandi: mark a test as requiring remote resources",
+    "remote: mark a test as requiring remote resources",
+]
 env = [
     "IPINFO_API_KEY=a1",
     "OPENCAGE_API_KEY=a1",

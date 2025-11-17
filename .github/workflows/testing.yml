@@ -48,7 +48,7 @@ jobs:
 
       - name: Run pytest with coverage and printout coverage for debugging
         run: |
-          pytest tests -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+          pytest tests -m "not dandi and not remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
           cat ./coverage.xml
 
       - name: Upload coverage to Codecov
