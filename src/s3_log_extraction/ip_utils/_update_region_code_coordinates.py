@@ -1,8 +1,6 @@
 import os
 
-import ipinfo
 import natsort
-import opencage.geocoder
 import tqdm
 import yaml
 
@@ -13,6 +11,9 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 def update_region_code_coordinates() -> None:
     """Update the `region_codes_to_coordinates.yaml` file in the cache directory."""
+    import ipinfo
+    import opencage.geocoder
+
     opencage_api_key = os.environ.get("OPENCAGE_API_KEY", None)
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", None)
 
@@ -91,8 +92,8 @@ def update_region_code_coordinates() -> None:
 def _get_coordinates_from_region_code(
     *,
     country_and_region_code: str,
-    ipinfo_client: ipinfo.Handler,
-    opencage_client: opencage.geocoder.OpenCageGeocode,
+    ipinfo_client: "ipinfo.Handler",
+    opencage_client: "opencage.geocoder.OpenCageGeocode",
     service_coordinates: dict[str, dict[str, float]],
     opencage_failures: list[str],
 ) -> dict[str, float]:
@@ -137,7 +138,7 @@ def _get_coordinates_from_region_code(
 def _get_service_coordinates_from_ipinfo(
     *,
     country_and_region_code: str,
-    ipinfo_client: ipinfo.Handler,
+    ipinfo_client: "ipinfo.Handler",
     service_coordinates: dict[str, dict[str, float]],
 ) -> dict[str, float]:
     # Note that services with a single code (e.g., "GitHub") should be handled via the global default dictionary
@@ -162,7 +163,7 @@ def _get_service_coordinates_from_ipinfo(
 
 
 def _get_coordinates_from_opencage(
-    *, country_and_region_code: str, opencage_client: opencage.geocoder.OpenCageGeocode, opencage_failures: list[str]
+    *, country_and_region_code: str, opencage_client: "opencage.geocoder.OpenCageGeocode", opencage_failures: list[str]
 ) -> dict[str, float]:
     """
     Use the OpenCage API to get the coordinates (in decimal degrees form) for a ISO 3166 country/region code.

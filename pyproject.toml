@@ -134,6 +134,7 @@ ignore = [
     "S101",
     "ICN001",
     "INP001",
+    "F821",  # Only way to do annotation of lazy imports...
 ]
 fixable = ["ALL"]
 

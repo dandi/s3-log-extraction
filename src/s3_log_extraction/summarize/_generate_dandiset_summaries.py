@@ -3,7 +3,6 @@ import concurrent.futures
 import datetime
 import pathlib
 
-import dandi.dandiapi
 import pandas
 import pydantic
 import tqdm
@@ -39,6 +38,8 @@ def generate_dandiset_summaries(
     skip : list of strings, optional
         A list of Dandiset IDs to exclude when generating summaries.
     """
+    import dandi.dandiapi
+
     summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
     if pick is not None and skip is not None:
         message = "Cannot specify both `pick` and `skip` parameters simultaneously."
@@ -135,10 +136,9 @@ def generate_dandiset_summaries(
     )
 
 
-def _get_dandi_asset_info(
-    *,
-    use_cache: bool = True,
-) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
+def _get_dandi_asset_info(*, use_cache: bool = True) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
+    import dandi.dandiapi
+
     cache_directory = get_cache_directory()
     dandi_cache_directory = cache_directory / "dandi"
     dandi_cache_directory.mkdir(exist_ok=True)
