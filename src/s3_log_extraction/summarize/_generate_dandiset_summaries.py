@@ -53,7 +53,7 @@ def generate_dandiset_summaries(
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    dandiset_id_to_blob_directories, blob_id_to_asset_path = _get_dandi_asset_info()
+    dandiset_id_to_blob_directories, blob_id_to_asset_path = _get_dandi_asset_info(api_url=api_url)
 
     # TODO: cache even the dandiset listing and leverage etags
     client = dandi.dandiapi.DandiAPIClient(api_url=api_url)
