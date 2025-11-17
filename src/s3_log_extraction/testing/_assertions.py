@@ -27,13 +27,14 @@ def assert_expected_extraction_content(
     for record_file in record_files:
         output_file = output_directory / record_file
         expected_file = expected_output_directory / record_file
-        expected_test_directory = pathlib.WindowsPath(r"E:\GitHub\s3-log-extraction\tests\extraction")
+
+        test_directory = str(test_directory)
+        expected_test_directory = r"E:\GitHub\s3-log-extraction\tests\extraction"
+
         with output_file.open(mode="r") as file_stream_1, expected_file.open(mode="r") as file_stream_2:
-            output_content = set(
-                pathlib.Path(line).relative_to(test_directory) for line in file_stream_1.read().splitlines()
-            )
+            output_content = set(line.removeprefix(test_directory) for line in file_stream_1.read().splitlines())
             expected_content = set(
-                pathlib.Path(line).relative_to(expected_test_directory) for line in file_stream_2.read().splitlines()
+                line.removeprefix(expected_test_directory) for line in file_stream_2.read().splitlines()
             )
 
             assert output_content == expected_content, (
