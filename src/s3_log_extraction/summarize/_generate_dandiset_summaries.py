@@ -223,9 +223,10 @@ def _get_dandi_asset_info(
             if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
                 dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
 
-        for blob_directory in (extraction_directory / "zarr").iterdir():
-            if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
-                dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
+        if (zarr_directory := extraction_directory / "zarr").is_dir():
+            for blob_directory in zarr_directory.iterdir():
+                if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
+                    dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
 
         yaml_content = {
             dandiset_id: [str(blob_directory) for blob_directory in blob_directories]
