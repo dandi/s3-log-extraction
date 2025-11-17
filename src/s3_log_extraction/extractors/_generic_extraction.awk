@@ -37,12 +37,12 @@ BEGIN {
 
     datetime = pre_uri_fields[3]
     parsed_timestamp = \
-        substr(datetime, 11, 2) \  # Last two digits of year
-        MONTH_TO_NUMERIC[substr(datetime, 5, 3)] \  # Month
-        substr(datetime, 2, 2) \  # Day
-        substr(datetime, 14, 2) \  # Hour
-        substr(datetime, 17, 2) \  # Minute
-        substr(datetime, 20, 2)  # Second
+        substr(datetime, 11, 2) \
+        MONTH_TO_NUMERIC[substr(datetime, 5, 3)] \
+        substr(datetime, 2, 2) \
+        substr(datetime, 14, 2) \
+        substr(datetime, 17, 2) \
+        substr(datetime, 20, 2)
 
     bytes_sent = (post_uri_fields[4] == "-" ? 0 : post_uri_fields[4])
     ip = pre_uri_fields[5]

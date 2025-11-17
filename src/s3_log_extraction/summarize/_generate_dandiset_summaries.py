@@ -20,6 +20,7 @@ def generate_dandiset_summaries(
     pick: list[str] | None = None,
     skip: list[str] | None = None,
     workers: int = -2,
+    api_url: str | None = None,
 ) -> None:
     """
     Generate top-level summaries of access activity for all Dandisets.
@@ -37,6 +38,9 @@ def generate_dandiset_summaries(
         A list of Dandiset IDs to exclusively select when generating summaries.
     skip : list of strings, optional
         A list of Dandiset IDs to exclude when generating summaries.
+    api_url : str, optional
+        Base API URL of the server to interact with.
+        Defaults to using the main DANDI API server.
     """
     import dandi.dandiapi
 
@@ -52,7 +56,7 @@ def generate_dandiset_summaries(
     dandiset_id_to_blob_directories, blob_id_to_asset_path = _get_dandi_asset_info()
 
     # TODO: cache even the dandiset listing and leverage etags
-    client = dandi.dandiapi.DandiAPIClient()
+    client = dandi.dandiapi.DandiAPIClient(api_url=api_url)
     if pick is None and skip is not None:
         dandiset_ids_to_exclude = {dandiset_id: True for dandiset_id in skip}
         dandiset_ids_to_summarize = [
@@ -136,7 +140,9 @@ def generate_dandiset_summaries(
     )
 
 
-def _get_dandi_asset_info(*, use_cache: bool = True) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
+def _get_dandi_asset_info(
+    *, use_cache: bool = True, api_url: str | None = None
+) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
     import dandi.dandiapi
 
     cache_directory = get_cache_directory()
@@ -161,7 +167,7 @@ def _get_dandi_asset_info(*, use_cache: bool = True) -> tuple[dict[str, list[pat
         with monthly_blob_id_to_asset_path_cache_file_path.open(mode="r") as file_stream:
             blob_id_to_asset_path = yaml.safe_load(stream=file_stream)
     else:
-        client = dandi.dandiapi.DandiAPIClient()
+        client = dandi.dandiapi.DandiAPIClient(api_url=api_url)
         dandisets = list(client.get_dandisets())
 
         blob_id_to_associated_asset_paths: dict[str, set[str]] = collections.defaultdict(set)

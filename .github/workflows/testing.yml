@@ -5,6 +5,9 @@ on:
       CODECOV_CREDENTIALS:
         required: true
 
+env:
+  S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
+
 jobs:
 
   run:
