@@ -34,7 +34,8 @@ def assert_expected_extraction_content(
         with output_file.open(mode="r") as file_stream_1, expected_file.open(mode="r") as file_stream_2:
             output_content = set(line.removeprefix(test_directory) for line in file_stream_1.read().splitlines())
             expected_content = set(
-                line.removeprefix(expected_test_directory) for line in file_stream_2.read().splitlines()
+                line.removeprefix(expected_test_directory).replace(r"\\", "/")
+                for line in file_stream_2.read().splitlines()
             )
 
             assert output_content == expected_content, (
