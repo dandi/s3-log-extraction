@@ -65,7 +65,6 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: BSD License",
     "Intended Audience :: Developers",
     "Operating System :: Unix",
     "Operating System :: MacOS",
@@ -73,16 +72,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
     "License :: OSI Approved :: MIT License",
 ]
-
-[project.urls]
-Homepage = "https://dandi.github.io/access-page/"
-Documentation = "https://github.com/dandi/s3-log-extraction/blob/master/README.md"
-Repository = "https://github.com/dandi/s3-log-extraction/"
-Issues = "https://github.com/dandi/s3-log-extraction/issues"
-Changelog = "https://github.com/dandi/s3-log-extraction/blob/master/CHANGELOG.md"
-
-[project.scripts]
-s3logextraction = "s3_log_extraction._command_line_interface._cli:_s3logextraction_cli"
 
 [project.optional-dependencies]
 geolocation = [
@@ -97,7 +86,20 @@ remote = [
 dandi = [
     "dandi",
 ]
-all = ["s3_log_extraction[geolocation,remote,dandi]"]
+sharing = [
+    "polars",
+]
+all = ["s3_log_extraction[geolocation,remote,dandi,sharing]"]
+
+[project.urls]
+Homepage = "https://dandi.github.io/access-page/"
+Documentation = "https://github.com/dandi/s3-log-extraction/blob/master/README.md"
+Repository = "https://github.com/dandi/s3-log-extraction/"
+Issues = "https://github.com/dandi/s3-log-extraction/issues"
+Changelog = "https://github.com/dandi/s3-log-extraction/blob/master/CHANGELOG.md"
+
+[project.scripts]
+s3logextraction = "s3_log_extraction._command_line_interface._cli:_s3logextraction_cli"
 
 [dependency-groups]
 test = ["pytest"]
