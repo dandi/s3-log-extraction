@@ -6,7 +6,7 @@
 </p>
 <p>
     <a href="https://pypi.org/project/s3-log-extraction/"><img alt="PyPI latest release version" src="https://badge.fury.io/py/s3-log-extraction.svg?id=py&kill_cache=1"></a>
-    <a href="https://github.com/dandi/s3-log-extraction/blob/main/license.txt"><img alt="License: MIT" src="https://img.shields.io/pypi/l/s3-log-extraction.svg"></a>
+    <a href="https://github.com/dandi/s3-log-extraction/blob/main/LICENSE.txt"><img alt="License: MIT" src="https://img.shields.io/pypi/l/s3-log-extraction.svg"></a>
     <a href="https://doi.org/10.5281/zenodo.17147965"><img src="https://zenodo.org/badge/826995164.svg" alt="DOI"></a>
 </p>
 <p>
@@ -20,6 +20,8 @@ Extraction of minimal information from consolidated raw S3 logs for public shari
 Developed for the [DANDI Archive](https://dandiarchive.org/).
 
 Read more about [S3 logging on AWS](https://web.archive.org/web/20240807191829/https://docs.aws.amazon.com/AmazonS3/latest/userguide/LogFormat.html).
+
+⚠️ This package currently only supports processing of access data (`GET`-type requests); if you wish to use this package for other types of requests (`PUT`/`DELETE`/`HEAD`, etc.) please reach out by raising an issue. ⚠️
 
 
 

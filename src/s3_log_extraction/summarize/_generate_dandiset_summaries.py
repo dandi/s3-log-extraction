@@ -3,7 +3,6 @@ import concurrent.futures
 import datetime
 import pathlib
 
-import dandi.dandiapi
 import pandas
 import pydantic
 import tqdm
@@ -21,6 +20,7 @@ def generate_dandiset_summaries(
     pick: list[str] | None = None,
     skip: list[str] | None = None,
     workers: int = -2,
+    api_url: str | None = None,
 ) -> None:
     """
     Generate top-level summaries of access activity for all Dandisets.
@@ -38,7 +38,12 @@ def generate_dandiset_summaries(
         A list of Dandiset IDs to exclusively select when generating summaries.
     skip : list of strings, optional
         A list of Dandiset IDs to exclude when generating summaries.
+    api_url : str, optional
+        Base API URL of the server to interact with.
+        Defaults to using the main DANDI API server.
     """
+    import dandi.dandiapi
+
     summary_directory = pathlib.Path(summary_directory) if summary_directory is not None else get_summary_directory()
     if pick is not None and skip is not None:
         message = "Cannot specify both `pick` and `skip` parameters simultaneously."
@@ -48,10 +53,10 @@ def generate_dandiset_summaries(
     index_to_region = load_ip_cache(cache_type="index_to_region")
 
     # TODO: record and only update basic DANDI stuff based on mtime or etag
-    dandiset_id_to_blob_directories, blob_id_to_asset_path = _get_dandi_asset_info()
+    dandiset_id_to_blob_directories, blob_id_to_asset_path = _get_dandi_asset_info(api_url=api_url)
 
     # TODO: cache even the dandiset listing and leverage etags
-    client = dandi.dandiapi.DandiAPIClient()
+    client = dandi.dandiapi.DandiAPIClient(api_url=api_url)
     if pick is None and skip is not None:
         dandiset_ids_to_exclude = {dandiset_id: True for dandiset_id in skip}
         dandiset_ids_to_summarize = [
@@ -136,9 +141,10 @@ def generate_dandiset_summaries(
 
 
 def _get_dandi_asset_info(
-    *,
-    use_cache: bool = True,
+    *, use_cache: bool = True, api_url: str | None = None
 ) -> tuple[dict[str, list[pathlib.Path]], dict[str, str]]:
+    import dandi.dandiapi
+
     cache_directory = get_cache_directory()
     dandi_cache_directory = cache_directory / "dandi"
     dandi_cache_directory.mkdir(exist_ok=True)
@@ -161,7 +167,7 @@ def _get_dandi_asset_info(
         with monthly_blob_id_to_asset_path_cache_file_path.open(mode="r") as file_stream:
             blob_id_to_asset_path = yaml.safe_load(stream=file_stream)
     else:
-        client = dandi.dandiapi.DandiAPIClient()
+        client = dandi.dandiapi.DandiAPIClient(api_url=api_url)
         dandisets = list(client.get_dandisets())
 
         blob_id_to_associated_asset_paths: dict[str, set[str]] = collections.defaultdict(set)
@@ -217,9 +223,10 @@ def _get_dandi_asset_info(
             if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
                 dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
 
-        for blob_directory in (extraction_directory / "zarr").iterdir():
-            if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
-                dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
+        if (zarr_directory := extraction_directory / "zarr").is_dir():
+            for blob_directory in zarr_directory.iterdir():
+                if blob_directory_to_associated_dandiset_ids.get(blob_directory, None) is None:
+                    dandiset_id_to_blob_directories["unassociated"].append(blob_directory)
 
         yaml_content = {
             dandiset_id: [str(blob_directory) for blob_directory in blob_directories]
