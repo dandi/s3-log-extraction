@@ -255,18 +255,29 @@ def _update_ip_coordinates_cli() -> None:
     type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
 )
+@rich_click.option(
+    "--api-url",
+    help=(
+        "The DANDI API URL to use when generating Dandiset summaries. "
+        "If not provided, the default DANDI API URL will be used."
+    ),
+    required=False,
+    type=rich_click.STRING,
+    default=None,
+)
 def _update_summaries_cli(
     mode: typing.Literal["dandi", "archive"] | None = None,
     pick: str | None = None,
     skip: str | None = None,
     workers: int = -2,
+    api_url: str | None = None,
 ) -> None:
     """Generate condensed summaries of activity."""
     match mode:
         case "dandi":
             pick_as_list = pick.split(",") if pick is not None else None
             skip_as_list = skip.split(",") if skip is not None else None
-            generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list, workers=workers)
+            generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list, workers=workers, api_url=api_url)
         case "archive":
             generate_archive_summaries()
         case _:
