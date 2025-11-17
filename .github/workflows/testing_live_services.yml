@@ -21,8 +21,6 @@ jobs:
     # Requirement settings identified as 'DevTests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
 
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +34,7 @@ jobs:
         run: python -m pip install -U pip
 
       - name: Install local checkout
-        run: pip install --no-cache-dir .[dev]
+        run: pip install --no-cache-dir .[all] --group all
 
       - name: Display installed packages and their sources for debugging
         run: pip list
@@ -60,7 +58,7 @@ jobs:
 
       - name: Run pytest with coverage and printout coverage for debugging
         run: |
-          pytest test_live_services -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+          pytest -m "remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
           cat ./coverage.xml
 
       - name: Upload coverage to Codecov

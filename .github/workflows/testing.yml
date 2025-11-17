@@ -1,4 +1,4 @@
-name: Dev tests
+name: Primary testing workflow
 on:
   workflow_call:
     secrets:
