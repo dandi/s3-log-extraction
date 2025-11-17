@@ -4,6 +4,22 @@
 
 
 
+# v1.2.0
+
+## Features
+
+Support for child instances of DANDI has been added by way of an `--api-url` flag on the CLI for `s3logextraction update summaries` and an `api_url` parameter for the corresponding API methods.
+
+## Improvements
+
+Upgraded CLI to use `rich_click` for better formatting.
+
+## Fixes
+
+Moved some exposed imports to local levels to allow successful import of package under minimal installation conditions.
+
+
+
 # v1.1.3
 
 ## Features
@@ -17,7 +33,7 @@ Now tracks 'unassociated' access activity for DANDI summaries, which includes al
 
 Added `s3_log_extraction.dataase.bundle_database` method for creating a hive-partitioned Parquet-based database of the extraction cache for easier sharing.
 
-# Improvements
+## Improvements
 
 Added `bogon` labeling for IP addresses that are not routable on the public internet, such as private IPs and reserved ranges. This improves the update iteration of the `s3logextraction update ip regions`.
 
