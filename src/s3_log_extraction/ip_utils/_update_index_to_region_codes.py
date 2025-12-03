@@ -33,6 +33,7 @@ def update_index_to_region_codes(batch_size: int = 1_000, batch_limit: int | Non
     number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
     if batch_limit is not None:
         number_of_batches = min(number_of_batches, batch_limit)
+        indexes_to_update = list(indexes_to_update)[: batch_limit * batch_size]
 
     for ip_index_batch in tqdm.tqdm(
         iterable=itertools.batched(iterable=indexes_to_update, n=batch_size),
