@@ -207,8 +207,15 @@ def _update_ip_indexes_cli() -> None:
 
 # s3logextraction update ip regions
 @_update_ip_cli.command(name="regions")
-def _update_ip_regions_cli() -> None:
-    update_index_to_region_codes()
+@rich_click.option(
+    "--batch-limit",
+    help=(
+        "The maximum number of batches to process when updating IP region codes. "
+        "By default, all batches will be processed."
+    ),
+)
+def _update_ip_regions_cli(batch_limit: int | None = None) -> None:
+    update_index_to_region_codes(batch_limit=batch_limit)
 
 
 # s3logextraction update ip coordinates
