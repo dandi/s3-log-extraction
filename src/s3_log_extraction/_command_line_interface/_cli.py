@@ -213,6 +213,9 @@ def _update_ip_indexes_cli() -> None:
         "The maximum number of batches to process when updating IP region codes. "
         "By default, all batches will be processed."
     ),
+    required=False,
+    type=int,
+    default=None,
 )
 def _update_ip_regions_cli(batch_limit: int | None = None) -> None:
     update_index_to_region_codes(batch_limit=batch_limit)
