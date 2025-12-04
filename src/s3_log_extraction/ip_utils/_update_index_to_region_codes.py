@@ -12,7 +12,7 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 from ..config import get_ip_cache_directory
 
 
-def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
+def update_index_to_region_codes(batch_size: int = 1_000, batch_limit: int | None = None) -> str | None:
     """Update the `indexed_region_codes.yaml` file in the cache directory."""
     import ipinfo
 
@@ -31,6 +31,10 @@ def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
 
     number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
+    if batch_limit is not None:
+        number_of_batches = min(number_of_batches, batch_limit)
+        indexes_to_update = list(indexes_to_update)[: batch_limit * batch_size]
+
     for ip_index_batch in tqdm.tqdm(
         iterable=itertools.batched(iterable=indexes_to_update, n=batch_size),
         total=number_of_batches,
@@ -102,7 +106,7 @@ def _get_region_code_from_ip_index(
 
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
-        timeout_in_seconds = 10
+        timeout_in_seconds = 30
         details = ipinfo_handler.getDetails(ip_address=ip_address, timeout=timeout_in_seconds)
 
         country = details.details.get("country", None)
