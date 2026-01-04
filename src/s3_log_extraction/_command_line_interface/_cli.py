@@ -1,4 +1,4 @@
-"""Call the DANDI S3 log parser from the command line."""
+"""Command line interface definitions for the S3 log extraction tool."""
 
 import os
 import typing
@@ -7,10 +7,7 @@ import pydantic
 import rich_click
 
 from ..config import reset_extraction, set_cache_directory
-from ..database import bundle_database
 from ..extractors import (
-    DandiRemoteS3LogAccessExtractor,
-    DandiS3LogAccessExtractor,
     RemoteS3LogAccessExtractor,
     S3LogAccessExtractor,
     stop_extraction,
@@ -19,8 +16,6 @@ from ..ip_utils import index_ips, update_index_to_region_codes, update_region_co
 from ..summarize import (
     generate_archive_summaries,
     generate_archive_totals,
-    generate_dandiset_summaries,
-    generate_dandiset_totals,
 )
 from ..testing import generate_benchmark
 from ..validate import (
@@ -62,11 +57,10 @@ def _s3logextraction_cli():
     "--mode",
     help=(
         "Special parsing mode related to expected object key structure; "
-        "for example, if 'dandi' then only extract 'blobs' and 'zarr' objects. "
         "By default, objects will be processed using the generic structure."
     ),
     required=False,
-    type=rich_click.Choice(choices=["remote", "dandi", "dandi-remote"]),
+    type=rich_click.Choice(choices=["remote"]),
     default=None,
 )
 @rich_click.option(
@@ -85,7 +79,7 @@ def _extract_cli(
     directory: str,
     limit: int | None = None,
     workers: int = -2,
-    mode: typing.Literal["remote", "dandi", "dandi-remote"] | None = None,
+    mode: typing.Literal["remote"] | None = None,
     manifest_file_path: str | None = None,
 ) -> None:
     """
@@ -99,17 +93,6 @@ def _extract_cli(
     match mode:
         case "remote":
             extractor = RemoteS3LogAccessExtractor()
-            extractor.extract_s3_bucket(
-                s3_root=directory,
-                limit=limit,
-                workers=workers,
-                manifest_file_path=manifest_file_path,
-            )
-        case "dandi":
-            extractor = DandiS3LogAccessExtractor()
-            extractor.extract_directory(directory=directory, limit=limit, workers=workers)
-        case "dandi-remote":
-            extractor = DandiRemoteS3LogAccessExtractor()
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -233,11 +216,10 @@ def _update_ip_coordinates_cli() -> None:
     "--mode",
     help=(
         "Generate condensed summaries of activity across the extracted data per object key. "
-        "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
         "Mode 'archive' aggregates over all dataset summaries."
     ),
     required=False,
-    type=rich_click.Choice(choices=["dandi", "archive"]),
+    type=rich_click.Choice(choices=["archive"]),
     default=None,
 )
 @rich_click.option(
@@ -265,29 +247,14 @@ def _update_ip_coordinates_cli() -> None:
     type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
 )
-@rich_click.option(
-    "--api-url",
-    help=(
-        "The DANDI API URL to use when generating Dandiset summaries. "
-        "If not provided, the default DANDI API URL will be used."
-    ),
-    required=False,
-    type=rich_click.STRING,
-    default=None,
-)
 def _update_summaries_cli(
-    mode: typing.Literal["dandi", "archive"] | None = None,
+    mode: typing.Literal["archive"] | None = None,
     pick: str | None = None,
     skip: str | None = None,
     workers: int = -2,
-    api_url: str | None = None,
 ) -> None:
     """Generate condensed summaries of activity."""
     match mode:
-        case "dandi":
-            pick_as_list = pick.split(",") if pick is not None else None
-            skip_as_list = skip.split(",") if skip is not None else None
-            generate_dandiset_summaries(pick=pick_as_list, skip=skip_as_list, workers=workers, api_url=api_url)
         case "archive":
             generate_archive_summaries()
         case _:
@@ -295,30 +262,18 @@ def _update_summaries_cli(
             rich_click.echo(message=message, err=True)
 
 
-# s3logextraction update database
-@_update_cli.command(name="database")
-def _bundle_database_cli() -> None:
-    """Update (or create) a bundled database for easier sharing."""
-    bundle_database()
-
-
 # s3logextraction update totals
 @_update_cli.command(name="totals")
 @rich_click.option(
     "--mode",
-    help=(
-        "Generate condensed summaries of activity across the extracted data per object key. "
-        "Mode 'dandi' will map asset hashes to Dandisets and their content filenames. "
-    ),
+    help=("Generate condensed summaries of activity across the extracted data per object key. "),
     required=False,
-    type=rich_click.Choice(choices=["dandi", "archive"]),
+    type=rich_click.Choice(choices=["archive"]),
     default=None,
 )
-def _update_totals_cli(mode: typing.Literal["dandi", "archive"] | None = None) -> None:
+def _update_totals_cli(mode: typing.Literal["archive"] | None = None) -> None:
     """Generate grand totals of all extracted data."""
     match mode:
-        case "dandi":
-            generate_dandiset_totals()
         case "archive":
             generate_archive_totals()
         case _:

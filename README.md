@@ -17,7 +17,7 @@
 
 Extraction of minimal information from consolidated raw S3 logs for public sharing and plotting.
 
-Developed for the [DANDI Archive](https://dandiarchive.org/).
+Originally developed for the [DANDI Archive](https://dandiarchive.org/).
 
 Read more about [S3 logging on AWS](https://web.archive.org/web/20240807191829/https://docs.aws.amazon.com/AmazonS3/latest/userguide/LogFormat.html).
 
@@ -116,44 +116,6 @@ s3logextraction update totals
 Finally, to generate archive-wide summaries and totals:
 
 ```bash
-s3logextraction update summaries --mode archive
-s3logextraction update totals --mode archive
-```
-
-
-
-## DANDI Usage
-
-Usage on the DANDI archive logs requires a bit more customization. This is mostly achieved by way of the flag `--mode dandi` on various operations.
-
-Begin by ensuring a special required environment variable is set:
-
-**S3_LOG_EXTRACTION_PASSWORD**
-  - Various sensitive information on Drogon is encrypted using this password, including:
-    - the regular expression for all associated Drogon IPs.
-    - the IP index and geolocation caches.
-
-This allows us to store full IP information in a persistent way (in case we need to go back and do a lookup) while still being secure.
-
-```bash
-export S3_LOG_EXTRACTION_PASSWORD="ask_yarik_or_cody_for_password"
-```
-
-In fresh environments, the cache should be specified as:
-
-```bash
-s3logextraction config cache set /mnt/backup/dandi/s3-logs-extraction-cache
-```
-
-To run all the steps (such as for daily updates):
-
-```bash
-s3logextraction extract /mnt/backup/dandi/dandiarchive-logs --mode dandi
-s3logextraction update ip indexes
-s3logextraction update ip regions
-s3logextraction update ip coordinates
-s3logextraction update summaries --mode dandi
-s3logextraction update totals --mode dandi
 s3logextraction update summaries --mode archive
 s3logextraction update totals --mode archive
 ```
