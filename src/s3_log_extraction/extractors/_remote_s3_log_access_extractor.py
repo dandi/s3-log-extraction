@@ -22,7 +22,7 @@ from ..config import get_cache_directory, get_extraction_directory, get_records_
 
 class RemoteS3LogAccessExtractor:
     """
-    A DANDI-specific extractor of basic access information contained in remotely stored raw S3 logs.
+    Extractor of basic access information contained in remotely stored raw S3 logs.
 
     This remote access design assumes that the S3 logs are stored in a nested structure. If you still use the flat
     storage pattern, or have a mix of the two structures, you should use the `manifest_file_path` argument

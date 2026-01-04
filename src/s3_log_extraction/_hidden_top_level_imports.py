@@ -6,7 +6,6 @@ But we only want the imports to trigger, not for them to actually be exposed.
 
 from ._command_line_interface._cli import _s3logextraction_cli
 from .config import get_cache_directory
-from .database import bundle_database
 from .encryption_utils import get_key
 from .extractors import S3LogAccessExtractor
 from .ip_utils import _index_ips

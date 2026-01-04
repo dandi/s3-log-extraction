@@ -23,14 +23,14 @@ def generate_archive_summaries(summary_directory: str | pathlib.Path | None = No
 
     # TODO: deduplicate code into common helpers across tools
     # By day
-    all_dandiset_summaries_by_day = [
-        pandas.read_table(filepath_or_buffer=dandiset_by_day_summary_file_path)
-        for dandiset_by_day_summary_file_path in summary_directory.rglob(pattern="by_day.tsv")
-        if dandiset_by_day_summary_file_path.parent.name != "archive"
+    all_dataset_summaries_by_day = [
+        pandas.read_table(filepath_or_buffer=dataset_by_day_summary_file_path)
+        for dataset_by_day_summary_file_path in summary_directory.rglob(pattern="by_day.tsv")
+        if dataset_by_day_summary_file_path.parent.name != "archive"
     ]
-    aggregated_dandiset_summaries_by_day = pandas.concat(objs=all_dandiset_summaries_by_day, ignore_index=True)
+    aggregated_dataset_summaries_by_day = pandas.concat(objs=all_dataset_summaries_by_day, ignore_index=True)
 
-    pre_aggregated = aggregated_dandiset_summaries_by_day.groupby(by="date", as_index=False)["bytes_sent"].agg(
+    pre_aggregated = aggregated_dataset_summaries_by_day.groupby(by="date", as_index=False)["bytes_sent"].agg(
         [list, "sum"]
     )
     pre_aggregated.rename(columns={"sum": "bytes_sent"}, inplace=True)
@@ -44,14 +44,14 @@ def generate_archive_summaries(summary_directory: str | pathlib.Path | None = No
     )
 
     # By region
-    all_dandiset_summaries_by_region = [
-        pandas.read_table(filepath_or_buffer=dandiset_by_region_summary_file_path)
-        for dandiset_by_region_summary_file_path in summary_directory.rglob(pattern="by_region.tsv")
-        if dandiset_by_region_summary_file_path.parent.name != "archive"
+    all_dataset_summaries_by_region = [
+        pandas.read_table(filepath_or_buffer=dataset_by_region_summary_file_path)
+        for dataset_by_region_summary_file_path in summary_directory.rglob(pattern="by_region.tsv")
+        if dataset_by_region_summary_file_path.parent.name != "archive"
     ]
-    aggregated_dandiset_summaries_by_region = pandas.concat(objs=all_dandiset_summaries_by_region, ignore_index=True)
+    aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
-    pre_aggregated = aggregated_dandiset_summaries_by_region.groupby(by="region", as_index=False)["bytes_sent"].agg(
+    pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)["bytes_sent"].agg(
         [list, "sum"]
     )
     pre_aggregated.rename(columns={"sum": "bytes_sent"}, inplace=True)
