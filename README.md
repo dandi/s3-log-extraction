@@ -15,7 +15,7 @@
 </p>
 </div>
 
-Extraction of minimal information from consolidated raw S3 logs for public sharing and plotting.
+Fast extraction of access summary data from S3 logs.
 
 Originally developed for the [DANDI Archive](https://dandiarchive.org/).
 

@@ -27,6 +27,7 @@ keywords = [
     "download tracking",
     "geolocation",
     "open data",
+    "data infrastructure",
 ]
 license = {file = "LICENSE.txt"}
 requires-python = ">=3.13"
