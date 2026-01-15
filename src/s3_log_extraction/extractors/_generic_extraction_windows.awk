@@ -55,9 +55,9 @@ BEGIN {
 END {
     for (object_key in data) {
         subdirectory = EXTRACTION_DIRECTORY object_key
+
         gsub("/", "\\", subdirectory)
         gsub("\\\\", "\\\\\\\\", subdirectory)
-        system("mkdir -p " subdirectory)
     }
 
     for (object_key in data) {
