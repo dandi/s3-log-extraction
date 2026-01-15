@@ -1,4 +1,3 @@
-import os
 import pathlib
 
 
@@ -15,15 +14,24 @@ def assert_expected_extraction_content(
         pathlib.Path(f"records/{extractor_name}_file-processing-end.txt"),
         pathlib.Path(f"records/{extractor_name}_file-processing-start.txt"),
     }
-    non_record_output_files = relative_output_files - record_files
-    non_record_expected_files = relative_expected_files - record_files
+    non_record_output_files = sorted(relative_output_files - record_files)
+    non_record_expected_files = sorted(relative_expected_files - record_files)
+
     for relative_output_file, relative_expected_file in zip(non_record_output_files, non_record_expected_files):
         output_file = output_directory / relative_output_file
         expected_file = expected_output_directory / relative_expected_file
         with output_file.open(mode="rb") as file_stream_1, expected_file.open(mode="rb") as file_stream_2:
-            output_content = file_stream_1.read().replace(b"\n", os.linesep.encode())
-            expected_content = file_stream_2.read()
-            assert output_content == expected_content, f"Binary content mismatch in {relative_output_file}"
+            output_content = file_stream_1.read()
+            expected_content = file_stream_2.read().replace(b"\r\n", b"\n")  # Bug fix for WSL
+            message = (
+                f"Binary content mismatch between:\n\n"
+                f"\n{output_file=}\n"
+                f"{relative_output_file=}\n"
+                f"{expected_file=}\n\n"
+                f"{output_content=}\n"
+                f"{expected_content=}\n\n"
+            )
+            assert output_content == expected_content, message
     for record_file in record_files:
         output_file = output_directory / record_file
         expected_file = expected_output_directory / record_file
