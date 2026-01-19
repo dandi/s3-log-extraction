@@ -48,7 +48,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: Unix",
     "Operating System :: MacOS",
-    "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "License :: OSI Approved :: MIT License",
 ]

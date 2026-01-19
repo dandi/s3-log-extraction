@@ -1,7 +1,6 @@
 import os
 import pathlib
 import subprocess
-import sys
 
 
 def _deploy_subprocess(
@@ -71,17 +70,3 @@ def _handle_aws_credentials() -> None:
             "please set your these variables or configure via AWS CLI."
         )
         raise ValueError(message)
-
-
-def _handle_gawk_base() -> str:
-    """Handle the gawk command based on the platform."""
-    # GNU AWK is not as readily available on Windows
-    if sys.platform == "win32":
-        gawk_path = pathlib.Path.home() / "anaconda3" / "Library" / "usr" / "bin" / "gawk.exe"
-
-        if not gawk_path.exists():
-            message = "Unable to find `gawk`, which is required for extraction - please raise an issue."
-            raise RuntimeError(message)
-
-    gawk_base = "gawk" if sys.platform != "win32" else str(gawk_path.absolute())
-    return gawk_base

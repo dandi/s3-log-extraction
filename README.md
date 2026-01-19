@@ -31,6 +31,7 @@ Read more about [S3 logging on AWS](https://web.archive.org/web/20240807191829/h
 pip install s3-log-extraction
 ```
 
+**Note for Windows users:** This package requires GAWK and is not natively supported on Windows. Windows users should use [Windows Subsystem for Linux (WSL)](https://docs.microsoft.com/en-us/windows/wsl/install) to run this package.
 
 
 # Workflow
