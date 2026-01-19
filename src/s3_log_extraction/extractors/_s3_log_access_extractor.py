@@ -35,8 +35,6 @@ class S3LogAccessExtractor:
     """
 
     def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
-        self.gawk_base = "gawk"
-
         self.cache_directory = cache_directory or get_cache_directory()
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
@@ -198,7 +196,7 @@ class S3LogAccessExtractor:
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
-        gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
+        gawk_command = f"gawk --file {absolute_script_path} {absolute_file_path}"
         _deploy_subprocess(
             command=gawk_command,
             environment_variables=self._awk_env,
