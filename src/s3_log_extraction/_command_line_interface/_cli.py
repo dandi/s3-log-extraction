@@ -262,11 +262,18 @@ def _update_summaries_cli(
             rich_click.echo(message=message, err=True)
 
 
+# s3logextraction update database
+@_update_cli.command(name="database")
+def _bundle_database_cli() -> None:
+    """Update (or create) a bundled Parquet database for easier sharing."""
+    bundle_database()
+
+
 # s3logextraction update totals
 @_update_cli.command(name="totals")
 @rich_click.option(
     "--mode",
-    help=("Generate condensed summaries of activity across the extracted data per object key. "),
+    help="Generate condensed summaries of activity across the extracted data per object key.",
     required=False,
     type=rich_click.Choice(choices=["archive"]),
     default=None,

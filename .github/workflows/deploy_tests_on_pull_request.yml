@@ -13,3 +13,10 @@ jobs:
     uses: ./.github/workflows/testing.yml
     secrets:
       CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}
+
+  RemoteDevTests:
+      uses: ./.github/workflows/remote_testing.yml
+      secrets:
+          IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
+          OPENCAGE_KEY: ${{ secrets.OPENCAGE_KEY }}
+          CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}

@@ -16,6 +16,13 @@ jobs:
     secrets:
       CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}
 
+  LiveServices:
+    uses: ./.github/workflows/remote_testing.yml
+    secrets:
+      IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
+      OPENCAGE_KEY: ${{ secrets.OPENCAGE_KEY }}
+      CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}
+
   NotifyOnFailure:
     runs-on: ubuntu-latest
     needs: [ DailyTests ]
