@@ -6,7 +6,7 @@ import typing
 import pydantic
 import rich_click
 
-from ..config import reset_extraction, set_cache_directory
+from ..config import get_summary_directory, reset_extraction, set_cache_directory
 from ..extractors import (
     RemoteS3LogAccessExtractor,
     S3LogAccessExtractor,
@@ -14,8 +14,10 @@ from ..extractors import (
 )
 from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
 from ..summarize import (
+    generate_all_dataset_totals,
     generate_archive_summaries,
     generate_archive_totals,
+    generate_summaries,
 )
 from ..testing import generate_benchmark
 from ..validate import (
@@ -216,6 +218,7 @@ def _update_ip_coordinates_cli() -> None:
     "--mode",
     help=(
         "Generate condensed summaries of activity across the extracted data per object key. "
+        "Defaults to grouping summaries by top level prefix."
         "Mode 'archive' aggregates over all dataset summaries."
     ),
     required=False,
@@ -256,10 +259,9 @@ def _update_summaries_cli(
     """Generate condensed summaries of activity."""
     match mode:
         case "archive":
-            generate_archive_summaries()
+            generate_archive_summaries(get_summary_directory())
         case _:
-            message = "The generic mode is not yet implemented - please raise an issue to discuss."
-            rich_click.echo(message=message, err=True)
+            generate_summaries()
 
 
 # s3logextraction update database
@@ -282,10 +284,9 @@ def _update_totals_cli(mode: typing.Literal["archive"] | None = None) -> None:
     """Generate grand totals of all extracted data."""
     match mode:
         case "archive":
-            generate_archive_totals()
+            generate_archive_totals(get_summary_directory())
         case _:
-            message = "The generic mode is not yet implemented - please raise an issue to discuss."
-            rich_click.echo(message=message, err=True)
+            generate_all_dataset_totals()
 
 
 # s3logextraction testing
