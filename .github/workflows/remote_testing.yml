@@ -16,9 +16,9 @@ env:
 jobs:
 
   run:
-    # Will read on PR dashboard as 'Deploy / RemoteDevTests / ubuntu'
-    # Action dashboard identified by 'Remote dev tests'
-    # Requirement settings identified as 'RemoteDevTests / ubuntu'
+    # Will read on PR dashboard as 'Deploy / RemoteTests / ubuntu'
+    # Action dashboard identified by 'Remote tests'
+    # Requirement settings identified as 'RemoteTests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest
 
@@ -56,9 +56,10 @@ jobs:
           ls ~/.s3_log_extraction
           cat ~/.s3_log_extraction/ip_hash_to_region.yaml
 
+      # TODO: add remote tests and update to `pytest -m "remote"`
       - name: Run pytest with coverage and printout coverage for debugging
         run: |
-          pytest -m "remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+          pytest -m "not remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
           cat ./coverage.xml
 
       - name: Upload coverage to Codecov

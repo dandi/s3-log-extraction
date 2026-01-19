@@ -11,9 +11,9 @@ env:
 jobs:
 
   run:
-    # Will read on PR dashboard as 'Deploy / DevTests / ubuntu'
-    # Action dashboard identified by 'Dev tests'
-    # Requirement settings identified as 'DevTests / ubuntu'
+    # Will read on PR dashboard as 'Deploy / Tests / ubuntu'
+    # Action dashboard identified by 'Primary testing workflow'
+    # Requirement settings identified as 'Tests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest
 
