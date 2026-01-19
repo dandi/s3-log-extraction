@@ -27,6 +27,7 @@ keywords = [
     "download tracking",
     "geolocation",
     "open data",
+    "data infrastructure",
 ]
 license = {file = "LICENSE.txt"}
 requires-python = ">=3.13"
@@ -62,16 +63,12 @@ remote = [
     "s3fs",
     "s5cmd",
 ]
-dandi = [
-    "dandi",
-]
 sharing = [
     "polars",
 ]
-all = ["s3_log_extraction[geolocation,remote,dandi,sharing]"]
+all = ["s3_log_extraction[geolocation,remote,sharing]"]
 
 [project.urls]
-Homepage = "https://dandi.github.io/access-page/"
 Documentation = "https://github.com/dandi/s3-log-extraction/blob/master/README.md"
 Repository = "https://github.com/dandi/s3-log-extraction/"
 Issues = "https://github.com/dandi/s3-log-extraction/issues"
@@ -149,7 +146,6 @@ known-first-party = ["s3_log_extraction"]
 # None of these environment variables need to be 'correct' with respect to test suite
 [tool.pytest.ini_options]
 markers = [
-    "dandi: mark a test as requiring remote resources",
     "remote: mark a test as requiring remote resources",
 ]
 env = [

@@ -1,24 +1,24 @@
-name: Dev tests
+name: Remote dev tests
 on:
   workflow_call:
     secrets:
-      IP_HASH_SALT:
-        required: true
       IPINFO_API_KEY:
+        required: true
+      OPENCAGE_KEY:
         required: true
       CODECOV_CREDENTIALS:
         required: true
 
 env:
-  IP_HASH_SALT: ${{ secrets.IP_HASH_SALT }}
   IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
+  OPENCAGE_KEY: ${{ secrets.OPENCAGE_KEY }}
 
 jobs:
 
   run:
-    # Will read on PR dashboard as 'Deploy / DevTests / ubuntu'
-    # Action dashboard identified by 'Dev tests'
-    # Requirement settings identified as 'DevTests / ubuntu'
+    # Will read on PR dashboard as 'Deploy / RemoteTests / ubuntu'
+    # Action dashboard identified by 'Remote tests'
+    # Requirement settings identified as 'RemoteTests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest
 
@@ -42,12 +42,12 @@ jobs:
       - name: Ensure caching is working
         run: ls ~
 
-      - name: Cache IP to region mapping to prevent overuse of ipinfo
+      - name: Cache IP to region mapping to prevent overuse of IPInfo and OpenCage APIs
         uses: actions/cache@v4
         id: dandi_home_cache
         with:
           path: ~/.s3_log_extraction
-          key: ubuntu_dandi_home_cache
+          key: ubuntu_home_cache
 
       - if: steps.dandi_home_cache.outputs.cache-hit == 'true'
         name: Ensure caching is working
@@ -56,9 +56,10 @@ jobs:
           ls ~/.s3_log_extraction
           cat ~/.s3_log_extraction/ip_hash_to_region.yaml
 
+      # TODO: add remote tests and update to `pytest -m "remote"`
       - name: Run pytest with coverage and printout coverage for debugging
         run: |
-          pytest -m "remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+          pytest -m "not remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
           cat ./coverage.xml
 
       - name: Upload coverage to Codecov
