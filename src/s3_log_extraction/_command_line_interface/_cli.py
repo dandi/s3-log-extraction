@@ -7,7 +7,6 @@ import pydantic
 import rich_click
 
 from ..config import get_summary_directory, reset_extraction, set_cache_directory
-from ..database import bundle_database
 from ..extractors import (
     RemoteS3LogAccessExtractor,
     S3LogAccessExtractor,
@@ -18,8 +17,6 @@ from ..summarize import (
     generate_all_dataset_totals,
     generate_archive_summaries,
     generate_archive_totals,
-    generate_dandiset_summaries,
-    generate_dandiset_totals,
     generate_summaries,
 )
 from ..testing import generate_benchmark
