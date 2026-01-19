@@ -7,7 +7,7 @@
 <p>
     <a href="https://pypi.org/project/s3-log-extraction/"><img alt="PyPI latest release version" src="https://badge.fury.io/py/s3-log-extraction.svg?id=py&kill_cache=1"></a>
     <a href="https://github.com/dandi/s3-log-extraction/blob/main/LICENSE.txt"><img alt="License: MIT" src="https://img.shields.io/pypi/l/s3-log-extraction.svg"></a>
-    <a href="https://doi.org/10.5281/zenodo.17147965"><img src="https://zenodo.org/badge/826995164.svg" alt="DOI"></a>
+    <a href="https://zenodo.org/badge/latestdoi/826995164"><img alt="DOI" src="https://img.shields.io/github/v/release/dandi/s3-log-extraction?label=DOI&color=blue"></a>
 </p>
 <p>
     <a href="https://github.com/psf/black"><img alt="Python code style: Black" src="https://img.shields.io/badge/python_code_style-black-000000.svg"></a>
