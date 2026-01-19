@@ -3,7 +3,6 @@ import itertools
 import math
 import os
 
-import ipinfo
 import tqdm
 import yaml
 
@@ -13,8 +12,10 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 from ..config import get_ip_cache_directory
 
 
-def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
+def update_index_to_region_codes(batch_size: int = 1_000, batch_limit: int | None = None) -> str | None:
     """Update the `indexed_region_codes.yaml` file in the cache directory."""
+    import ipinfo
+
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", None)
     if ipinfo_api_key is None:
         message = "The environment variable 'IPINFO_API_KEY' must be set to import `s3_log_extraction`!"
@@ -30,6 +31,10 @@ def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
 
     number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
+    if batch_limit is not None:
+        number_of_batches = min(number_of_batches, batch_limit)
+        indexes_to_update = list(indexes_to_update)[: batch_limit * batch_size]
+
     for ip_index_batch in tqdm.tqdm(
         iterable=itertools.batched(iterable=indexes_to_update, n=batch_size),
         total=number_of_batches,
@@ -70,8 +75,10 @@ def update_index_to_region_codes(batch_size: int = 1_000) -> str | None:
 
 
 def _get_region_code_from_ip_index(
-    ip_index: int, ip_address: str, ipinfo_handler: ipinfo.Handler, index_not_in_services: dict[int, bool]
+    ip_index: int, ip_address: str, ipinfo_handler: "ipinfo.Handler", index_not_in_services: dict[int, bool]
 ) -> str | None:
+    import ipinfo
+
     # Determine if IP address belongs to GitHub, AWS, Google, or known VPNs
     # Azure not yet easily doable; keep an eye on
     # https://learn.microsoft.com/en-us/answers/questions/1410071/up-to-date-azure-public-api-to-get-azure-ip-ranges
@@ -99,7 +106,7 @@ def _get_region_code_from_ip_index(
 
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
-        timeout_in_seconds = 10
+        timeout_in_seconds = 30
         details = ipinfo_handler.getDetails(ip_address=ip_address, timeout=timeout_in_seconds)
 
         country = details.details.get("country", None)

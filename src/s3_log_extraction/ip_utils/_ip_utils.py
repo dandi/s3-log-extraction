@@ -1,11 +1,11 @@
 import functools
 
-import requests
-
 
 @functools.lru_cache
 def _request_cidr_range(service_name: str) -> dict:
     """Cache (in-memory) the requests to external services."""
+    import requests
+
     match service_name:
         case "GitHub":
             github_cidr_request = requests.get(url="https://api.github.com/meta").json()

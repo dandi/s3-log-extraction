@@ -10,7 +10,7 @@ import shutil
 import sys
 import tempfile
 
-import fsspec
+import pydantic
 import tqdm
 import yaml
 
@@ -309,6 +309,8 @@ class RemoteS3LogAccessExtractor:
         enable_stop: bool = True,
         parallel_mode: bool = False,
     ) -> None:
+        import fsspec
+
         if enable_stop is True and self.stop_file_path.exists():
             return
 
@@ -370,14 +372,13 @@ class RemoteS3LogAccessExtractor:
         #     yaml.dump(data=self.processed_years, stream=file_stream)
 
     @staticmethod
-    def parse_manifest(*, file_path: str | pathlib.Path) -> None:
+    @pydantic.validate_call
+    def parse_manifest(*, file_path: pydantic.FilePath) -> None:
         """
         Read the manifest file and save it as a parsed JSON object, adjacent to the initial file.
 
         The raw manifest file is the output of `s5cmd ls s3_root/* > manifest.txt`.
         """
-        file_path = pathlib.Path(file_path)
-
         manifest = collections.defaultdict(list)
         lines = [line.split(" ")[-1].strip() for line in file_path.read_text().splitlines() if "DIR" not in line]
         for line in tqdm.tqdm(

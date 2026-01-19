@@ -3,10 +3,13 @@ import pathlib
 
 import pandas
 import py
+import pytest
 
 import s3_log_extraction
 
 
+@pytest.mark.dandi
+@pytest.mark.remote
 def test_map_all_reduced_s3_logs_to_dandisets(tmpdir: py.path.local):
     tmpdir = pathlib.Path(tmpdir)
 

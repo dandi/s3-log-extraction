@@ -8,9 +8,7 @@ from ..config import get_summary_directory
 
 
 @pydantic.validate_call
-def generate_dandiset_totals(
-    summary_directory: str | pathlib.Path | None = None,
-) -> None:
+def generate_dandiset_totals(summary_directory: str | pathlib.Path | None = None) -> None:
     """
     Generate top-level totals of summarized access activity for all Dandisets.
 

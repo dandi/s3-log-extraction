@@ -25,6 +25,7 @@ def test_extraction(tmpdir: py.path.local) -> None:
 
     s3_log_extraction.testing.assert_expected_extraction_content(
         extractor_name="S3LogAccessExtractor",
+        test_directory=base_directory,
         output_directory=output_directory,
         expected_output_directory=expected_output_directory,
         relative_output_files=relative_output_files,
@@ -52,6 +53,7 @@ def test_extraction_parallel(tmpdir: py.path.local) -> None:
 
     s3_log_extraction.testing.assert_expected_extraction_content(
         extractor_name="S3LogAccessExtractor",
+        test_directory=base_directory,
         output_directory=output_directory,
         expected_output_directory=expected_output_directory,
         relative_output_files=relative_output_files,

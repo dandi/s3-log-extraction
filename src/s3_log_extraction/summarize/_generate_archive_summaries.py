@@ -8,9 +8,7 @@ from ..config import get_summary_directory
 
 
 @pydantic.validate_call
-def generate_archive_summaries(
-    summary_directory: str | pathlib.Path | None = None,
-) -> None:
+def generate_archive_summaries(summary_directory: str | pathlib.Path | None = None) -> None:
     """
     Generate summaries by day and region for the entire archive from the mapped S3 logs.
 
