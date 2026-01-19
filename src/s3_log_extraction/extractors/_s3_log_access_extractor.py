@@ -6,14 +6,13 @@ import os
 import pathlib
 import random
 import shutil
-import sys
 import tempfile
 
 import natsort
 import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ._utils import _deploy_subprocess, _handle_gawk_base
+from ._utils import _deploy_subprocess
 from .._parallel._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
@@ -36,8 +35,6 @@ class S3LogAccessExtractor:
     """
 
     def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
-        self.gawk_base = _handle_gawk_base()
-
         self.cache_directory = cache_directory or get_cache_directory()
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
@@ -51,8 +48,7 @@ class S3LogAccessExtractor:
         self.file_processing_end_record_file_path = self.records_directory / file_processing_end_record_file_name
 
         # TODO: does this hold after bundling?
-        awk_filename = "_generic_extraction.awk" if sys.platform != "win32" else "_generic_extraction_windows.awk"
-        self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
+        self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
         self.file_processing_end_record = dict()
@@ -200,7 +196,7 @@ class S3LogAccessExtractor:
         absolute_script_path = str(self._relative_script_path.absolute())
         absolute_file_path = str(file_path.absolute())
 
-        gawk_command = f"{self.gawk_base} --file {absolute_script_path} {absolute_file_path}"
+        gawk_command = f"gawk --file {absolute_script_path} {absolute_file_path}"
         _deploy_subprocess(
             command=gawk_command,
             environment_variables=self._awk_env,
