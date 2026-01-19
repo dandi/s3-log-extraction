@@ -12,7 +12,7 @@ import natsort
 import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ._utils import _deploy_subprocess, _handle_gawk_base
+from ._utils import _deploy_subprocess
 from .._parallel._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
@@ -35,7 +35,7 @@ class S3LogAccessExtractor:
     """
 
     def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
-        self.gawk_base = _handle_gawk_base()
+        self.gawk_base = "gawk"
 
         self.cache_directory = cache_directory or get_cache_directory()
         self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)

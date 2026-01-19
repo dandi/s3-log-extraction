@@ -70,8 +70,3 @@ def _handle_aws_credentials() -> None:
             "please set your these variables or configure via AWS CLI."
         )
         raise ValueError(message)
-
-
-def _handle_gawk_base() -> str:
-    """Handle the gawk command based on the platform."""
-    return "gawk"
