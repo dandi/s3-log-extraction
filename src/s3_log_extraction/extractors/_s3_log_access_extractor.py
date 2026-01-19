@@ -6,7 +6,6 @@ import os
 import pathlib
 import random
 import shutil
-import sys
 import tempfile
 
 import natsort
@@ -51,8 +50,7 @@ class S3LogAccessExtractor:
         self.file_processing_end_record_file_path = self.records_directory / file_processing_end_record_file_name
 
         # TODO: does this hold after bundling?
-        awk_filename = "_generic_extraction.awk" if sys.platform != "win32" else "_generic_extraction_windows.awk"
-        self._relative_script_path = pathlib.Path(__file__).parent / awk_filename
+        self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
         self.file_processing_end_record = dict()
