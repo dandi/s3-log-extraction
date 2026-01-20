@@ -2,7 +2,7 @@
   <picture>
     <img alt="s3-log-extraction logo" src="https://raw.githubusercontent.com/dandi/s3-log-extraction/main/docs/s3-log-extraction-logo.svg" width="200">
   </picture>
-  
+
 <h1>S3 Log Extraction</h1>
 <p>
     <a href="https://pypi.org/project/s3-log-extraction/"><img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-E95420?style=flat&logo=ubuntu&logoColor=white"></a>
