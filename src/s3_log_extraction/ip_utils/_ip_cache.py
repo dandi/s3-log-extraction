@@ -1,3 +1,4 @@
+import pathlib
 import typing
 
 import yaml
@@ -6,16 +7,22 @@ from ..config import get_ip_cache_directory
 from ..encryption_utils import decrypt_bytes, encrypt_bytes
 
 
-def load_index_to_ip() -> dict[int, str]:
+def load_index_to_ip(cache_directory: str | pathlib.Path | None = None) -> dict[int, str]:
     """
     Load the index to IP cache from the cache directory.
+
+    Parameters
+    ----------
+    cache_directory : str | pathlib.Path | None
+        Path to the cache directory.
+        If `None`, the default cache directory will be used.
 
     Returns
     -------
     dict[int, str]
         A dictionary mapping indexes to full IP addresses.
     """
-    ips_cache_directory = get_ip_cache_directory()
+    ips_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     ips_index_cache_file_path = ips_cache_directory / "indexed_ips.yaml"
 
     if not ips_index_cache_file_path.exists():
@@ -31,7 +38,7 @@ def load_index_to_ip() -> dict[int, str]:
     return index_to_ip
 
 
-def save_index_to_ip(*, index_to_ip: dict[int, str]) -> None:
+def save_index_to_ip(*, index_to_ip: dict[int, str], cache_directory: str | pathlib.Path | None = None) -> None:
     """
     Save the index to IP cache to the cache directory.
 
@@ -40,7 +47,7 @@ def save_index_to_ip(*, index_to_ip: dict[int, str]) -> None:
     index_to_ip : dict[int, str]
         A dictionary mapping indexes to full IP addresses.
     """
-    ip_cache_directory = get_ip_cache_directory()
+    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     ip_index_cache_file_path = ip_cache_directory / "indexed_ips.yaml"
 
     data = yaml.dump(data=index_to_ip).encode(encoding="utf-8")
