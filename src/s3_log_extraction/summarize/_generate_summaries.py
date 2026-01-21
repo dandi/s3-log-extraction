@@ -51,7 +51,7 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
     ):
         dataset_id = dataset.name
 
-        asset_directories = [file_path.parent for file_path in dataset.rglob(pattern="*bytes_sent.txt")]
+        asset_directories = sorted([file_path.parent for file_path in dataset.rglob(pattern="*bytes_sent.txt")])
         _summarize_dataset(
             dataset_id=dataset_id,
             asset_directories=asset_directories,
