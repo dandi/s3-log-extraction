@@ -58,6 +58,7 @@ def save_index_to_ip(*, index_to_ip: dict[int, str], cache_directory: str | path
 def load_ip_cache(
     *,
     cache_type: typing.Literal["index_to_region", "index_not_in_services"],
+    cache_directory: str | pathlib.Path | None = None,
 ) -> dict[int, str]:
     """Load the index to region cache from the cache directory."""
     ip_cache_directory = get_ip_cache_directory()

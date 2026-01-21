@@ -18,18 +18,12 @@ def test_generic_summaries(tmpdir: py.path.local):
     test_extraction_dir = test_dir / "extraction"
     test_summary_dir = test_dir / "summaries"
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
+    s3_log_extraction.ip_utils.index_ips(cache_directory=test_dir)
 
-    dandi_s3_log_extraction.summarize.generate_dandiset_summaries(
-        summary_directory=test_summary_dir, workers=1, extraction_directory=test_extraction_dir
-    )
-
-    # Cannot generate `by_region.tsv` here since it would need to expose a real IP
-    # TODO: disconnect IP cache and allow it to be specific in tests with false values
-    shutil.copy(src=expected_summaries_dir / "000126" / "by_region.tsv", dst=test_summary_dir)
-
-    dandi_s3_log_extraction.summarize.generate_dandiset_totals(summary_directory=test_summary_dir)
-
-    s3_log_extraction.generate_archive_summaries(summary_directory=test_summary_dir)
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir)
+    s3_log_extraction.summarize.generate_all_dataset_totals(summary_directory=test_summary_dir)
+    s3_log_extraction.summarize.generate_archive_summaries(summary_directory=test_summary_dir)
+    s3_log_extraction.summarize.generate_archive_totals(summary_directory=test_summary_dir)
 
     test_file_paths = {path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="*.tsv")}
     expected_file_paths = {
@@ -38,7 +32,7 @@ def test_generic_summaries(tmpdir: py.path.local):
     assert set(test_file_paths.keys()) == set(expected_file_paths.keys())
 
     for expected_file_path in expected_file_paths.values():
-        relative_file_path = expected_file_path.relative_to(expected_output_folder_path)
+        relative_file_path = expected_file_path.relative_to(expected_summaries_dir)
         test_file_path = test_summary_dir / relative_file_path
 
         test_mapped_log = pandas.read_table(filepath_or_buffer=test_file_path, index_col=0)
