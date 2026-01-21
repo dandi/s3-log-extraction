@@ -1,2 +1,2 @@
-E:\GitHub\s3-log-extraction\tests\extraction\test_generic_logs\2020-01-01-05-06-35-0123456789ABCDEF
-E:\GitHub\s3-log-extraction\tests\extraction\test_generic_logs\2022-01-01-05-06-35-0123456789ABCDEF
+E:\GitHub\s3-log-extraction\tests\extraction\example_logs\2020-01-01-05-06-35-0123456789ABCDEF
+E:\GitHub\s3-log-extraction\tests\extraction\example_logs\2022-01-01-05-06-35-0123456789ABCDEF
