@@ -47,33 +47,3 @@ def test_generic_summaries(tmpdir: py.path.local):
                 f"{str(exception)}\n\n"
             )
             raise AssertionError(message)
-
-    # # TODO: make a standalone test case (requires setting up expected test output example outside live services)
-    # s3_log_extraction.generate_archive_totals(mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path)
-    #
-    # test_archive_totals_file_path = test_mapped_s3_logs_folder_path / "archive_totals.json"
-    # expected_all_dandiset_totals_file_path = expected_output_folder_path / "archive_totals.json"
-    # with test_archive_totals_file_path.open(mode="r") as io:
-    #     test_archive_totals = json.load(fp=io)
-    # with expected_all_dandiset_totals_file_path.open(mode="r") as io:
-    #     expected_archive_totals = json.load(fp=io)
-    #
-    # assert test_archive_totals == expected_archive_totals
-    #
-    # # TODO: make a standalone test case (requires setting up expected test output example outside live services)
-    # test_cache_directory = test_mapped_s3_logs_folder_path / ".cache"
-    # test_cache_directory.mkdir(exist_ok=True)
-    # s3_log_extraction.update_region_codes_to_coordinates(
-    #     mapped_s3_logs_folder_path=test_mapped_s3_logs_folder_path, cache_directory=test_cache_directory
-    # )
-    #
-    # test_log_cache_directory = test_cache_directory / "dandi_s3_log_extraction"
-    # test_region_codes_to_coordinates_file_path = test_log_cache_directory / "region_codes_to_coordinates.json"
-    # expected_log_cache_directory = expected_output_folder_path / ".cache" / "dandi_s3_log_extraction"
-    # expected_region_codes_to_coordinates_file_path = expected_log_cache_directory / "region_codes_to_coordinates.json"
-    # with test_region_codes_to_coordinates_file_path.open(mode="r") as io:
-    #     test_region_codes_to_coordinates = json.load(fp=io)
-    # with expected_region_codes_to_coordinates_file_path.open(mode="r") as io:
-    #     expected_region_codes_to_coordinates = json.load(fp=io)
-    #
-    # assert test_region_codes_to_coordinates == expected_region_codes_to_coordinates
