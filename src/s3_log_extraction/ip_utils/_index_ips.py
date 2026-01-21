@@ -1,3 +1,4 @@
+import pathlib
 import random
 
 import numpy
@@ -8,7 +9,7 @@ from ._ip_cache import load_index_to_ip, save_index_to_ip
 from ..config import get_cache_directory
 
 
-def index_ips(*, seed: int = None) -> None:
+def index_ips(*, seed: int = None, cache_directory: str | pathlib.Path | None = None) -> None:
     """
     Indexes IP addresses extracted from the S3 log files.
 
@@ -22,10 +23,10 @@ def index_ips(*, seed: int = None) -> None:
     high = numpy.iinfo(dtype).max
     max_redraws = 1_000
 
-    cache_directory = get_cache_directory()
+    cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
     extraction_directory = cache_directory / "extraction"
 
-    index_to_ip = load_index_to_ip()
+    index_to_ip = load_index_to_ip(cache_directory=cache_directory)
     ip_to_index = {ip: index for index, ip in index_to_ip.items()}
     indexed_ips = {ip for ip in index_to_ip.values()}
 
@@ -40,11 +41,11 @@ def index_ips(*, seed: int = None) -> None:
         ips_to_index = unique_full_ips - indexed_ips
 
         for ip in ips_to_index:
-            new_index = int(rng.integers(low=0, high=high, size=1, dtype=dtype))
+            new_index = int(rng.integers(low=0, high=high, dtype=dtype))
 
             redraw = 0
             while index_to_ip.get(new_index, None) is not None and redraw < max_redraws:
-                new_index = int(rng.integers(low=0, high=high, size=1, dtype=dtype))
+                new_index = int(rng.integers(low=0, high=high, dtype=dtype))
                 redraw += 1
 
             if redraw >= max_redraws:
@@ -63,7 +64,7 @@ def index_ips(*, seed: int = None) -> None:
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
         indexed_ips_file_path.write_text("\n".join(full_indexed_ips))
 
-    save_index_to_ip(index_to_ip=index_to_ip)
+    save_index_to_ip(index_to_ip=index_to_ip, cache_directory=cache_directory)
 
     # TODO: add delayed optional cleanup
     # for full_ip_file_path in full_ip_file_paths:

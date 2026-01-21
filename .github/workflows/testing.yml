@@ -1,7 +1,9 @@
-name: Primary testing workflow
+name: Primary tests
 on:
   workflow_call:
     secrets:
+      S3_LOG_EXTRACTION_PASSWORD:
+        required: true
       CODECOV_CREDENTIALS:
         required: true
 
@@ -12,7 +14,7 @@ jobs:
 
   run:
     # Will read on PR dashboard as 'Deploy / Tests / ubuntu'
-    # Action dashboard identified by 'Primary testing workflow'
+    # Action dashboard identified by 'Primary tests'
     # Requirement settings identified as 'Tests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest

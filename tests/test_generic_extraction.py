@@ -9,10 +9,10 @@ def test_extraction(tmpdir: py.path.local) -> None:
     tmpdir = pathlib.Path(tmpdir)
 
     base_directory = pathlib.Path(__file__).parent
-    test_logs_directory = base_directory / "test_generic_logs"
+    test_logs_directory = base_directory / "example_logs"
     output_directory = tmpdir / "test_extraction"
     output_directory.mkdir(exist_ok=True)
-    expected_output_directory = base_directory / "expected_generic_output"
+    expected_output_directory = base_directory / "expected_output"
 
     extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory)
     extractor.extract_directory(directory=test_logs_directory, workers=1)
@@ -37,10 +37,10 @@ def test_extraction_parallel(tmpdir: py.path.local) -> None:
     tmpdir = pathlib.Path(tmpdir)
 
     base_directory = pathlib.Path(__file__).parent
-    test_logs_directory = base_directory / "test_generic_logs"
+    test_logs_directory = base_directory / "example_logs"
     output_directory = tmpdir / "test_extraction"
     output_directory.mkdir(exist_ok=True)
-    expected_output_directory = base_directory / "expected_generic_output"
+    expected_output_directory = base_directory / "expected_output"
 
     extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory)
     extractor.extract_directory(directory=test_logs_directory, workers=2)
