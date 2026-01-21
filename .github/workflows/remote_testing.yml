@@ -1,4 +1,4 @@
-name: Remote dev tests
+name: Remote tests
 on:
   workflow_call:
     secrets:
