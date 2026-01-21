@@ -12,11 +12,13 @@ jobs:
   Tests:
     uses: ./.github/workflows/testing.yml
     secrets:
+      S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
       CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}
 
   RemoteTests:
       uses: ./.github/workflows/remote_testing.yml
       secrets:
+          S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
           IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
           OPENCAGE_KEY: ${{ secrets.OPENCAGE_KEY }}
           CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}

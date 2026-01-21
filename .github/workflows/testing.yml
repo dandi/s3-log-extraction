@@ -2,6 +2,8 @@ name: Primary tests
 on:
   workflow_call:
     secrets:
+      S3_LOG_EXTRACTION_PASSWORD:
+        required: true
       CODECOV_CREDENTIALS:
         required: true
 
