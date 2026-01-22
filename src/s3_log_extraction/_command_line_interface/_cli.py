@@ -264,13 +264,6 @@ def _update_summaries_cli(
             generate_summaries()
 
 
-# s3logextraction update database
-@_update_cli.command(name="database")
-def _bundle_database_cli() -> None:
-    """Update (or create) a bundled Parquet database for easier sharing."""
-    bundle_database()
-
-
 # s3logextraction update totals
 @_update_cli.command(name="totals")
 @rich_click.option(
