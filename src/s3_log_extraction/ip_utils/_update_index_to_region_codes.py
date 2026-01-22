@@ -12,7 +12,9 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 from ..config import get_ip_cache_directory
 
 
-def update_index_to_region_codes(batch_size: int = 1_000, batch_limit: int | None = None) -> str | None:
+def update_index_to_region_codes(
+    batch_size: int = 1_000, batch_limit: int | None = None, cache_directory: str | pathlib.Path | None = None
+) -> str | None:
     """Update the `indexed_region_codes.yaml` file in the cache directory."""
     import ipinfo
 
@@ -22,12 +24,12 @@ def update_index_to_region_codes(batch_size: int = 1_000, batch_limit: int | Non
         raise ValueError(message)  # pragma: no cover
     ipinfo_handler = ipinfo.getHandler(access_token=ipinfo_api_key)
 
-    ip_cache_directory = get_ip_cache_directory()
+    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
 
-    index_to_ip = load_index_to_ip()
-    index_not_in_services = load_ip_cache(cache_type="index_not_in_services")
-    index_to_region = load_ip_cache(cache_type="index_to_region")
+    index_to_ip = load_index_to_ip(cache_directory=cache_directory)
+    index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
+    index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
 
     number_of_batches = math.ceil(len(indexes_to_update) / batch_size)

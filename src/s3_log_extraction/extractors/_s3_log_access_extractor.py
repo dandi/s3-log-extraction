@@ -30,7 +30,7 @@ class S3LogAccessExtractor:
     This extractor is:
       - parallelized
       - interruptible
-          However, you must use the command `s3logextraction stop` to end the processes after the current completion.
+          However, you must use the command `s3logextraction stop` to end the processes safely as soon as possible.
       - updatable
     """
 

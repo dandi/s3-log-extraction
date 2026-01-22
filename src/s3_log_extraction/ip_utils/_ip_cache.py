@@ -61,7 +61,7 @@ def load_ip_cache(
     cache_directory: str | pathlib.Path | None = None,
 ) -> dict[int, str]:
     """Load the index to region cache from the cache directory."""
-    ip_cache_directory = get_ip_cache_directory()
+    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     cache_file_path = ip_cache_directory / f"{cache_type}.yaml"
 
     if not cache_file_path.exists():

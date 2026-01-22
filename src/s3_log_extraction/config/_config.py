@@ -77,12 +77,12 @@ def _establish_cache_subdirectory(
     This makes it easier to navigate the codebase via auto-completion and IDEs.
     As opposed to only having one function like this and returning a structure such as a dictionary.
     """
-    cache_directory = cache_directory or get_cache_directory()
+    cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
 
-    records_directory = cache_directory / name
-    records_directory.mkdir(exist_ok=True)
+    cache_subdir = cache_dir / name
+    cache_subdir.mkdir(exist_ok=True)
 
-    return records_directory
+    return cache_subdir
 
 
 def get_records_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
