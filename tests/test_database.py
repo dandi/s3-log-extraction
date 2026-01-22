@@ -1,4 +1,8 @@
-"""Tests for the database module."""
+"""Tests for the database module.
+
+Note: These tests require Python 3.13+ due to typing.Generator syntax used
+in the codebase. The tests will be skipped automatically on Python < 3.13.
+"""
 
 import pathlib
 import shutil
