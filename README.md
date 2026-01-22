@@ -8,7 +8,7 @@
     <a href="https://pypi.org/project/s3-log-extraction/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/s3-log-extraction.svg"></a>
     <a href="https://pypi.org/project/s3-log-extraction/"><img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-E95420?style=flat&logo=ubuntu&logoColor=white"></a>
     <a href="https://codecov.io/github/dandi/s3-log-extraction?branch=main"><img alt="codecov" src="https://codecov.io/github/dandi/s3-log-extraction/coverage.svg?branch=main"></a>
-    <a href="https://github.com/dandi/s3-log-extraction/actions/workflows/daily_tests.yml/badge.svg"><img alt="Daily tests" src="https://github.com/dandi/s3-log-extraction/actions/workflows/daily_tests.yml/badge.svg">
+    <a href="https://github.com/dandi/s3-log-extraction/actions/workflows/daily_tests.yml/badge.svg"><img alt="Daily tests" src="https://github.com/dandi/s3-log-extraction/actions/workflows/daily_tests.yml/badge.svg"></a>
     <a href="https://github.com/dandi/s3-log-extraction/actions/workflows/daily_remote_tests.yml/badge.svg"><img alt="Daily tests (remote)" src="https://github.com/dandi/s3-log-extraction/actions/workflows/daily_remote_tests.yml/badge.svg"></a>
 </p>
 <p>
