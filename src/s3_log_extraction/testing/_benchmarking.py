@@ -96,7 +96,7 @@ def generate_benchmark(directory: str | pathlib.Path, seed: int = 0) -> None:
 
 def _generate_object_key_levels(
     *, number_of_object_key_levels: tuple[int, ...], length: int = 6, characters: str = "0123456789abcdef"
-) -> typing.Generator[str]:
+) -> typing.Generator[str, None, None]:
     """
     Generate a random combination of levels (subdirectories relative to root) for S3 object keys.
 
@@ -116,7 +116,7 @@ def _generate_object_key_levels(
 
     Returns
     -------
-    object_key_levels : typing.Generator[str]
+    object_key_levels : typing.Generator[str, None, None]
         A generator that yields random combinations of object key levels as strings.
         Each string is a combination of the specified number of levels, joined by slashes ("/").
     """
@@ -135,7 +135,7 @@ def _generate_object_keys(
     lower_bound: int = 5,
     higher_bound: int = 30,
     characters: str = "0123456789abcdef",
-) -> typing.Generator[str]:
+) -> typing.Generator[str, None, None]:
     """
     Generate random S3 object keys based on the provided levels.
 
@@ -159,7 +159,7 @@ def _generate_object_keys(
 
     Returns
     -------
-    object_keys : typing.Generator[str]
+    object_keys : typing.Generator[str, None, None]
         A generator that yields random S3 object keys as strings.
     """
     for _ in range(number_of_object_keys):
@@ -263,7 +263,7 @@ def _create_random_log_file(
 
 def _generate_random_lines(
     number_of_lines: int, timestamp: str, object_keys: list[str], object_key_to_total_bytes: dict[str, int]
-) -> typing.Generator[str]:
+) -> typing.Generator[str, None, None]:
     for _ in range(number_of_lines):
         line = list(_DEFAULT_FIELDS)
 
