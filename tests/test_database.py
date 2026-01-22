@@ -29,7 +29,8 @@ def test_bundle_database(tmpdir: py.path.local) -> None:
     base_directory = pathlib.Path(__file__).parent
 
     # Set up test extraction directory in temp location
-    test_extraction_source = base_directory / "expected_output" / "extraction_for_database_test"
+    # Use the existing extraction directory with blobs subdirectory
+    test_extraction_source = base_directory / "expected_output" / "extraction"
     test_cache_directory = tmpdir / "cache"
     test_extraction_directory = test_cache_directory / "extraction"
     shutil.copytree(src=test_extraction_source, dst=test_extraction_directory)
@@ -48,7 +49,7 @@ def test_bundle_database(tmpdir: py.path.local) -> None:
     assert output_database_directory.exists()
 
     # Load expected output for comparison
-    expected_sharing_directory = base_directory / "expected_output" / "sharing_for_database_test"
+    expected_sharing_directory = base_directory / "expected_output" / "sharing"
     expected_database_directory = expected_sharing_directory / "extracted_activity.parquet"
 
     # Verify blob index mapping exists
