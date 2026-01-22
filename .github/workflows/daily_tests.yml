@@ -1,0 +1,34 @@
+name: Deploy daily tests
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # Daily at 2am EST
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  DailyTests:
+    uses: ./.github/workflows/testing.yml
+    secrets:
+      S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
+      CODECOV_CREDENTIALS: ${{ secrets.CODECOV_CREDENTIALS }}
+
+  NotifyOnFailure:
+    runs-on: ubuntu-latest
+    needs: [ DailyTests ]
+    if: ${{ always() && needs.DailyTests.result == 'failure' }}
+    steps:
+      - uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "CI Failure: s3-log-extraction Daily Tests"
+          to: cody.c.baker.phd@gmail.com  # Add more with comma separation (no spaces)
+          from: s3-log-extraction
+          body: "The daily test workflow failed, please check status at https://github.com/dandi/s3-log-extraction/actions/workflows/daily_tests.yml"
