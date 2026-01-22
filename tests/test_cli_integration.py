@@ -11,8 +11,17 @@ import py
 import s3_log_extraction
 
 
-def test_cli_extraction(tmpdir: py.path.local) -> None:
-    """Test extraction using the CLI instead of the API."""
+def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
+    """
+    Helper function to run CLI extraction tests with a specified number of workers.
+
+    Parameters
+    ----------
+    tmpdir : py.path.local
+        Temporary directory for test outputs.
+    workers : int
+        Number of workers to use for extraction.
+    """
     tmpdir = pathlib.Path(tmpdir)
 
     base_directory = pathlib.Path(__file__).parent
@@ -42,7 +51,7 @@ def test_cli_extraction(tmpdir: py.path.local) -> None:
             "extract",
             str(test_logs_directory),
             "--workers",
-            "1",
+            str(workers),
         ],
         check=True,
         capture_output=True,
@@ -66,66 +75,19 @@ def test_cli_extraction(tmpdir: py.path.local) -> None:
         relative_output_files=relative_output_files,
         relative_expected_files=relative_expected_files,
     )
+
+
+def test_cli_extraction(tmpdir: py.path.local) -> None:
+    """Test extraction using the CLI instead of the API."""
+    _run_cli_extraction_test(tmpdir, workers=1)
 
 
 def test_cli_extraction_parallel(tmpdir: py.path.local) -> None:
     """Test parallel extraction using the CLI instead of the API."""
-    tmpdir = pathlib.Path(tmpdir)
-
-    base_directory = pathlib.Path(__file__).parent
-    test_logs_directory = base_directory / "example_logs"
-    output_directory = tmpdir / "test_extraction"
-    output_directory.mkdir(exist_ok=True)
-    expected_output_directory = base_directory / "expected_output"
-
-    # Run extraction via CLI with multiple workers
-    result = subprocess.run(
-        [
-            "s3logextraction",
-            "config",
-            "cache",
-            "set",
-            str(output_directory),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-
-    result = subprocess.run(
-        [
-            "s3logextraction",
-            "extract",
-            str(test_logs_directory),
-            "--workers",
-            "2",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-
-    # Verify output files match expected structure
-    relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
-    relative_expected_files = {
-        file.relative_to(expected_output_directory) for file in expected_output_directory.rglob(pattern="*.txt")
-    }
-    assert relative_output_files == relative_expected_files
-
-    # Verify content matches expected output
-    s3_log_extraction.testing.assert_expected_extraction_content(
-        extractor_name="S3LogAccessExtractor",
-        test_directory=base_directory,
-        output_directory=output_directory,
-        expected_output_directory=expected_output_directory,
-        relative_output_files=relative_output_files,
-        relative_expected_files=relative_expected_files,
-    )
+    _run_cli_extraction_test(tmpdir, workers=2)
 
 
-def test_cli_generic_summaries(tmpdir: py.path.local):
+def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     """Test summary generation using the CLI instead of the API."""
     test_dir = pathlib.Path(tmpdir)
 
