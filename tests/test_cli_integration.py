@@ -3,12 +3,13 @@
 import os
 import pathlib
 import shutil
-import subprocess
 
 import pandas
 import py
+from click.testing import CliRunner
 
 import s3_log_extraction
+from s3_log_extraction._command_line_interface._cli import _s3logextraction_cli
 
 
 def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
@@ -30,32 +31,17 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     output_directory.mkdir(exist_ok=True)
     expected_output_directory = base_directory / "expected_output"
 
-    # Run extraction via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "config",
-            "cache",
-            "set",
-            str(output_directory),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    runner = CliRunner()
 
-    subprocess.run(
-        [
-            "s3logextraction",
-            "extract",
-            str(test_logs_directory),
-            "--workers",
-            str(workers),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+    # Set cache directory via CLI
+    result = runner.invoke(_s3logextraction_cli, ["config", "cache", "set", str(output_directory)])
+    assert result.exit_code == 0, f"Failed to set cache: {result.output}"
+
+    # Run extraction via CLI
+    result = runner.invoke(
+        _s3logextraction_cli, ["extract", str(test_logs_directory), "--workers", str(workers)]
     )
+    assert result.exit_code == 0, f"Extraction failed: {result.output}"
 
     # Verify output files match expected structure
     relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
@@ -98,94 +84,31 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     test_summary_dir = test_dir / "summaries"
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
 
-    # Create environment with password for encryption
-    env = os.environ.copy()
-    env["S3_LOG_EXTRACTION_PASSWORD"] = "test"
+    runner = CliRunner()
 
     # Set cache directory via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "config",
-            "cache",
-            "set",
-            str(test_dir),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = runner.invoke(_s3logextraction_cli, ["config", "cache", "set", str(test_dir)])
+    assert result.exit_code == 0, f"Failed to set cache: {result.output}"
 
     # Update IP indexes via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "update",
-            "ip",
-            "indexes",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = runner.invoke(_s3logextraction_cli, ["update", "ip", "indexes"])
+    assert result.exit_code == 0, f"Failed to update IP indexes: {result.output}"
 
     # Generate summaries via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "update",
-            "summaries",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = runner.invoke(_s3logextraction_cli, ["update", "summaries"])
+    assert result.exit_code == 0, f"Failed to generate summaries: {result.output}"
 
     # Generate dataset totals via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "update",
-            "totals",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = runner.invoke(_s3logextraction_cli, ["update", "totals"])
+    assert result.exit_code == 0, f"Failed to generate totals: {result.output}"
 
     # Generate archive summaries via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "update",
-            "summaries",
-            "--mode",
-            "archive",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = runner.invoke(_s3logextraction_cli, ["update", "summaries", "--mode", "archive"])
+    assert result.exit_code == 0, f"Failed to generate archive summaries: {result.output}"
 
     # Generate archive totals via CLI
-    subprocess.run(
-        [
-            "s3logextraction",
-            "update",
-            "totals",
-            "--mode",
-            "archive",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = runner.invoke(_s3logextraction_cli, ["update", "totals", "--mode", "archive"])
+    assert result.exit_code == 0, f"Failed to generate archive totals: {result.output}"
 
     # Verify the output matches expected files
     test_file_paths = {path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="*.tsv")}

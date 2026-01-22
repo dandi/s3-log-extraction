@@ -30,7 +30,7 @@ keywords = [
     "data infrastructure",
 ]
 license = {file = "LICENSE.txt"}
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "pandas",
     "tqdm",
