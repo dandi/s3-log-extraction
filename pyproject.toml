@@ -150,4 +150,5 @@ markers = [
 env = [
     "IPINFO_API_KEY=a1",
     "OPENCAGE_API_KEY=a1",
+    "S3_LOG_EXTRACTION_PASSWORD=test",
 ]
