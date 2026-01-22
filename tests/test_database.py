@@ -107,9 +107,9 @@ def test_bundle_database(tmpdir: py.path.local) -> None:
         # We'll verify blob_index is valid separately
         columns_to_compare = ["asset_type", "blob_head", "timestamp", "bytes_sent", "indexed_ip"]
         for col in columns_to_compare:
-            assert output_sorted[col].to_list() == expected_sorted[col].to_list(), (
-                f"Column {col} mismatch in {output_file}"
-            )
+            assert (
+                output_sorted[col].to_list() == expected_sorted[col].to_list()
+            ), f"Column {col} mismatch in {output_file}"
 
         # Verify blob_index values are within valid range
         assert output_df["blob_index"].min() >= 0
