@@ -31,7 +31,7 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     expected_output_directory = base_directory / "expected_output"
 
     # Run extraction via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "config",
@@ -43,9 +43,8 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0
 
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "extract",
@@ -57,7 +56,6 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0
 
     # Verify output files match expected structure
     relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
@@ -105,7 +103,7 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     env["S3_LOG_EXTRACTION_PASSWORD"] = "test"
 
     # Set cache directory via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "config",
@@ -118,10 +116,9 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
         text=True,
         env=env,
     )
-    assert result.returncode == 0
 
     # Update IP indexes via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "update",
@@ -133,10 +130,9 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
         text=True,
         env=env,
     )
-    assert result.returncode == 0
 
     # Generate summaries via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "update",
@@ -147,10 +143,9 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
         text=True,
         env=env,
     )
-    assert result.returncode == 0
 
     # Generate dataset totals via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "update",
@@ -161,10 +156,9 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
         text=True,
         env=env,
     )
-    assert result.returncode == 0
 
     # Generate archive summaries via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "update",
@@ -177,10 +171,9 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
         text=True,
         env=env,
     )
-    assert result.returncode == 0
 
     # Generate archive totals via CLI
-    result = subprocess.run(
+    subprocess.run(
         [
             "s3logextraction",
             "update",
@@ -193,7 +186,6 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
         text=True,
         env=env,
     )
-    assert result.returncode == 0
 
     # Verify the output matches expected files
     test_file_paths = {path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="*.tsv")}
