@@ -103,9 +103,10 @@ def test_bundle_database(tmpdir: py.path.local) -> None:
         output_sorted = output_df.sort(by=["timestamp", "blob_index"])
         expected_sorted = expected_df.sort(by=["timestamp", "blob_index"])
 
-        # Remap blob_index values for comparison since they depend on iteration order
-        # We'll compare all other columns and verify blob_index is valid
-        for col in ["asset_type", "blob_head", "timestamp", "bytes_sent", "indexed_ip"]:
+        # Compare all columns except blob_index (which depends on iteration order)
+        # We'll verify blob_index is valid separately
+        columns_to_compare = ["asset_type", "blob_head", "timestamp", "bytes_sent", "indexed_ip"]
+        for col in columns_to_compare:
             assert output_sorted[col].to_list() == expected_sorted[col].to_list(), (
                 f"Column {col} mismatch in {output_file}"
             )
