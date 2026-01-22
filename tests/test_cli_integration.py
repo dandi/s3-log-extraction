@@ -1,6 +1,5 @@
 """CLI integration tests that mirror the existing API-based integration tests."""
 
-import os
 import pathlib
 import shutil
 
@@ -38,9 +37,7 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     assert result.exit_code == 0, f"Failed to set cache: {result.output}"
 
     # Run extraction via CLI
-    result = runner.invoke(
-        _s3logextraction_cli, ["extract", str(test_logs_directory), "--workers", str(workers)]
-    )
+    result = runner.invoke(_s3logextraction_cli, ["extract", str(test_logs_directory), "--workers", str(workers)])
     assert result.exit_code == 0, f"Extraction failed: {result.output}"
 
     # Verify output files match expected structure
