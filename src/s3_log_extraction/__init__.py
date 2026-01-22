@@ -12,7 +12,6 @@ __all__ = [
     "reset_extraction",
     # Public submodules
     "config",
-    "database",
     "encryption_utils",
     "extractors",
     "ip_utils",
