@@ -1,4 +1,4 @@
-name: Remote tests
+name: Remote testing
 on:
   workflow_call:
     secrets:
@@ -20,7 +20,7 @@ jobs:
 
   run:
     # Will read on PR dashboard as 'Deploy / RemoteTests / ubuntu'
-    # Action dashboard identified by 'Remote tests'
+    # Action dashboard identified by 'Remote testing'
     # Requirement settings identified as 'RemoteTests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-name: Primary tests
+name: Primary testing
 on:
   workflow_call:
     secrets:
@@ -14,7 +14,7 @@ jobs:
 
   run:
     # Will read on PR dashboard as 'Deploy / Tests / ubuntu'
-    # Action dashboard identified by 'Primary tests'
+    # Action dashboard identified by 'Primary testing'
     # Requirement settings identified as 'Tests / ubuntu'
     name: ubuntu
     runs-on: ubuntu-latest
