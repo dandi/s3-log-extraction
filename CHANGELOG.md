@@ -4,6 +4,24 @@
 
 
 
+# v1.3.0
+
+## Features
+
+Added functionality and tests for generating generic summaries. A big thanks to @rwblair for contributing this!
+
+## Improvements
+
+Exposed the flag `--batch-limit` to `update_index_to_region_codes` and increased the timeout to the IP Info API.
+
+Removed all DANDI-specific functionality. This has been split into the extension package https://github.com/dandi/dandi-s3-log-extraction.
+
+Added a logo to the project.
+
+Added tests for the CLI.
+
+
+
 # v1.2.0
 
 ## Features
