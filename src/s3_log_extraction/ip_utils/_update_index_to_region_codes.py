@@ -50,8 +50,8 @@ def update_index_to_region_codes(
     indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
 
     index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=False)
-    index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
     index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
+    index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
 
     number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
@@ -90,12 +90,16 @@ def update_index_to_region_codes(
                 continue
 
             # API limit reached; do not cache and wait for it to reset
-            if region_code == "TBD":
+            if region_code == "unknown":
                 continue
             index_to_region[ip_index] = region_code
 
             with indexed_regions_file_path.open(mode="w") as file_stream:
                 yaml.dump(data=index_to_region, stream=file_stream)
+
+    index_not_in_services_file_path = ip_cache_directory / "index_not_in_services.yaml"
+    with index_not_in_services_file_path.open(mode="w") as file_stream:
+        yaml.dump(data=index_not_in_services, stream=file_stream)
 
 
 def _get_region_code_from_ip_index(
@@ -107,7 +111,7 @@ def _get_region_code_from_ip_index(
     # Azure not yet easily doable; keep an eye on
     # https://learn.microsoft.com/en-us/answers/questions/1410071/up-to-date-azure-public-api-to-get-azure-ip-ranges
     # maybe it will change in the future
-    if index_not_in_services.get(ip_index, None) is None:
+    if ip_index not in index_not_in_services:
         for service_name in _KNOWN_SERVICES:
             cidr_addresses_and_subregions = _get_cidr_address_ranges_and_subregions(service_name=service_name)
 
@@ -125,9 +129,14 @@ def _get_region_code_from_ip_index(
                 subregion = matched_cidr_address_and_subregion[1]
                 if subregion is not None:
                     region_service_string += f"/{subregion}"
-                return region_service_string
-    index_not_in_services[ip_index] = True
 
+                index_not_in_services[ip_index] = False
+                return region_service_string
+
+        # TODO: make `index_not_in_services` a `set`
+        index_not_in_services[ip_index] = True
+
+    # TODO: add batching support to ipinfo requests
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
         timeout_in_seconds = 30
@@ -148,4 +157,4 @@ def _get_region_code_from_ip_index(
 
         return region_string
     except ipinfo.exceptions.RequestQuotaExceededError:  # pragma: no cover
-        return "TBD"
+        return "unknown"

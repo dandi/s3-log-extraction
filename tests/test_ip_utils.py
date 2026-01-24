@@ -27,6 +27,7 @@ def test_ip_utils(tmpdir: py.path.local) -> None:
         test_dir=test_extraction_dir, expected_dir=expected_extraction_dir
     )
 
-    # Test updating indexed IPs to region codes
+    # Test updating indexed IPs to region codes and coordinates
     s3_log_extraction.ip_utils.update_index_to_region_codes(cache_directory=test_cache, encrypt=False)
+    s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=test_cache)
     s3_log_extraction.testing.assert_filetree_matches(test_dir=test_ips_dir, expected_dir=expected_ips_dir)
