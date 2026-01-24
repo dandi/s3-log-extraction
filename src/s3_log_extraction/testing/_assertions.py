@@ -83,6 +83,6 @@ def assert_filetree_matches(test_dir: pathlib.Path, expected_dir: pathlib.Path) 
             f"Expected file: {expected_dir / relative_file_path}\n"
             f"Test content length: {len(test_content)} bytes\n"
             f"Expected content length: {len(expected_content)} bytes\n"
-            f"Test content: {test_content}\n"
-            f"Expected content: {expected_content}\n\n"
+            f"Test content: {test_content.decode()}\n"
+            f"Expected content: {expected_content.decode()}\n\n"
         )
