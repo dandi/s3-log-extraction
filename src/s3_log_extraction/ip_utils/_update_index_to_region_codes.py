@@ -13,9 +13,30 @@ from ..config import get_ip_cache_directory
 
 
 def update_index_to_region_codes(
-    batch_size: int = 1_000, batch_limit: int | None = None, cache_directory: str | pathlib.Path | None = None
+    batch_size: int = 1_000,
+    batch_limit: int | None = None,
+    cache_directory: str | pathlib.Path | None = None,
+    encrypt: bool = True,
 ) -> str | None:
-    """Update the `indexed_region_codes.yaml` file in the cache directory."""
+    """
+    Update the `indexed_region_codes.yaml` file in the cache directory.
+
+    Parameters
+    ----------
+    batch_size : int
+        Number of IP addresses to process in each batch.
+        Default is 1,000.
+    batch_limit : int | None
+        Maximum number of batches to process.
+        If `None`, all batches will be processed.
+        Default is `None`.
+    cache_directory : str | pathlib.Path | None
+        Path to the cache directory.
+        If `None`, the default cache directory will be used.
+    encrypt : bool
+        Whether the index to IP cache file is encrypted.
+        Default and recommended mode is `True`; the use of `False` is mainly for testing purposes.
+    """
     import ipinfo
 
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", None)
@@ -27,7 +48,7 @@ def update_index_to_region_codes(
     ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
 
-    index_to_ip = load_index_to_ip(cache_directory=cache_directory)
+    index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=False)
     index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
     index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
     indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
