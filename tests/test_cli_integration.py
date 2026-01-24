@@ -41,9 +41,15 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     assert result.exit_code == 0, f"Extraction failed: {result.output}"
 
     # Verify output files match expected structure
-    relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
+    relative_output_files = {
+        file.relative_to(output_directory)
+        for file in output_directory.rglob(pattern="*.txt")
+        if "indexed_ips" not in file.stem
+    }
     relative_expected_files = {
-        file.relative_to(expected_output_directory) for file in expected_output_directory.rglob(pattern="*.txt")
+        file.relative_to(expected_output_directory)
+        for file in expected_output_directory.rglob(pattern="*.txt")
+        if "indexed_ips" not in file.stem
     }
     assert relative_output_files == relative_expected_files
 

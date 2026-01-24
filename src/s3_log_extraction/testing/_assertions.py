@@ -51,3 +51,38 @@ def assert_expected_extraction_content(
                 f"Extra in output: {output_content - expected_content}\n"
                 f"Missing in output: {expected_content - output_content}"
             )
+
+
+def assert_filetree_matches(test_dir: pathlib.Path, expected_dir: pathlib.Path) -> None:
+    relative_test_file_contents = {
+        file.relative_to(test_dir): file.read_bytes().strip() for file in test_dir.rglob(pattern="*") if file.is_file()
+    }
+    relative_expected_file_contents = {
+        file.relative_to(expected_dir): file.read_bytes().strip()
+        for file in expected_dir.rglob(pattern="*")
+        if file.is_file()
+    }
+
+    test_files = set(relative_test_file_contents.keys())
+    expected_files = set(relative_expected_file_contents.keys())
+    assert test_files == expected_files, (
+        f"File trees do not match.\n"
+        f"Test directory: {test_dir}\n"
+        f"Expected directory: {expected_dir}\n"
+        f"Extra files in test: {test_files - expected_files}\n"
+        f"Missing files in test: {expected_files - test_files}"
+    )
+
+    for relative_file_path in relative_expected_file_contents.keys():
+        test_content = relative_test_file_contents[relative_file_path]
+        expected_content = relative_expected_file_contents[relative_file_path]
+
+        assert test_content == expected_content, (
+            f"\n\nContent mismatch in file: {relative_file_path}\n"
+            f"Test file: {test_dir / relative_file_path}\n"
+            f"Expected file: {expected_dir / relative_file_path}\n"
+            f"Test content length: {len(test_content)} bytes\n"
+            f"Expected content length: {len(expected_content)} bytes\n"
+            f"Test content: {test_content}\n"
+            f"Expected content: {expected_content}\n\n"
+        )

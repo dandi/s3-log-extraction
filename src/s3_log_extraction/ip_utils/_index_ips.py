@@ -9,7 +9,12 @@ from ._ip_cache import load_index_to_ip, save_index_to_ip
 from ..config import get_cache_directory
 
 
-def index_ips(*, seed: int = None, cache_directory: str | pathlib.Path | None = None) -> None:
+def index_ips(
+    *,
+    seed: int = None,
+    cache_directory: str | pathlib.Path | None = None,
+    encrypt: bool = True,
+) -> None:
     """
     Indexes IP addresses extracted from the S3 log files.
 
@@ -17,6 +22,17 @@ def index_ips(*, seed: int = None, cache_directory: str | pathlib.Path | None = 
     the randomized indexes of unique IPs.
 
     The index mapping to full IPs is encrypted and saved to the cache for if access is ever needed for lookup purposes.
+
+    Parameters
+    ----------
+    seed : int
+        Seed for the random number generator to ensure reproducibility.
+    cache_directory : str | pathlib.Path | None
+        Path to the cache directory.
+        If `None`, the default cache directory will be used.
+    encrypt : bool
+        Whether to encrypt the index to IP cache file.
+        Default and recommended mode is `True`; the use of `False` is mainly for testing purposes.
     """
     rng = numpy.random.default_rng(seed=seed)
     dtype = "uint64"
@@ -26,7 +42,7 @@ def index_ips(*, seed: int = None, cache_directory: str | pathlib.Path | None = 
     cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
     extraction_directory = cache_directory / "extraction"
 
-    index_to_ip = load_index_to_ip(cache_directory=cache_directory)
+    index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=encrypt)
     ip_to_index = {ip: index for index, ip in index_to_ip.items()}
     indexed_ips = {ip for ip in index_to_ip.values()}
 
@@ -64,8 +80,4 @@ def index_ips(*, seed: int = None, cache_directory: str | pathlib.Path | None = 
         indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
         indexed_ips_file_path.write_text("\n".join(full_indexed_ips))
 
-    save_index_to_ip(index_to_ip=index_to_ip, cache_directory=cache_directory)
-
-    # TODO: add delayed optional cleanup
-    # for full_ip_file_path in full_ip_file_paths:
-    #     full_ip_file_path.unlink()
+    save_index_to_ip(index_to_ip=index_to_ip, cache_directory=cache_directory, encrypt=encrypt)
