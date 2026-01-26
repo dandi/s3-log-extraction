@@ -203,7 +203,7 @@ class RemoteS3LogAccessExtractor:
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
             message = (
                 "\nRecord corruption from previous run detected - "
-                "please call `s3_log_extraction reset extraction` to clean the extraction cache and records.\n\n"
+                "please call `s3logextraction reset extraction` to clean the extraction cache and records.\n\n"
             )
             raise ValueError(message)
 

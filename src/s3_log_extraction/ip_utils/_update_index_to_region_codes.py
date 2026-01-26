@@ -3,6 +3,7 @@ import itertools
 import math
 import os
 import pathlib
+import random
 
 import tqdm
 import yaml
@@ -52,12 +53,16 @@ def update_index_to_region_codes(
     index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=False)
     index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
     index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
-    indexes_to_update = set(index_to_ip.keys()) - set(index_to_region.keys())
+    indexes_to_update = list(set(index_to_ip.keys()) - set(index_to_region.keys()))
+
+    # If a batch limit is set, shuffle the indexes to ensure repeated runs update different IPs
+    if batch_limit is not None:
+        random.shuffle(indexes_to_update)
 
     number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
     if batch_limit is not None:
         number_of_batches = min(number_of_batches, batch_limit)
-        indexes_to_update = list(indexes_to_update)[: batch_limit * batch_size]
+        indexes_to_update = indexes_to_update[: batch_limit * batch_size]
 
     for ip_index_batch in tqdm.tqdm(
         iterable=itertools.batched(iterable=indexes_to_update, n=batch_size),
