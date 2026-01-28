@@ -50,7 +50,7 @@ def update_index_to_region_codes(
     ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
 
-    index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=False)
+    index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=encrypt)
     index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
     index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
     indexes_to_update = list(set(index_to_ip.keys()) - set(index_to_region.keys()))
