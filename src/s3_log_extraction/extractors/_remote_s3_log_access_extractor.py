@@ -376,21 +376,21 @@ class RemoteS3LogAccessExtractor:
         The raw manifest file is the output of `s5cmd ls s3_root/* > manifest.txt`.
         """
         manifest = collections.defaultdict(list)
-        lines = [line.split(" ")[-1].strip() for line in file_path.read_text().splitlines() if "DIR" not in line]
-        for line in tqdm.tqdm(
-            iterable=lines,
-            total=len(lines),
+        filenames = [line.split(" ")[-1].strip() for line in file_path.read_text().splitlines() if "DIR" not in line]
+        for filename in tqdm.tqdm(
+            iterable=filenames,
+            total=len(filenames),
             desc="Parsing local manifest",
             unit="files",
             smoothing=0,
             leave=False,
         ):
-            line_splits = line.split("-")
-            year = line_splits[0]
-            month = line_splits[1]
-            day = line_splits[2]
+            filename_splits = filename.split("-")
+            year = filename_splits[0]
+            month = filename_splits[1]
+            day = filename_splits[2]
             date = f"{year}-{month}-{day}"
-            manifest[date].append(line)
+            manifest[date].append(filename)
 
         parsed_file_path = file_path.parent / f"{file_path.stem}_parsed.json"
         parsed_file_path.unlink(missing_ok=True)
