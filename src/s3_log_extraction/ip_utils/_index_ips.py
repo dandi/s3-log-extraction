@@ -75,7 +75,7 @@ def index_ips(
             unit="files",
             smoothing=0,
             position=1,
-            leave=True,
+            leave=False,
         ):
             full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
             unique_full_ips = {ip for ip in full_ips}
