@@ -62,7 +62,7 @@ def index_ips(
 
         files_to_process = [
             path
-            for path in batch_list
+            for path in batch
             if not (indexed_path := path.parent / "indexed_ips.txt").exists()
             or path.stat().st_mtime > indexed_path.stat().st_mtime
         ]
