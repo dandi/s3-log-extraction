@@ -32,7 +32,8 @@ def index_ips(
         If `None`, the default cache directory will be used.
     encrypt : bool
         Whether to encrypt the index to IP cache file.
-        Default and recommended mode is `True`; the use of `False` is mainly for testing purposes.
+        Default and recommended mode is `True`.
+        The use of `False` is mainly for testing purposes.
     """
     rng = numpy.random.default_rng(seed=seed)
     dtype = "uint64"
@@ -46,11 +47,23 @@ def index_ips(
     ip_to_index = {ip: index for index, ip in index_to_ip.items()}
     indexed_ips = {ip for ip in index_to_ip.values()}
 
-    full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
-    random.shuffle(full_ip_file_paths)
+    full_ip_file_paths_to_process = [
+        path
+        for path in extraction_directory.rglob(pattern="full_ips.txt")
+        if not (indexed_path := path.parent / "indexed_ips.txt").exists()
+        or path.stat().st_mtime > indexed_path.stat().st_mtime
+    ]
+
+    # current_indexed_ip_file_paths = list(extraction_directory.rglob(pattern="indexed_ips.txt"))
+
+    random.shuffle(full_ip_file_paths_to_process)
 
     for full_ip_file_path in tqdm.tqdm(
-        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="files", smoothing=0
+        iterable=full_ip_file_paths_to_process,
+        total=len(full_ip_file_paths_to_process),
+        desc="Indexing IP files",
+        unit="files",
+        smoothing=0,
     ):
         full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
         unique_full_ips = {ip for ip in full_ips}
