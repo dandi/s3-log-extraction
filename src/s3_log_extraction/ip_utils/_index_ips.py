@@ -71,7 +71,6 @@ def index_ips(
             total=len(files_to_process),
             desc="Indexing IP files",
             unit="files",
-            smoothing=0,
             position=1,
             leave=False,
         ):
