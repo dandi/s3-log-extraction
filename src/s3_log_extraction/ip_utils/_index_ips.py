@@ -48,7 +48,7 @@ def index_ips(
     ip_to_index = {ip: index for index, ip in index_to_ip.items()}
     indexed_ips = {ip for ip in index_to_ip.values()}
 
-    batch_size = 100_000
+    batch_size = 1_000_000
     tqdm_iterable = tqdm.tqdm(
         iterable=itertools.batched(iterable=extraction_directory.rglob(pattern="full_ips.txt"), n=batch_size),
         total=0,
@@ -56,6 +56,7 @@ def index_ips(
         unit="batches",
         smoothing=0,
         position=0,
+        leave=True,
     )
     for batch in tqdm_iterable:
         tqdm_iterable.total += 1
@@ -74,6 +75,7 @@ def index_ips(
             unit="files",
             smoothing=0,
             position=1,
+            leave=True,
         ):
             full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
             unique_full_ips = {ip for ip in full_ips}
