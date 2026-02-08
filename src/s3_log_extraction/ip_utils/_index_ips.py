@@ -1,6 +1,5 @@
 import itertools
 import pathlib
-import random
 
 import numpy
 import numpy.random
@@ -61,16 +60,15 @@ def index_ips(
     for batch in tqdm_iterable:
         tqdm_iterable.total += 1
 
-        batch_list = list(batch)
-        random.shuffle(batch_list)
+        files_to_process = [
+            path
+            for path in batch_list
+            if not (indexed_path := path.parent / "indexed_ips.txt").exists()
+            or path.stat().st_mtime > indexed_path.stat().st_mtime
+        ]
         for full_ip_file_path in tqdm.tqdm(
-            iterable=(
-                path
-                for path in batch_list
-                if not (indexed_path := path.parent / "indexed_ips.txt").exists()
-                or path.stat().st_mtime > indexed_path.stat().st_mtime
-            ),
-            total=batch_size,
+            iterable=files_to_process,
+            total=len(files_to_process),
             desc="Indexing IP files",
             unit="files",
             smoothing=0,
