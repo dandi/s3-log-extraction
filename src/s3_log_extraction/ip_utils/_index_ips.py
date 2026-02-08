@@ -69,7 +69,7 @@ def index_ips(
                 if not (indexed_path := path.parent / "indexed_ips.txt").exists()
                 or path.stat().st_mtime > indexed_path.stat().st_mtime
             ),
-            total=len(full_ip_file_paths_to_process),
+            total=batch_size,
             desc="Indexing IP files",
             unit="files",
             smoothing=0,
