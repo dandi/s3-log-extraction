@@ -54,8 +54,6 @@ def index_ips(
         or path.stat().st_mtime > indexed_path.stat().st_mtime
     ]
 
-    # current_indexed_ip_file_paths = list(extraction_directory.rglob(pattern="indexed_ips.txt"))
-
     random.shuffle(full_ip_file_paths_to_process)
 
     for full_ip_file_path in tqdm.tqdm(
