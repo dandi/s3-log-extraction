@@ -43,7 +43,7 @@ def update_region_code_coordinates(
         message = (
             f"\nCannot update region codes to coordinates because the indexed regions file does not exist: "
             f"{index_to_region_codes_file_path}\n\n"
-            f"Please run `s3_log_extractor.update_index_to_region_codes()` first to create the indexed regions file.\n"
+            f"Please run `s3logextractor.update_index_to_region_codes()` first to create the indexed regions file.\n"
         )
         raise FileNotFoundError(message)
 

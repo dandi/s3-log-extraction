@@ -1,5 +1,5 @@
+import itertools
 import pathlib
-import random
 
 import numpy
 import numpy.random
@@ -32,7 +32,8 @@ def index_ips(
         If `None`, the default cache directory will be used.
     encrypt : bool
         Whether to encrypt the index to IP cache file.
-        Default and recommended mode is `True`; the use of `False` is mainly for testing purposes.
+        Default and recommended mode is `True`.
+        The use of `False` is mainly for testing purposes.
     """
     rng = numpy.random.default_rng(seed=seed)
     dtype = "uint64"
@@ -46,38 +47,59 @@ def index_ips(
     ip_to_index = {ip: index for index, ip in index_to_ip.items()}
     indexed_ips = {ip for ip in index_to_ip.values()}
 
-    full_ip_file_paths = list(extraction_directory.rglob(pattern="*full_ips.txt"))
-    random.shuffle(full_ip_file_paths)
+    batch_size = 1_000_000
+    tqdm_iterable = tqdm.tqdm(
+        iterable=itertools.batched(iterable=extraction_directory.rglob(pattern="full_ips.txt"), n=batch_size),
+        total=0,
+        desc="Indexing IPs in batches",
+        unit="batches",
+        smoothing=0,
+        position=0,
+        leave=True,
+    )
+    for batch in tqdm_iterable:
+        tqdm_iterable.total += 1
 
-    for full_ip_file_path in tqdm.tqdm(
-        iterable=full_ip_file_paths, total=len(full_ip_file_paths), desc="Indexing IP files", unit="files", smoothing=0
-    ):
-        full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
-        unique_full_ips = {ip for ip in full_ips}
-        ips_to_index = unique_full_ips - indexed_ips
+        files_to_process = [
+            path
+            for path in batch
+            if not (indexed_path := path.parent / "indexed_ips.txt").exists()
+            or path.stat().st_mtime > indexed_path.stat().st_mtime
+        ]
+        for full_ip_file_path in tqdm.tqdm(
+            iterable=files_to_process,
+            total=len(files_to_process),
+            desc="Indexing IP files",
+            unit="files",
+            position=1,
+            leave=False,
+        ):
+            full_ips = [line.strip() for line in full_ip_file_path.read_text().splitlines()]
+            unique_full_ips = {ip for ip in full_ips}
+            ips_to_index = unique_full_ips - indexed_ips
 
-        for ip in ips_to_index:
-            new_index = int(rng.integers(low=0, high=high, dtype=dtype))
-
-            redraw = 0
-            while index_to_ip.get(new_index, None) is not None and redraw < max_redraws:
+            for ip in ips_to_index:
                 new_index = int(rng.integers(low=0, high=high, dtype=dtype))
-                redraw += 1
 
-            if redraw >= max_redraws:
-                message = (
-                    f"Failed to find a unique index for an IP after {max_redraws} redraws - "
-                    "suggest increasing either index dtype or redraw limit."
-                )
-                raise ValueError(message)
+                redraw = 0
+                while index_to_ip.get(new_index, None) is not None and redraw < max_redraws:
+                    new_index = int(rng.integers(low=0, high=high, dtype=dtype))
+                    redraw += 1
 
-            index_to_ip[new_index] = ip
-            ip_to_index[ip] = new_index
-            indexed_ips.update(ip_to_index)
+                if redraw >= max_redraws:
+                    message = (
+                        f"Failed to find a unique index for an IP after {max_redraws} redraws - "
+                        "suggest increasing either index dtype or redraw limit."
+                    )
+                    raise ValueError(message)
 
-        full_indexed_ips = [f"{ip_to_index[ip]}" for ip in full_ips]
+                index_to_ip[new_index] = ip
+                ip_to_index[ip] = new_index
+                indexed_ips.update(ip_to_index)
 
-        indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
-        indexed_ips_file_path.write_text("\n".join(full_indexed_ips))
+            full_indexed_ips = [f"{ip_to_index[ip]}" for ip in full_ips]
 
-    save_index_to_ip(index_to_ip=index_to_ip, cache_directory=cache_directory, encrypt=encrypt)
+            indexed_ips_file_path = full_ip_file_path.parent / "indexed_ips.txt"
+            indexed_ips_file_path.write_text("\n".join(full_indexed_ips))
+
+        save_index_to_ip(index_to_ip=index_to_ip, cache_directory=cache_directory, encrypt=encrypt)
