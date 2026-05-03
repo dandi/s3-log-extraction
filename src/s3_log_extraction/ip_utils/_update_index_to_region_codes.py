@@ -135,6 +135,9 @@ def _get_region_code_from_ip_index(
                 if subregion is not None:
                     region_service_string += f"/{subregion}"
 
+                # Remove from set in case it was previously marked as not in services
+                # (e.g., if a new service was added to _KNOWN_SERVICES after the last run)
+                index_not_in_services.discard(ip_index)
                 return region_service_string
 
         index_not_in_services.add(ip_index)

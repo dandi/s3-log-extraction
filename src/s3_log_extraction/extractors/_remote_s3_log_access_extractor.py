@@ -366,10 +366,14 @@ class RemoteS3LogAccessExtractor:
         #     if len(self.processed_months_per_year.get(year, set())) == 12:
         #         self.processed_years.add(year)
         #
+        # # Note: sets must be converted to lists for YAML serialization
         # with self.processed_months_per_year_record_file_path.open("w") as file_stream:
-        #     yaml.dump(data=self.processed_months_per_year, stream=file_stream)
+        #     yaml.dump(
+        #         data={year: list(months) for year, months in self.processed_months_per_year.items()},
+        #         stream=file_stream,
+        #     )
         # with self.processed_years_record_file_path.open("w") as file_stream:
-        #     yaml.dump(data=self.processed_years, stream=file_stream)
+        #     yaml.dump(data=list(self.processed_years), stream=file_stream)
 
     @staticmethod
     @pydantic.validate_call
