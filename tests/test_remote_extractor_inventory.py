@@ -167,7 +167,8 @@ def test_get_unprocessed_s3_urls_from_inventory_ignores_short_paths(tmp_path: pa
     s3_root = "s3://my-bucket"
     inventory_content = "\n".join(
         [
-            "s3://my-bucket/2024/01/",  # missing filename component
+            "s3://my-bucket/2024/01/",  # missing filename component (trailing slash)
+            "s3://my-bucket/2024/01/01",  # exactly year/month/day with no filename
             "s3://my-bucket/2024/01/01/2024-01-01-00-00-00-VALID",
         ]
     )

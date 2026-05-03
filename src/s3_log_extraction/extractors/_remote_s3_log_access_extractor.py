@@ -312,7 +312,10 @@ class RemoteS3LogAccessExtractor:
         with fsspec.open(urlpath=inventory_s3_path, mode="r") as file_stream:
             inventory_content = file_stream.read()
 
-        # Normalize s3_root so we can strip it as a prefix safely
+        # Normalize s3_root so we can strip it as a prefix safely.
+        # The trailing slash ensures that adjacent prefixes such as
+        # "s3://bucket/logs-extra" are not matched when s3_root is
+        # "s3://bucket/logs".
         s3_root_prefix = s3_root.rstrip("/") + "/"
 
         inventory: dict[str, list[str]] = collections.defaultdict(list)
