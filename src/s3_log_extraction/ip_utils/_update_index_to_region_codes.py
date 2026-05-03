@@ -135,13 +135,13 @@ def _get_region_code_from_ip_index(
                 if subregion is not None:
                     region_service_string += f"/{subregion}"
 
-                # Remove from dict in case it was previously marked as not in services
-                # (e.g., if a new service was added to _KNOWN_SERVICES after the last run)
-                index_not_in_services.pop(ip_index, None)
+                index_not_in_services[ip_index] = False
                 return region_service_string
 
+        # TODO: make `index_not_in_services` a `set`
         index_not_in_services[ip_index] = True
 
+    # TODO: add batching support to ipinfo requests
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
         timeout_in_seconds = 30
