@@ -19,7 +19,7 @@ def save_config(config: dict[str, typing.Any]) -> None:
         return
 
     with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="w") as file_stream:
-        json.dump(obj=config, fp=file_stream)
+        json.dump(obj=config, fp=file_stream, indent=2)
 
 
 def get_config() -> dict[str, typing.Any]:
@@ -34,7 +34,7 @@ def get_config() -> dict[str, typing.Any]:
     config = {}
     if not S3_LOG_EXTRACTION_CONFIG_FILE_PATH.exists():
         with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="w") as file_stream:
-            json.dump(obj=config, fp=file_stream)
+            json.dump(obj=config, fp=file_stream, indent=2)
 
     with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="r") as file_stream:
         config = json.load(fp=file_stream)
