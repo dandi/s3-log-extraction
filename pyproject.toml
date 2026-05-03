@@ -30,7 +30,7 @@ keywords = [
     "data infrastructure",
 ]
 license = {file = "LICENSE.txt"}
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "pandas",
     "tqdm",
@@ -44,7 +44,7 @@ dependencies = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Intended Audience :: Developers",
     "Operating System :: Unix",
     "Operating System :: MacOS",
@@ -90,7 +90,7 @@ all = [
 
 [tool.black]
 line-length = 120
-target-version = ['py313']
+target-version = ['py314']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
