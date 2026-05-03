@@ -321,7 +321,7 @@ class RemoteS3LogAccessExtractor:
             if not url or not url.startswith(s3_root_prefix):
                 continue
             # Relative path after the root: year/month/day/filename
-            relative_path = url[len(s3_root_prefix):]
+            relative_path = url[len(s3_root_prefix) :]
             parts = relative_path.split("/")
             if len(parts) < 4:
                 continue
