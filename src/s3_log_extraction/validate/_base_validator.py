@@ -24,12 +24,12 @@ class BaseValidator(abc.ABC):
         record_file_name = f"{self.__class__.__name__}_{hex(hash(self))[2:]}.txt"
         self.record_file_path = self.records_directory / record_file_name
 
-        self.record = {}
+        self.record: set[str] = set()
         if not self.record_file_path.exists():
             return
 
         with self.record_file_path.open(mode="r") as file_stream:
-            self.record = {line.strip(): True for line in file_stream.readlines()}
+            self.record = {line.strip() for line in file_stream.readlines()}
 
     @abc.abstractmethod
     def _run_validation(self, file_path: pathlib.Path) -> None:
@@ -65,12 +65,12 @@ class BaseValidator(abc.ABC):
         """
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
-        if self.record.get(absolute_file_path, False) is True:
+        if absolute_file_path in self.record:
             return
 
         self._run_validation(file_path=file_path)
 
-        self.record[absolute_file_path] = True
+        self.record.add(absolute_file_path)
         self._record_success(file_path=file_path)
 
     def validate_directory(self, directory: str | pathlib.Path, limit: int | None = None) -> None:
@@ -89,7 +89,7 @@ class BaseValidator(abc.ABC):
         directory = pathlib.Path(directory)
 
         all_log_files = {str(file_path.absolute()) for file_path in directory.rglob(pattern="*.log")}
-        unvalidated_files = list(all_log_files - set(self.record.keys()))
+        unvalidated_files = list(all_log_files - self.record)
         random.shuffle(unvalidated_files)
 
         files_to_validate = unvalidated_files[:limit] if limit is not None else unvalidated_files

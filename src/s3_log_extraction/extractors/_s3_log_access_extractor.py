@@ -51,18 +51,16 @@ class S3LogAccessExtractor:
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
-        self.file_processing_end_record = dict()
-        file_processing_record_difference = set()
+        self.file_processing_end_record: set[str] = set()
+        file_processing_record_difference: set[str] = set()
         if self.file_processing_start_record_file_path.exists() and self.file_processing_end_record_file_path.exists():
             file_processing_start_record = {
                 file_path for file_path in self.file_processing_start_record_file_path.read_text().splitlines()
             }
             self.file_processing_end_record = {
-                file_path: True for file_path in self.file_processing_end_record_file_path.read_text().splitlines()
+                file_path for file_path in self.file_processing_end_record_file_path.read_text().splitlines()
             }
-            file_processing_record_difference = file_processing_start_record - set(
-                self.file_processing_end_record.keys()
-            )
+            file_processing_record_difference = file_processing_start_record - self.file_processing_end_record
         if len(file_processing_record_difference) > 0:
             # IDEA: an advanced feature for the future could be looking at the timestamp of the 'started' log
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
@@ -86,7 +84,7 @@ class S3LogAccessExtractor:
         all_log_files = {
             str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
         }
-        unextracted_files = list(all_log_files - set(self.file_processing_end_record.keys()))
+        unextracted_files = list(all_log_files - self.file_processing_end_record)
 
         files_to_extract = unextracted_files[:limit] if limit is not None else unextracted_files
         random.shuffle(files_to_extract)
@@ -174,7 +172,7 @@ class S3LogAccessExtractor:
 
         file_path = pathlib.Path(file_path)
         absolute_file_path = str(file_path.absolute())
-        if self.file_processing_end_record.get(absolute_file_path, False) is True:
+        if absolute_file_path in self.file_processing_end_record:
             return
 
         # Record the start of the mirror copy step
@@ -185,7 +183,7 @@ class S3LogAccessExtractor:
         self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
 
         # Record final success and cleanup
-        self.file_processing_end_record[absolute_file_path] = True
+        self.file_processing_end_record.add(absolute_file_path)
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 

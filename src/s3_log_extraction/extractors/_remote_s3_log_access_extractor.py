@@ -61,17 +61,22 @@ class RemoteS3LogAccessExtractor:
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
-        self.processed_years: dict[str, bool] = dict()
+        self.processed_years: set[str] = set()
         self.processed_years_record_file_path = self.records_directory / "processed_years.yaml"
         if self.processed_years_record_file_path.exists():
             with self.processed_years_record_file_path.open(mode="r") as file_stream:
-                self.processed_years = yaml.safe_load(stream=file_stream)
+                loaded = yaml.safe_load(stream=file_stream)
+                self.processed_years = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
 
-        self.processed_months_per_year: dict[str, dict[str, bool]] = dict()
+        self.processed_months_per_year: dict[str, set[str]] = dict()
         self.processed_months_per_year_record_file_path = self.records_directory / "processed_months_per_year.yaml"
         if self.processed_months_per_year_record_file_path.exists():
             with self.processed_months_per_year_record_file_path.open(mode="r") as file_stream:
-                self.processed_months_per_year = yaml.safe_load(stream=file_stream)
+                loaded = yaml.safe_load(stream=file_stream) or {}
+                self.processed_months_per_year = {
+                    year: set(months.keys()) if isinstance(months, dict) else set(months or [])
+                    for year, months in loaded.items()
+                }
 
     def extract_s3_bucket(
         self,
@@ -163,11 +168,12 @@ class RemoteS3LogAccessExtractor:
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
         self._get_end_record_and_check_consistency()
 
-        self.processed_dates: dict[str, bool] = dict()
+        self.processed_dates: set[str] = set()
         processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
         if processed_dates_record_file_path.exists():
             with processed_dates_record_file_path.open(mode="r") as file_stream:
-                self.processed_dates = yaml.safe_load(stream=file_stream)
+                loaded = yaml.safe_load(stream=file_stream)
+                self.processed_dates = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
 
         unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
             manifest_file_path=manifest_file_path, s3_root=s3_root
@@ -183,8 +189,8 @@ class RemoteS3LogAccessExtractor:
         return unprocessed_s3_urls
 
     def _get_end_record_and_check_consistency(self) -> None:
-        self.s3_url_processing_end_record = dict()
-        s3_url_processing_record_difference = set()
+        self.s3_url_processing_end_record: set[str] = set()
+        s3_url_processing_record_difference: set[str] = set()
         if (
             self.s3_url_processing_start_record_file_path.exists()
             and self.s3_url_processing_end_record_file_path.exists()
@@ -193,11 +199,9 @@ class RemoteS3LogAccessExtractor:
                 file_path for file_path in self.s3_url_processing_start_record_file_path.read_text().splitlines()
             }
             self.s3_url_processing_end_record = {
-                file_path: True for file_path in self.s3_url_processing_end_record_file_path.read_text().splitlines()
+                file_path for file_path in self.s3_url_processing_end_record_file_path.read_text().splitlines()
             }
-            s3_url_processing_record_difference = s3_url_processing_start_record - set(
-                self.s3_url_processing_end_record.keys()
-            )
+            s3_url_processing_record_difference = s3_url_processing_start_record - self.s3_url_processing_end_record
         if len(s3_url_processing_record_difference) > 0:
             # IDEA: an advanced feature for the future could be looking at the timestamp of the 'started' log
             # and cleaning the entire extraction directory of entries with that date (and possibly +/- a day around it)
@@ -219,7 +223,7 @@ class RemoteS3LogAccessExtractor:
                 manifest = json.load(fp=file_stream)
 
         dates_from_manifest = [date for date in manifest.keys()]
-        unprocessed_dates = list(set(dates_from_manifest) - set(self.processed_dates.keys()))
+        unprocessed_dates = list(set(dates_from_manifest) - self.processed_dates)
 
         s3_urls = [
             f"{s3_base}/{filename}"
@@ -235,7 +239,7 @@ class RemoteS3LogAccessExtractor:
             for filename in manifest[date]
         ]
 
-        unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
+        unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
@@ -243,7 +247,7 @@ class RemoteS3LogAccessExtractor:
             command=f"s5cmd ls {s3_root}/", error_message=f"Failed to scan years of nested structure at {s3_root}."
         )
         years = {line.split(" ")[-1].rstrip("/\n") for line in years_result.splitlines()}
-        unprocessed_years = list(years - set(self.processed_years.keys()))
+        unprocessed_years = list(years - self.processed_years)
 
         dates_with_logs = []
         unprocessed_months_per_year = dict()
@@ -256,9 +260,7 @@ class RemoteS3LogAccessExtractor:
                 continue
 
             months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
-            unprocessed_months_per_year[year] = list(
-                months - set(self.processed_months_per_year.get(year, dict()).keys())
-            )
+            unprocessed_months_per_year[year] = list(months - self.processed_months_per_year.get(year, set()))
 
             for month in unprocessed_months_per_year[year]:
                 subdirectory = f"{s3_root}/{year}/{month}"
@@ -271,7 +273,7 @@ class RemoteS3LogAccessExtractor:
                 dates = [f"{year}-{month}-{line.split(" ")[-1].rstrip("/\n")}" for line in days_result.splitlines()]
                 dates_with_logs.extend(dates)
 
-        new_dates = list(set(dates_with_logs) - set(self.processed_dates.keys()))
+        new_dates = list(set(dates_with_logs) - self.processed_dates)
         sorted_new_dates = sorted(list(new_dates))
         unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
@@ -296,7 +298,7 @@ class RemoteS3LogAccessExtractor:
                 [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
             )
 
-        unprocessed_s3_urls = list(set(s3_urls) - set(self.s3_url_processing_end_record.keys()))
+        unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
         return unprocessed_s3_urls
 
     def _extract_s3_url(
@@ -352,20 +354,24 @@ class RemoteS3LogAccessExtractor:
         #     for month in months:
         #         processed_days_this_month = [
         #             processed_date
-        #             for processed_date in processed_dates.keys()
+        #             for processed_date in processed_dates
         #             if processed_date.startswith(f"{year}-{month}-")
         #         ]
         #         total_days_this_month = calendar.monthrange(int(year), int(month))[1]
         #         if len(processed_days_this_month) == total_days_this_month:
-        #             self.processed_months_per_year[year][month] = True
+        #             self.processed_months_per_year[year].add(month)
         #
-        #     if len(self.processed_months_per_year.get(year, dict())) == 12:
-        #         self.processed_years[year] = True
+        #     if len(self.processed_months_per_year.get(year, set())) == 12:
+        #         self.processed_years.add(year)
         #
+        # # Note: sets must be converted to lists for YAML serialization
         # with self.processed_months_per_year_record_file_path.open("w") as file_stream:
-        #     yaml.dump(data=self.processed_months_per_year, stream=file_stream)
+        #     yaml.dump(
+        #         data={year: list(months) for year, months in self.processed_months_per_year.items()},
+        #         stream=file_stream,
+        #     )
         # with self.processed_years_record_file_path.open("w") as file_stream:
-        #     yaml.dump(data=self.processed_years, stream=file_stream)
+        #     yaml.dump(data=list(self.processed_years), stream=file_stream)
 
     @staticmethod
     @pydantic.validate_call
