@@ -1,5 +1,6 @@
 """Tests for RemoteS3LogAccessExtractor._update_records."""
 
+import calendar
 import pathlib
 
 import pytest
@@ -84,8 +85,6 @@ def test_update_records_partial_date_not_marked(tmp_path: pathlib.Path) -> None:
 @pytest.mark.ai_generated
 def test_update_records_full_month_promotes_to_processed_months(tmp_path: pathlib.Path) -> None:
     """When all calendar days in a month are in processed_dates, the month is marked done."""
-    import calendar
-
     extractor = _make_extractor(tmp_path)
     year, month = "2023", "02"
 
@@ -111,8 +110,6 @@ def test_update_records_full_month_promotes_to_processed_months(tmp_path: pathli
 @pytest.mark.ai_generated
 def test_update_records_full_year_promotes_to_processed_years(tmp_path: pathlib.Path) -> None:
     """When all 12 months in a year are processed, the year is added to processed_years."""
-    import calendar
-
     extractor = _make_extractor(tmp_path)
     year = "2022"
 
