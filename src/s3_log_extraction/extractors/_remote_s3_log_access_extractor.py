@@ -162,7 +162,6 @@ class RemoteS3LogAccessExtractor:
                     shutil.rmtree(path=self.temporary_directory)
                     self.temporary_directory.mkdir()
 
-        self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
@@ -346,32 +345,6 @@ class RemoteS3LogAccessExtractor:
             environment_variables=self._awk_env,
             error_message=f"Extraction failed on {file_path}.",
         )
-
-    def _update_records(self) -> None:
-        pass
-        # TODO
-        # for year, months in unprocessed_months_per_year.items():
-        #     for month in months:
-        #         processed_days_this_month = [
-        #             processed_date
-        #             for processed_date in processed_dates
-        #             if processed_date.startswith(f"{year}-{month}-")
-        #         ]
-        #         total_days_this_month = calendar.monthrange(int(year), int(month))[1]
-        #         if len(processed_days_this_month) == total_days_this_month:
-        #             self.processed_months_per_year[year].add(month)
-        #
-        #     if len(self.processed_months_per_year.get(year, set())) == 12:
-        #         self.processed_years.add(year)
-        #
-        # # Note: sets must be converted to lists for YAML serialization
-        # with self.processed_months_per_year_record_file_path.open("w") as file_stream:
-        #     yaml.dump(
-        #         data={year: list(months) for year, months in self.processed_months_per_year.items()},
-        #         stream=file_stream,
-        #     )
-        # with self.processed_years_record_file_path.open("w") as file_stream:
-        #     yaml.dump(data=list(self.processed_years), stream=file_stream)
 
     @staticmethod
     @pydantic.validate_call
