@@ -260,9 +260,7 @@ class RemoteS3LogAccessExtractor:
                 continue
 
             months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
-            unprocessed_months_per_year[year] = list(
-                months - self.processed_months_per_year.get(year, set())
-            )
+            unprocessed_months_per_year[year] = list(months - self.processed_months_per_year.get(year, set()))
 
             for month in unprocessed_months_per_year[year]:
                 subdirectory = f"{s3_root}/{year}/{month}"
