@@ -104,11 +104,11 @@ def update_index_to_region_codes(
 
     index_not_in_services_file_path = ip_cache_directory / "index_not_in_services.yaml"
     with index_not_in_services_file_path.open(mode="w") as file_stream:
-        yaml.dump(data=index_not_in_services, stream=file_stream)
+        yaml.dump(data=list(index_not_in_services), stream=file_stream)
 
 
 def _get_region_code_from_ip_index(
-    ip_index: int, ip_address: str, ipinfo_handler: "ipinfo.Handler", index_not_in_services: dict[int, bool]
+    ip_index: int, ip_address: str, ipinfo_handler: "ipinfo.Handler", index_not_in_services: set[int]
 ) -> str | None:
     import ipinfo
 
@@ -135,13 +135,10 @@ def _get_region_code_from_ip_index(
                 if subregion is not None:
                     region_service_string += f"/{subregion}"
 
-                index_not_in_services[ip_index] = False
                 return region_service_string
 
-        # TODO: make `index_not_in_services` a `set`
-        index_not_in_services[ip_index] = True
+        index_not_in_services.add(ip_index)
 
-    # TODO: add batching support to ipinfo requests
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
         timeout_in_seconds = 30

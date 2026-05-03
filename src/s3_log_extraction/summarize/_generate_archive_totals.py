@@ -26,7 +26,7 @@ def generate_archive_totals(
     summary_file_path = archive_directory / "by_region.tsv"
     summary = pandas.read_table(filepath_or_buffer=summary_file_path)
 
-    unique_countries = dict()
+    unique_countries: set[str] = set()
     for region in summary["region"]:
         if region in ["VPN", "GitHub", "unknown"]:
             continue
@@ -37,7 +37,7 @@ def generate_archive_totals(
         if "AWS" in country_code:
             country_code = region_code.split("-")[0].upper()
 
-        unique_countries[country_code] = True
+        unique_countries.add(country_code)
 
     number_of_unique_regions = len(summary["region"])
     number_of_unique_countries = len(unique_countries)
