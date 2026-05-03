@@ -109,14 +109,20 @@ class RemoteS3LogAccessExtractor:
             Path to a local pre-parsed JSON manifest file listing log files
             that would not be discoverable via the natural nested structure
             (e.g. flat-layout legacy files).  Mutually exclusive with
-            ``inventory_s3_path`` for the remote-listing path, but both may
-            be supplied together to cover both sources.
+            ``inventory_s3_path``; only one may be provided at a time.
         inventory_s3_path : str or None, optional
             S3 path to a weekly inventory file (e.g.
             ``s3://my-logs-bucket/inventory.txt``) containing all current log
             object keys, one full S3 URL per line.  When provided, the
             inventory is used in place of live ``s5cmd ls`` calls to discover
-            unprocessed log files.
+            unprocessed log files.  Mutually exclusive with
+            ``manifest_file_path``; only one may be provided at a time.
+
+        Raises
+        ------
+        ValueError
+            If both ``manifest_file_path`` and ``inventory_s3_path`` are
+            provided simultaneously.
         """
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
@@ -203,6 +209,10 @@ class RemoteS3LogAccessExtractor:
         s3_root: str,
         inventory_s3_path: str | None = None,
     ) -> list[str]:
+        if manifest_file_path is not None and inventory_s3_path is not None:
+            message = "Only one of 'manifest_file_path' or 'inventory_s3_path' may be provided at a time, not both."
+            raise ValueError(message)
+
         self._get_end_record_and_check_consistency()
 
         self.processed_dates: set[str] = set()

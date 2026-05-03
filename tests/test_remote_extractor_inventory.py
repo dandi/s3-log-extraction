@@ -180,3 +180,25 @@ def test_get_unprocessed_s3_urls_from_inventory_ignores_short_paths(tmp_path: pa
         )
 
     assert result == ["s3://my-bucket/2024/01/01/2024-01-01-00-00-00-VALID"]
+
+
+@pytest.mark.ai_generated
+def test_get_unprocessed_s3_urls_raises_when_both_manifest_and_inventory_provided(
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    Providing both ``manifest_file_path`` and ``inventory_s3_path`` simultaneously
+    must raise a ``ValueError`` because they are mutually exclusive sources.
+    """
+    extractor = _make_extractor(tmp_path)
+
+    # Create a minimal valid manifest file so pydantic doesn't complain
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text("{}")
+
+    with pytest.raises(ValueError, match="Only one of 'manifest_file_path' or 'inventory_s3_path'"):
+        extractor._get_unprocessed_s3_urls(
+            manifest_file_path=manifest_file,
+            s3_root="s3://my-bucket",
+            inventory_s3_path="s3://my-bucket/inventory.txt",
+        )
