@@ -5,3 +5,4 @@ Before committing any changes, you MUST:
 - Follow assertion style (actual on left, expected on right)
 - Always mark AI-generated tests with `ai_generated` Pytest marker
 - Run pre-commit
+- Always bump the version in `pyproject.toml` appropriately
