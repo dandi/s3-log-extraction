@@ -1,4 +1,3 @@
-import calendar
 import collections
 import concurrent.futures
 import itertools
@@ -163,7 +162,6 @@ class RemoteS3LogAccessExtractor:
                     shutil.rmtree(path=self.temporary_directory)
                     self.temporary_directory.mkdir()
 
-        self._update_records()
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
@@ -226,10 +224,6 @@ class RemoteS3LogAccessExtractor:
         dates_from_manifest = [date for date in manifest.keys()]
         unprocessed_dates = list(set(dates_from_manifest) - self.processed_dates)
 
-        self._s3_urls_per_date_manifest: dict[str, list[str]] = {
-            date: [f"{s3_base}/{filename}" for filename in manifest[date]] for date in unprocessed_dates
-        }
-
         s3_urls = [
             f"{s3_base}/{filename}"
             for date in tqdm.tqdm(
@@ -283,7 +277,6 @@ class RemoteS3LogAccessExtractor:
         unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
         s3_urls = []
-        self._s3_urls_per_date_remote: dict[str, list[str]] = {}
         for date in tqdm.tqdm(
             iterable=unprocessed_dates,
             total=len(unprocessed_dates),
@@ -300,12 +293,9 @@ class RemoteS3LogAccessExtractor:
             )
             if s3_urls_result is None:
                 continue
-            date_urls = [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
-            s3_urls.extend(date_urls)
-            self._s3_urls_per_date_remote[date] = date_urls
-
-        self.unprocessed_months_per_year = unprocessed_months_per_year
-        self.dates_with_logs_from_remote = dates_with_logs
+            s3_urls.extend(
+                [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
+            )
 
         unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
         return unprocessed_s3_urls
@@ -355,56 +345,6 @@ class RemoteS3LogAccessExtractor:
             environment_variables=self._awk_env,
             error_message=f"Extraction failed on {file_path}.",
         )
-
-    def _update_records(self) -> None:
-        if not self.s3_url_processing_end_record_file_path.exists():
-            return
-
-        all_processed_s3_urls = set(self.s3_url_processing_end_record_file_path.read_text().splitlines())
-
-        # Build a combined mapping of date -> all S3 URLs across manifest and remote sources
-        s3_urls_per_date: dict[str, list[str]] = {}
-        for attr in ("_s3_urls_per_date_manifest", "_s3_urls_per_date_remote"):
-            for date, urls in getattr(self, attr, {}).items():
-                s3_urls_per_date.setdefault(date, []).extend(urls)
-
-        # A date is fully processed when every URL found for it appears in the end record
-        newly_processed_dates: set[str] = {
-            date
-            for date, urls in s3_urls_per_date.items()
-            if urls and all(url in all_processed_s3_urls for url in urls)
-        }
-        self.processed_dates = self.processed_dates | newly_processed_dates
-
-        processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
-        with processed_dates_record_file_path.open("w") as file_stream:
-            yaml.dump(data=sorted(self.processed_dates), stream=file_stream)
-
-        # Promote fully-processed months using calendar day counts as the completion criterion
-        for year, months in getattr(self, "unprocessed_months_per_year", {}).items():
-            if year not in self.processed_months_per_year:
-                self.processed_months_per_year[year] = set()
-            for month in months:
-                processed_days_this_month = [
-                    processed_date
-                    for processed_date in self.processed_dates
-                    if processed_date.startswith(f"{year}-{month}-")
-                ]
-                total_days_this_month = calendar.monthrange(int(year), int(month))[1]
-                if len(processed_days_this_month) == total_days_this_month:
-                    self.processed_months_per_year[year].add(month)
-
-            if len(self.processed_months_per_year.get(year, set())) == 12:
-                self.processed_years.add(year)
-
-        # Note: sets must be converted to lists for YAML serialization
-        with self.processed_months_per_year_record_file_path.open("w") as file_stream:
-            yaml.dump(
-                data={year: sorted(list(months)) for year, months in self.processed_months_per_year.items()},
-                stream=file_stream,
-            )
-        with self.processed_years_record_file_path.open("w") as file_stream:
-            yaml.dump(data=sorted(list(self.processed_years)), stream=file_stream)
 
     @staticmethod
     @pydantic.validate_call

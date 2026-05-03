@@ -146,7 +146,6 @@ known-first-party = ["s3_log_extraction"]
 [tool.pytest.ini_options]
 markers = [
     "remote: mark a test as requiring remote resources",
-    "ai_generated: mark a test as AI-generated",
 ]
 env = [
     "IPINFO_API_KEY=a1",
