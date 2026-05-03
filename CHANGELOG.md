@@ -2,6 +2,12 @@
 
 # Upcoming
 
+## Features
+
+Added `inventory_s3_path` parameter to `RemoteS3LogAccessExtractor.extract_s3_bucket` and a new `--inventory` CLI
+option.  When an S3 inventory path is provided, unprocessed log files are discovered from the weekly inventory
+snapshot instead of performing live ``s5cmd ls`` calls against the bucket.  The inventory file must be a plain-text
+file stored in S3 containing one full S3 URL per line.
 
 
 # v1.3.0

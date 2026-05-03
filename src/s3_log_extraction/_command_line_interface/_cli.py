@@ -77,12 +77,25 @@ def _s3logextraction_cli():
     type=rich_click.Path(writable=False),
     default=None,
 )
+@rich_click.option(
+    "--inventory",
+    "inventory_s3_path",
+    help=(
+        "S3 path to a weekly inventory file (e.g. s3://my-logs-bucket/inventory.txt) containing all current log "
+        "object keys, one full S3 URL per line.  When provided, this inventory is used in place of live "
+        "s5cmd ls calls to discover unprocessed log files."
+    ),
+    required=False,
+    type=rich_click.STRING,
+    default=None,
+)
 def _extract_cli(
     directory: str,
     limit: int | None = None,
     workers: int = -2,
     mode: typing.Literal["remote"] | None = None,
     manifest_file_path: str | None = None,
+    inventory_s3_path: str | None = None,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -100,6 +113,7 @@ def _extract_cli(
                 limit=limit,
                 workers=workers,
                 manifest_file_path=manifest_file_path,
+                inventory_s3_path=inventory_s3_path,
             )
         case _:
             extractor = S3LogAccessExtractor()

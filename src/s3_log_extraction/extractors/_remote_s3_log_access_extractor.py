@@ -86,11 +86,44 @@ class RemoteS3LogAccessExtractor:
         workers: int = -2,
         batch_size: int = 5_000,
         manifest_file_path: str | pathlib.Path | None = None,
+        inventory_s3_path: str | None = None,
     ) -> None:
+        """
+        Extract S3 log access data from a remote S3 bucket.
+
+        Parameters
+        ----------
+        s3_root : str
+            The root S3 path of the log bucket (e.g. ``s3://my-logs-bucket``).
+        limit : int or None, optional
+            Maximum number of files to process.  If ``None`` (default), all
+            unprocessed files are processed.
+        workers : int, optional
+            Number of parallel workers.  Negative values use ``cpu_count +
+            workers + 1`` cores (e.g. ``-2`` means all-but-one core).
+            Defaults to ``-2``.
+        batch_size : int, optional
+            Number of S3 URLs to dispatch per batch when using multiple
+            workers.  Defaults to ``5_000``.
+        manifest_file_path : str or pathlib.Path or None, optional
+            Path to a local pre-parsed JSON manifest file listing log files
+            that would not be discoverable via the natural nested structure
+            (e.g. flat-layout legacy files).  Mutually exclusive with
+            ``inventory_s3_path`` for the remote-listing path, but both may
+            be supplied together to cover both sources.
+        inventory_s3_path : str or None, optional
+            S3 path to a weekly inventory file (e.g.
+            ``s3://my-logs-bucket/inventory.txt``) containing all current log
+            object keys, one full S3 URL per line.  When provided, the
+            inventory is used in place of live ``s5cmd ls`` calls to discover
+            unprocessed log files.
+        """
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
 
-        unprocessed_s3_urls = self._get_unprocessed_s3_urls(manifest_file_path=manifest_file_path, s3_root=s3_root)
+        unprocessed_s3_urls = self._get_unprocessed_s3_urls(
+            manifest_file_path=manifest_file_path, s3_root=s3_root, inventory_s3_path=inventory_s3_path
+        )
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
         tqdm_style_kwargs = {
@@ -164,7 +197,12 @@ class RemoteS3LogAccessExtractor:
 
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
-    def _get_unprocessed_s3_urls(self, manifest_file_path: pathlib.Path | None, s3_root: str) -> list[str]:
+    def _get_unprocessed_s3_urls(
+        self,
+        manifest_file_path: pathlib.Path | None,
+        s3_root: str,
+        inventory_s3_path: str | None = None,
+    ) -> list[str]:
         self._get_end_record_and_check_consistency()
 
         self.processed_dates: set[str] = set()
@@ -177,8 +215,13 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
             manifest_file_path=manifest_file_path, s3_root=s3_root
         )
-        unprocessed_s3_urls_from_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
-        unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_remote
+        if inventory_s3_path is not None:
+            unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_inventory(
+                inventory_s3_path=inventory_s3_path, s3_root=s3_root
+            )
+        else:
+            unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
+        unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_inventory_or_remote
 
         del self.s3_url_processing_end_record  # Free memory
 
@@ -236,6 +279,70 @@ class RemoteS3LogAccessExtractor:
                 leave=False,
             )
             for filename in manifest[date]
+        ]
+
+        unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
+        return unprocessed_s3_urls
+
+    def _get_unprocessed_s3_urls_from_inventory(self, inventory_s3_path: str, s3_root: str) -> list[str]:
+        """
+        Get unprocessed S3 URLs from a weekly inventory file stored in S3.
+
+        The inventory file must contain one full S3 URL per line, e.g.::
+
+            s3://my-logs-bucket/2024/01/01/2024-01-01-00-00-00-ABCDEF
+
+        Parameters
+        ----------
+        inventory_s3_path : str
+            Full S3 path to the inventory text file
+            (e.g. ``s3://my-logs-bucket/inventory.txt``).
+        s3_root : str
+            The root S3 path used for extraction
+            (e.g. ``s3://my-logs-bucket``).  Only lines that start with
+            this prefix are considered.
+
+        Returns
+        -------
+        list[str]
+            Deduplicated list of S3 URLs that have not yet been processed.
+        """
+        import fsspec
+
+        with fsspec.open(urlpath=inventory_s3_path, mode="r") as file_stream:
+            inventory_content = file_stream.read()
+
+        # Normalize s3_root so we can strip it as a prefix safely
+        s3_root_prefix = s3_root.rstrip("/") + "/"
+
+        inventory: dict[str, list[str]] = collections.defaultdict(list)
+        for raw_line in inventory_content.splitlines():
+            url = raw_line.strip()
+            if not url or not url.startswith(s3_root_prefix):
+                continue
+            # Relative path after the root: year/month/day/filename
+            relative_path = url[len(s3_root_prefix):]
+            parts = relative_path.split("/")
+            if len(parts) < 4:
+                continue
+            year, month, day = parts[0], parts[1], parts[2]
+            date = f"{year}-{month}-{day}"
+            inventory[date].append(url)
+
+        unprocessed_dates = list(set(inventory.keys()) - self.processed_dates)
+
+        s3_urls = [
+            url
+            for date in tqdm.tqdm(
+                iterable=unprocessed_dates,
+                total=len(unprocessed_dates),
+                desc="Assembling inventory",
+                unit="dates",
+                smoothing=0,
+                miniters=1,
+                leave=False,
+            )
+            for url in inventory[date]
         ]
 
         unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
