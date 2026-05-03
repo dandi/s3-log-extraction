@@ -73,24 +73,17 @@ def load_ip_cache(
     *,
     cache_type: typing.Literal["index_to_region", "index_not_in_services"],
     cache_directory: str | pathlib.Path | None = None,
-) -> dict[int, str] | set[int]:
+) -> dict[int, str]:
     """Load the index to region cache from the cache directory."""
     ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     cache_file_path = ip_cache_directory / f"{cache_type}.yaml"
 
     if not cache_file_path.exists():
         cache_file_path.touch()
-        return {} if cache_type == "index_to_region" else set()
+        return {}
 
     with cache_file_path.open(mode="r") as file_stream:
         content = file_stream.read()
 
-    data = yaml.safe_load(stream=content) or ({} if cache_type == "index_to_region" else [])
-
-    if cache_type == "index_not_in_services":
-        # Support both old dict format ({index: True/False}) and new list format ([index, ...])
-        if isinstance(data, dict):
-            return {index for index, value in data.items() if value is True}
-        return set(data)
-
+    data = yaml.safe_load(stream=content) or {}
     return data

@@ -104,11 +104,11 @@ def update_index_to_region_codes(
 
     index_not_in_services_file_path = ip_cache_directory / "index_not_in_services.yaml"
     with index_not_in_services_file_path.open(mode="w") as file_stream:
-        yaml.dump(data=list(index_not_in_services), stream=file_stream)
+        yaml.dump(data=index_not_in_services, stream=file_stream)
 
 
 def _get_region_code_from_ip_index(
-    ip_index: int, ip_address: str, ipinfo_handler: "ipinfo.Handler", index_not_in_services: set[int]
+    ip_index: int, ip_address: str, ipinfo_handler: "ipinfo.Handler", index_not_in_services: dict[int, bool]
 ) -> str | None:
     import ipinfo
 
@@ -135,12 +135,12 @@ def _get_region_code_from_ip_index(
                 if subregion is not None:
                     region_service_string += f"/{subregion}"
 
-                # Remove from set in case it was previously marked as not in services
+                # Remove from dict in case it was previously marked as not in services
                 # (e.g., if a new service was added to _KNOWN_SERVICES after the last run)
-                index_not_in_services.discard(ip_index)
+                index_not_in_services.pop(ip_index, None)
                 return region_service_string
 
-        index_not_in_services.add(ip_index)
+        index_not_in_services[ip_index] = True
 
     # Lines cannot be covered without testing on a real IP
     try:  # pragma: no cover
