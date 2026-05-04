@@ -2,6 +2,10 @@
 
 # Upcoming
 
+
+
+# v1.3.7
+
 ## Features
 
 Added `inventory_s3_path` parameter to `RemoteS3LogAccessExtractor.extract_s3_bucket` and a new `--inventory` CLI
