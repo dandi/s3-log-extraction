@@ -1,5 +1,7 @@
 import collections
 import concurrent.futures
+import csv
+import gzip
 import itertools
 import json
 import math
@@ -86,7 +88,7 @@ class RemoteS3LogAccessExtractor:
         workers: int = -2,
         batch_size: int = 5_000,
         manifest_file_path: str | pathlib.Path | None = None,
-        inventory_s3_path: str | None = None,
+        inventory_directory: str | pathlib.Path | None = None,
     ) -> None:
         """
         Extract S3 log access data from a remote S3 bucket.
@@ -109,26 +111,38 @@ class RemoteS3LogAccessExtractor:
             Path to a local pre-parsed JSON manifest file listing log files
             that would not be discoverable via the natural nested structure
             (e.g. flat-layout legacy files).  Mutually exclusive with
-            ``inventory_s3_path``; only one may be provided at a time.
-        inventory_s3_path : str or None, optional
-            S3 path to a weekly inventory file (e.g.
-            ``s3://my-logs-bucket/inventory.txt``) containing all current log
-            object keys, one full S3 URL per line.  When provided, the
-            inventory is used in place of live ``s5cmd ls`` calls to discover
-            unprocessed log files.  Mutually exclusive with
-            ``manifest_file_path``; only one may be provided at a time.
+            ``inventory_directory``; only one may be provided at a time.
+        inventory_directory : str or pathlib.Path or None, optional
+            Path to a local pre-downloaded S3 inventory directory.  The
+            directory must follow the standard AWS S3 Inventory layout::
+
+                <inventory_directory>/
+                ├── <timestamp>/          # e.g. 2026-05-03T01-00Z/
+                │   ├── manifest.json
+                │   └── manifest.checksum
+                ├── data/
+                │   └── <uuid>.csv.gz    # gzip-compressed CSV inventory files
+                └── hive/
+                    └── dt=<YYYY-MM-DD-HH-MM>/
+                        └── symlink.txt  # references to data/*.csv.gz
+
+            The most recent hive partition is used to determine which data
+            files to parse.  Each ``data/*.csv.gz`` file is parsed according
+            to the schema in the corresponding ``manifest.json``.  Mutually
+            exclusive with ``manifest_file_path``; only one may be provided
+            at a time.
 
         Raises
         ------
         ValueError
-            If both ``manifest_file_path`` and ``inventory_s3_path`` are
+            If both ``manifest_file_path`` and ``inventory_directory`` are
             provided simultaneously.
         """
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
 
         unprocessed_s3_urls = self._get_unprocessed_s3_urls(
-            manifest_file_path=manifest_file_path, s3_root=s3_root, inventory_s3_path=inventory_s3_path
+            manifest_file_path=manifest_file_path, s3_root=s3_root, inventory_directory=inventory_directory
         )
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
@@ -207,10 +221,10 @@ class RemoteS3LogAccessExtractor:
         self,
         manifest_file_path: pathlib.Path | None,
         s3_root: str,
-        inventory_s3_path: str | None = None,
+        inventory_directory: pathlib.Path | None = None,
     ) -> list[str]:
-        if manifest_file_path is not None and inventory_s3_path is not None:
-            message = "Only one of 'manifest_file_path' or 'inventory_s3_path' may be provided at a time, not both."
+        if manifest_file_path is not None and inventory_directory is not None:
+            message = "Only one of 'manifest_file_path' or 'inventory_directory' may be provided at a time, not both."
             raise ValueError(message)
 
         self._get_end_record_and_check_consistency()
@@ -225,9 +239,9 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
             manifest_file_path=manifest_file_path, s3_root=s3_root
         )
-        if inventory_s3_path is not None:
-            unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_inventory(
-                inventory_s3_path=inventory_s3_path, s3_root=s3_root
+        if inventory_directory is not None:
+            unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_local_inventory(
+                inventory_directory=inventory_directory, s3_root=s3_root
             )
         else:
             unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
@@ -294,53 +308,93 @@ class RemoteS3LogAccessExtractor:
         unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
         return unprocessed_s3_urls
 
-    def _get_unprocessed_s3_urls_from_inventory(self, inventory_s3_path: str, s3_root: str) -> list[str]:
+    def _get_unprocessed_s3_urls_from_local_inventory(
+        self, inventory_directory: pathlib.Path, s3_root: str
+    ) -> list[str]:
         """
-        Get unprocessed S3 URLs from a weekly inventory file stored in S3.
+        Get unprocessed S3 URLs from a pre-downloaded local AWS S3 Inventory directory.
 
-        The inventory file must contain one full S3 URL per line, e.g.::
+        The inventory directory must follow the standard AWS S3 Inventory layout,
+        with timestamped subdirectories (e.g. ``2026-05-03T01-00Z/``), a ``data/``
+        folder containing gzip-compressed CSV files, and a ``hive/`` folder with
+        Hive-partitioned symlink files (e.g. ``hive/dt=2026-05-03-01-00/symlink.txt``).
 
-            s3://my-logs-bucket/2024/01/01/2024-01-01-00-00-00-ABCDEF
+        The most recent hive partition is used to determine which data files to read.
 
         Parameters
         ----------
-        inventory_s3_path : str
-            Full S3 path to the inventory text file
-            (e.g. ``s3://my-logs-bucket/inventory.txt``).
+        inventory_directory : pathlib.Path
+            Path to the pre-downloaded S3 inventory root directory.
         s3_root : str
-            The root S3 path used for extraction
-            (e.g. ``s3://my-logs-bucket``).  Only lines that start with
-            this prefix are considered.
+            The root S3 path used for extraction (e.g. ``s3://my-logs-bucket``).
+            Only object keys that fall under this prefix are considered.
 
         Returns
         -------
         list[str]
             Deduplicated list of S3 URLs that have not yet been processed.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no hive partitions are found or required files are missing.
+        ValueError
+            If the ``Key`` column is absent from the inventory schema.
         """
-        import fsspec
+        inventory_directory = pathlib.Path(inventory_directory)
 
-        with fsspec.open(urlpath=inventory_s3_path, mode="r") as file_stream:
-            inventory_content = file_stream.read()
+        # 1. Find the most recent hive partition (alphabetical sort works for dt=YYYY-MM-DD-HH-MM)
+        hive_directory = inventory_directory / "hive"
+        hive_partitions = sorted(hive_directory.glob("dt=*"))
+        if not hive_partitions:
+            message = f"No hive partitions found in {hive_directory}."
+            raise FileNotFoundError(message)
+        latest_partition = hive_partitions[-1]
 
-        # Normalize s3_root so we can strip it as a prefix safely.
-        # The trailing slash ensures that adjacent prefixes such as
-        # "s3://bucket/logs-extra" are not matched when s3_root is
-        # "s3://bucket/logs".
+        # 2. Derive the corresponding timestamp directory name.
+        #    dt=2026-05-03-01-00  →  2026-05-03T01-00Z
+        dt_value = latest_partition.name[len("dt=") :]  # e.g. "2026-05-03-01-00"
+        date_part = dt_value[:10]  # "2026-05-03"
+        time_part = dt_value[11:]  # "01-00"
+        timestamp_dir_name = f"{date_part}T{time_part}Z"  # "2026-05-03T01-00Z"
+        manifest_path = inventory_directory / timestamp_dir_name / "manifest.json"
+
+        with manifest_path.open(mode="r") as file_stream:
+            manifest = json.load(fp=file_stream)
+
+        source_bucket: str = manifest["sourceBucket"]
+        file_schema = [col.strip() for col in manifest["fileSchema"].split(",")]
+        if "Key" not in file_schema:
+            message = f"'Key' column not found in inventory schema: {file_schema}"
+            raise ValueError(message)
+        key_index = file_schema.index("Key")
+
+        # 3. Read symlink.txt — each line is an S3 path to a data/*.csv.gz file.
+        symlink_path = latest_partition / "symlink.txt"
+        symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
+
+        # 4. Parse each local CSV.gz file referenced by the symlink.
         s3_root_prefix = s3_root.rstrip("/") + "/"
-
         inventory: dict[str, list[str]] = collections.defaultdict(list)
-        for raw_line in inventory_content.splitlines():
-            url = raw_line.strip()
-            if not url or not url.startswith(s3_root_prefix):
-                continue
-            # Relative path after the root: year/month/day/filename
-            relative_path = url[len(s3_root_prefix) :]
-            parts = relative_path.split("/")
-            if len(parts) < 4:
-                continue
-            year, month, day = parts[0], parts[1], parts[2]
-            date = f"{year}-{month}-{day}"
-            inventory[date].append(url)
+        for s3_data_path in symlink_lines:
+            uuid_filename = s3_data_path.split("/")[-1]
+            local_csv_gz_path = inventory_directory / "data" / uuid_filename
+            with gzip.open(local_csv_gz_path, "rt", newline="") as gz_file:
+                reader = csv.reader(gz_file)
+                for row in reader:
+                    if len(row) <= key_index:
+                        continue
+                    key = row[key_index]
+                    s3_url = f"s3://{source_bucket}/{key}"
+                    if not s3_url.startswith(s3_root_prefix):
+                        continue
+                    relative_path = s3_url[len(s3_root_prefix) :]
+                    parts = relative_path.split("/")
+                    if len(parts) < 4:
+                        continue
+                    year, month, day = parts[0], parts[1], parts[2]
+                    date = f"{year}-{month}-{day}"
+                    inventory[date].append(s3_url)
 
         unprocessed_dates = list(set(inventory.keys()) - self.processed_dates)
 

@@ -79,14 +79,18 @@ def _s3logextraction_cli():
 )
 @rich_click.option(
     "--inventory",
-    "inventory_s3_path",
+    "inventory_directory",
     help=(
-        "S3 path to a weekly inventory file (e.g. s3://my-logs-bucket/inventory.txt) containing all current log "
-        "object keys, one full S3 URL per line.  When provided, this inventory is used in place of live "
-        "s5cmd ls calls to discover unprocessed log files."
+        "Path to a local pre-downloaded AWS S3 Inventory directory. "
+        "The directory must contain a 'hive/' sub-folder with Hive-partitioned symlink files "
+        "(e.g. hive/dt=YYYY-MM-DD-HH-MM/symlink.txt), a 'data/' sub-folder with the "
+        "gzip-compressed CSV inventory files, and timestamped manifest directories "
+        "(e.g. 2026-05-03T01-00Z/manifest.json). "
+        "The most recent hive partition is used to discover all log files in the bucket, "
+        "replacing live s5cmd ls calls."
     ),
     required=False,
-    type=rich_click.STRING,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
     default=None,
 )
 def _extract_cli(
@@ -95,7 +99,7 @@ def _extract_cli(
     workers: int = -2,
     mode: typing.Literal["remote"] | None = None,
     manifest_file_path: str | None = None,
-    inventory_s3_path: str | None = None,
+    inventory_directory: str | None = None,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -113,7 +117,7 @@ def _extract_cli(
                 limit=limit,
                 workers=workers,
                 manifest_file_path=manifest_file_path,
-                inventory_s3_path=inventory_s3_path,
+                inventory_directory=inventory_directory,
             )
         case _:
             extractor = S3LogAccessExtractor()
