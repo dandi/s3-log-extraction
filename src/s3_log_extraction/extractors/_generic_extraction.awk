@@ -46,10 +46,12 @@ BEGIN {
 
     bytes_sent = (post_uri_fields[4] == "-" ? 0 : post_uri_fields[4])
     ip = pre_uri_fields[5]
+    download = (status == "200" ? 1 : 0)
 
     data[object_key]["timestamps"][++data[object_key]["timestamps_count"]] = parsed_timestamp
     data[object_key]["bytes_sent"][++data[object_key]["bytes_sent_count"]] = bytes_sent
     data[object_key]["ip"][++data[object_key]["ip_count"]] = ip
+    data[object_key]["download"][++data[object_key]["download_count"]] = download
 }
 
 END {
@@ -63,6 +65,7 @@ END {
         timestamps_file_path = subdirectory "/timestamps.txt"
         bytes_sent_file_path = subdirectory "/bytes_sent.txt"
         full_ips_file_path = subdirectory "/full_ips.txt"
+        download_file_path = subdirectory "/download.txt"
 
         for (i = 1; i <= data[object_key]["timestamps_count"]; i++) {
             print data[object_key]["timestamps"][i] >> timestamps_file_path
@@ -72,6 +75,9 @@ END {
         }
         for (i = 1; i <= data[object_key]["ip_count"]; i++) {
             print data[object_key]["ip"][i] >> full_ips_file_path
+        }
+        for (i = 1; i <= data[object_key]["download_count"]; i++) {
+            print data[object_key]["download"][i] >> download_file_path
         }
     }
 }

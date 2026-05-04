@@ -4,6 +4,13 @@
 
 
 
+# v1.3.8
+
+## Features
+
+Added a new `download` field to the GAWK extraction step. The field is stored as plain text (`download.txt`) alongside the other extraction files. Its value is `1` when the raw log line has exactly a `200` HTTP status code (a complete download, not a partial request) and `0` otherwise.
+
+
 # v1.3.7
 
 ## Features
