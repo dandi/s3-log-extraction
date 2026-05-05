@@ -10,6 +10,7 @@ import pathlib
 import random
 import shutil
 import tempfile
+import warnings
 
 import pydantic
 import tqdm
@@ -291,19 +292,7 @@ class RemoteS3LogAccessExtractor:
         dates_from_manifest = [date for date in manifest.keys()]
         unprocessed_dates = list(set(dates_from_manifest) - self.processed_dates)
 
-        s3_urls = [
-            f"{s3_base}/{filename}"
-            for date in tqdm.tqdm(
-                iterable=unprocessed_dates,
-                total=len(unprocessed_dates),
-                desc="Assembling local manifest",
-                unit="dates",
-                smoothing=0,
-                miniters=1,
-                leave=False,
-            )
-            for filename in manifest[date]
-        ]
+        s3_urls = [f"{s3_base}/{filename}" for date in unprocessed_dates for filename in manifest[date]]
 
         unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
         return unprocessed_s3_urls
@@ -398,24 +387,18 @@ class RemoteS3LogAccessExtractor:
 
         unprocessed_dates = list(set(inventory.keys()) - self.processed_dates)
 
-        s3_urls = [
-            url
-            for date in tqdm.tqdm(
-                iterable=unprocessed_dates,
-                total=len(unprocessed_dates),
-                desc="Assembling inventory",
-                unit="dates",
-                smoothing=0,
-                miniters=1,
-                leave=False,
-            )
-            for url in inventory[date]
-        ]
+        s3_urls = [url for date in unprocessed_dates for url in inventory[date]]
 
         unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
+        warnings.warn(
+            "Fetching log file listings directly from S3 via network requests can be very slow for large buckets. "
+            "Consider setting up AWS S3 Inventory on your bucket and using the `inventory_directory` argument "
+            "for significantly better performance.",
+            stacklevel=3,
+        )
         years_result = _deploy_subprocess(
             command=f"s5cmd ls {s3_root}/", error_message=f"Failed to scan years of nested structure at {s3_root}."
         )

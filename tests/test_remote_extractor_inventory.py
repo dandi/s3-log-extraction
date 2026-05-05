@@ -5,6 +5,7 @@ import gzip
 import io
 import json
 import pathlib
+import unittest.mock
 
 import pytest
 
@@ -285,3 +286,23 @@ def test_get_unprocessed_s3_urls_raises_when_both_manifest_and_inventory_provide
             s3_root="s3://my-bucket",
             inventory_directory=inventory_dir,
         )
+
+
+@pytest.mark.ai_generated
+def test_get_unprocessed_s3_urls_from_remote_emits_performance_warning(tmp_path: pathlib.Path) -> None:
+    """
+    Calling ``_get_unprocessed_s3_urls_from_remote`` without an inventory directory
+    must emit a ``UserWarning`` recommending S3 Inventory for better performance.
+    """
+    extractor = _make_extractor(tmp_path)
+    extractor.processed_years = set()
+    extractor.processed_months_per_year = {}
+    extractor.s3_url_processing_end_record = set()
+
+    # Patch _deploy_subprocess so no real S3 network calls are made.
+    with unittest.mock.patch(
+        "s3_log_extraction.extractors._remote_s3_log_access_extractor._deploy_subprocess",
+        return_value="",
+    ):
+        with pytest.warns(UserWarning, match="Consider setting up AWS S3 Inventory"):
+            extractor._get_unprocessed_s3_urls_from_remote(s3_root="s3://my-bucket")
