@@ -1,0 +1,10 @@
+FROM python:3.14-slim AS minimal
+LABEL org.opencontainers.image.source=https://github.com/dandi/s3-log-extraction
+LABEL org.opencontainers.image.description="A minimal Docker image for an official release of the s3-log-extraction project."
+
+RUN pip install --no-cache-dir s3-log-extraction
+CMD ["s3logextraction"]
+
+FROM minimal AS all
+LABEL org.opencontainers.image.description="A Docker image for an official release of the s3-log-extraction project with all extras."
+RUN pip install --no-cache-dir "s3-log-extraction[all]"

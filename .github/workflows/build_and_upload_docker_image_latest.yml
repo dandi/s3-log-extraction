@@ -1,0 +1,55 @@
+name: Build and Upload Docker Image of Latest Release to GHCR
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Upload Package to PyPI]
+    types: [completed]
+
+jobs:
+  release-image:
+    name: Build and upload Docker image of latest release to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse the version from the latest git tag
+        id: parsed_version
+        run: |
+          git fetch --prune --unshallow --tags
+          latest_tag=$(git describe --tags --abbrev=0)
+          echo "version_tag=$latest_tag" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push latest-minimal
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ghcr.io/dandi/s3-log-extraction:latest-minimal,ghcr.io/dandi/s3-log-extraction:${{ steps.parsed_version.outputs.version_tag }}-minimal
+          context: .
+          file: containers/Dockerfile.latest
+          target: minimal
+          provenance: false
+
+      - name: Build and push latest
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ghcr.io/dandi/s3-log-extraction:latest,ghcr.io/dandi/s3-log-extraction:${{ steps.parsed_version.outputs.version_tag }}
+          context: .
+          file: containers/Dockerfile.latest
+          target: all
+          provenance: false

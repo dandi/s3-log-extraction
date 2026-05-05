@@ -4,6 +4,18 @@
 
 
 
+# v1.4.0
+
+## Features
+
+Added Docker images built and published to GHCR (GitHub Container Registry).
+
+- `ghcr.io/dandi/s3-log-extraction:latest-minimal` — minimal install from the latest PyPI release
+- `ghcr.io/dandi/s3-log-extraction:latest` — full install (all extras) from the latest PyPI release
+- `ghcr.io/dandi/s3-log-extraction:dev` — full install built from the `main` branch
+
+
+
 # v1.3.9
 
 ## Improvements
