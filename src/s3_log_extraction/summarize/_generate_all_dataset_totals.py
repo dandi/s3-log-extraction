@@ -50,6 +50,7 @@ def generate_all_dataset_totals(
             "total_bytes_sent": int(summary["bytes_sent"].sum()),
             "number_of_unique_regions": number_of_unique_regions,
             "number_of_unique_countries": number_of_unique_countries,
+            "total_number_of_requests": int(summary["number_of_requests"].sum()),
         }
 
     top_level_summary_file_path = summary_directory / "totals.json"

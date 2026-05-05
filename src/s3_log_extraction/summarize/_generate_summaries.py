@@ -105,17 +105,21 @@ def _summarize_dataset_by_day(*, asset_directories: list[pathlib.Path], summary_
         all_bytes_sent.extend(bytes_sent)
 
     summarized_activity_by_day = collections.defaultdict(int)
+    number_of_requests_by_day = collections.defaultdict(int)
     for date, bytes_sent in zip(all_dates, all_bytes_sent):
         summarized_activity_by_day[date] += bytes_sent
+        number_of_requests_by_day[date] += 1
 
     if len(summarized_activity_by_day) == 0:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
+    all_dates_ordered = list(summarized_activity_by_day.keys())
     summary_table = pandas.DataFrame(
         data={
-            "date": list(summarized_activity_by_day.keys()),
+            "date": all_dates_ordered,
             "bytes_sent": list(summarized_activity_by_day.values()),
+            "number_of_requests": [number_of_requests_by_day[date] for date in all_dates_ordered],
         }
     )
     summary_table.sort_values(by="date", inplace=True)
@@ -128,6 +132,7 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
     extraction_base_path = summary_file_path.parent.parent.parent / "extraction" / dataset_id  # Assumes same cache dir
 
     summarized_activity_by_asset = collections.defaultdict(int)
+    number_of_requests_by_asset = collections.defaultdict(int)
     for asset_directory in asset_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
@@ -140,15 +145,18 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
 
         asset_path = str(asset_directory.relative_to(extraction_base_path))
         summarized_activity_by_asset[asset_path] += sum(bytes_sent)
+        number_of_requests_by_asset[asset_path] += len(bytes_sent)
 
     if len(summarized_activity_by_asset) == 0:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
+    all_asset_paths = list(summarized_activity_by_asset.keys())
     summary_table = pandas.DataFrame(
         data={
-            "asset_path": list(summarized_activity_by_asset.keys()),
+            "asset_path": all_asset_paths,
             "bytes_sent": list(summarized_activity_by_asset.values()),
+            "number_of_requests": [number_of_requests_by_asset[path] for path in all_asset_paths],
         }
     )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
@@ -176,17 +184,21 @@ def _summarize_dataset_by_region(
         all_bytes_sent.extend(bytes_sent)
 
     summarized_activity_by_region = collections.defaultdict(int)
+    number_of_requests_by_region = collections.defaultdict(int)
     for region, bytes_sent in zip(all_regions, all_bytes_sent):
         summarized_activity_by_region[region] += bytes_sent
+        number_of_requests_by_region[region] += 1
 
     if len(summarized_activity_by_region) == 0:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
+    all_regions_ordered = list(summarized_activity_by_region.keys())
     summary_table = pandas.DataFrame(
         data={
-            "region": list(summarized_activity_by_region.keys()),
+            "region": all_regions_ordered,
             "bytes_sent": list(summarized_activity_by_region.values()),
+            "number_of_requests": [number_of_requests_by_region[region] for region in all_regions_ordered],
         }
     )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
