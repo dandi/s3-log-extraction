@@ -2,6 +2,11 @@
 
 # Upcoming
 
+Added a new `DownloadsLogicPreValidator` that detects aberrant raw S3 log lines where `bytes_sent` is a valid
+number and is less than the object size (`total_bytes`), yet the HTTP status code is exactly `200`.
+A `200` status indicates a complete download, so `bytes_sent` should equal the object size; any deviation is
+considered aberrant and causes the validator to raise a `RuntimeError`.
+The new protocol is also exposed through the CLI as `s3logextraction validate downloads_logic <directory>`.
 
 
 # v1.4.0

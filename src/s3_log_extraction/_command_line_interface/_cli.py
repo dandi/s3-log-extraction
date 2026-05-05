@@ -21,6 +21,7 @@ from ..summarize import (
 )
 from ..testing import generate_benchmark
 from ..validate import (
+    DownloadsLogicPreValidator,
     ExtractionHeuristicPreValidator,
     HttpEmptySplitPreValidator,
     HttpSplitCountPreValidator,
@@ -330,15 +331,22 @@ def _generate_benchmark_cli(directory: str) -> None:
 @_s3logextraction_cli.command(name="validate")
 @rich_click.argument(
     "protocol",
-    type=rich_click.Choice(["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]),
+    type=rich_click.Choice(
+        ["downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]
+    ),
 )
 @rich_click.argument("directory", type=rich_click.Path(writable=False))
 def _validate_cli(
-    protocol: typing.Literal["http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"],
+    protocol: typing.Literal[
+        "downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"
+    ],
     directory: pydantic.DirectoryPath,
 ) -> None:
     """Run a pre-validation protocol."""
     match protocol:
+        case "downloads_logic":
+            validator = DownloadsLogicPreValidator()
+            validator.validate_directory(directory=directory)
         case "http_empty_split":
             validator = HttpEmptySplitPreValidator()
             validator.validate_directory(directory=directory)
