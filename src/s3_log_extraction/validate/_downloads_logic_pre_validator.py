@@ -3,8 +3,6 @@ import pathlib
 import subprocess
 
 from ._base_validator import BaseValidator
-from .._regex import DROGON_IP_REGEX_ENCRYPTED
-from ..encryption_utils import decrypt_bytes
 
 
 class DownloadsLogicPreValidator(BaseValidator):
@@ -41,12 +39,8 @@ class DownloadsLogicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
-        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
-
         # TODO: does this hold after bundling?
-        self._relative_awk_script_path = (
-            pathlib.Path(__file__).parent / "_downloads_logic_pre_validator_script.awk"
-        )
+        self._relative_awk_script_path = pathlib.Path(__file__).parent / "_downloads_logic_pre_validator_script.awk"
 
         super().__init__()
 
@@ -73,7 +67,6 @@ class DownloadsLogicPreValidator(BaseValidator):
             shell=True,
             capture_output=True,
             text=True,
-            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX},
         )
         if result.returncode != 0:
             message = (

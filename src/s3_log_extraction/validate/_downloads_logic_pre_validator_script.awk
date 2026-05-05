@@ -1,24 +1,13 @@
 BEGIN {
     FS = "HTTP/1\\."
 
-    if (!("DROGON_IP_REGEX" in ENVIRON)) {
-        print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
-        exit 1
-    }
-    DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
-
     BYTES_SENT_REGEX = "^[0-9]+$"
 }
 
 {
     if (NF == 0) {next}
 
-    # Pre-URI fields like this should be unaffected
     split($1, pre_uri_fields, " ")
-
-    ip = pre_uri_fields[5]
-    if (ip ~ DROGON_IP_REGEX) {next}
-
     request_type = pre_uri_fields[8]
     if (request_type != "REST.GET.OBJECT") {next}
 
