@@ -294,10 +294,9 @@ def test_get_unprocessed_s3_urls_from_remote_emits_performance_warning(tmp_path:
     Calling ``_get_unprocessed_s3_urls_from_remote`` without an inventory directory
     must emit a ``UserWarning`` recommending S3 Inventory for better performance.
     """
+    # _make_extractor already sets processed_dates and s3_url_processing_end_record to
+    # empty sets; processed_years and processed_months_per_year default to empty in __init__.
     extractor = _make_extractor(tmp_path)
-    extractor.processed_years = set()
-    extractor.processed_months_per_year = {}
-    extractor.s3_url_processing_end_record = set()
 
     # Patch _deploy_subprocess so no real S3 network calls are made.
     with unittest.mock.patch(

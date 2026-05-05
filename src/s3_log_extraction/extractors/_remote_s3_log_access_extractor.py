@@ -397,6 +397,8 @@ class RemoteS3LogAccessExtractor:
             "Fetching log file listings directly from S3 via network requests can be very slow for large buckets. "
             "Consider setting up AWS S3 Inventory on your bucket and using the `inventory_directory` argument "
             "for significantly better performance.",
+            # stacklevel=3 surfaces the warning at the user-facing extract_s3_bucket() call site
+            # rather than inside the internal helper chain.
             stacklevel=3,
         )
         years_result = _deploy_subprocess(
