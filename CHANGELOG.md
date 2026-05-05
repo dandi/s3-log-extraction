@@ -4,6 +4,16 @@
 
 
 
+# v1.3.9
+
+## Improvements
+
+Added `number_of_requests` column to `by_day.tsv`, `by_asset.tsv`, and `by_region.tsv` summaries.
+This counts the number of S3 log lines (requests) per grouping (date, asset, or region).
+Also added `total_number_of_requests` to `totals.json` and `archive_totals.json`.
+
+
+
 # v1.3.8
 
 ## Features
