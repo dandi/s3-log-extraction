@@ -1,5 +1,5 @@
-date	bytes_sent	number_of_requests
-2022-04-06	12	1
-2022-08-03	0	1
-2023-11-13	0	1
-2024-11-13	1194552	1
+date	bytes_sent	number_of_requests	number_of_downloads
+2022-04-06	12	1	1
+2022-08-03	0	1	0
+2023-11-13	0	1	1
+2024-11-13	1194552	1	1

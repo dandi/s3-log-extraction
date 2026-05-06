@@ -31,13 +31,15 @@ def generate_archive_summaries(summary_directory: str | pathlib.Path | None = No
     aggregated_dataset_summaries_by_day = pandas.concat(objs=all_dataset_summaries_by_day, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_day.groupby(by="date", as_index=False)[
-        ["bytes_sent", "number_of_requests"]
+        ["bytes_sent", "number_of_requests", "number_of_downloads"]
     ].sum()
     pre_aggregated.sort_values(by="date", key=natsort.natsort_keygen(), inplace=True)
 
-    aggregated_activity_by_day = pre_aggregated.reindex(columns=("date", "bytes_sent", "number_of_requests"))
+    aggregated_activity_by_day = pre_aggregated.reindex(
+        columns=("date", "bytes_sent", "number_of_requests", "number_of_downloads")
+    )
     aggregated_activity_by_day = aggregated_activity_by_day.astype(
-        dtype={"bytes_sent": "int64", "number_of_requests": "int64"}
+        dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
     )
 
     archive_summary_by_day_file_path = archive_directory / "by_day.tsv"
@@ -54,13 +56,15 @@ def generate_archive_summaries(summary_directory: str | pathlib.Path | None = No
     aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)[
-        ["bytes_sent", "number_of_requests"]
+        ["bytes_sent", "number_of_requests", "number_of_downloads"]
     ].sum()
     pre_aggregated.sort_values(by="region", key=natsort.natsort_keygen(), inplace=True)
 
-    aggregated_activity_by_region = pre_aggregated.reindex(columns=("region", "bytes_sent", "number_of_requests"))
+    aggregated_activity_by_region = pre_aggregated.reindex(
+        columns=("region", "bytes_sent", "number_of_requests", "number_of_downloads")
+    )
     aggregated_activity_by_region = aggregated_activity_by_region.astype(
-        dtype={"bytes_sent": "int64", "number_of_requests": "int64"}
+        dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
     )
 
     archive_summary_by_region_file_path = archive_directory / "by_region.tsv"

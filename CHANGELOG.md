@@ -8,6 +8,10 @@ A `200` status indicates a complete download, so `bytes_sent` should equal the o
 considered aberrant and causes the validator to raise a `RuntimeError`.
 The new protocol is also exposed through the CLI as `s3logextraction validate downloads_logic <directory>`.
 
+Added `number_of_downloads` column to `by_day.tsv`, `by_asset.tsv`, and `by_region.tsv` summaries.
+This counts the number of complete downloads (HTTP status `200`) per grouping (date, asset, or region).
+Also added `total_number_of_downloads` to `totals.json` and `archive_totals.json`.
+
 
 # v1.4.0
 
