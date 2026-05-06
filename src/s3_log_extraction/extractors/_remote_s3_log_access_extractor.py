@@ -285,7 +285,7 @@ class RemoteS3LogAccessExtractor:
     def _get_unprocessed_s3_urls_from_manifest(self, manifest_file_path: pathlib.Path, s3_root: str) -> list[str]:
         s3_base = "/".join(s3_root.split("/")[:3])
 
-        with pathlib.Path(manifest_file_path).open(mode="r") as file_stream:
+        with manifest_file_path.open(mode="r") as file_stream:
             manifest = json.load(fp=file_stream)
 
         dates_from_manifest = [date for date in manifest.keys()]
