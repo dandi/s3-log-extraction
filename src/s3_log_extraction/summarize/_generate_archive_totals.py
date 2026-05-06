@@ -41,12 +41,21 @@ def generate_archive_totals(
 
     number_of_unique_regions = len(summary["region"])
     number_of_unique_countries = len(unique_countries)
+
+    requester_count_file_path = archive_directory / "requester_count.txt"
+    number_of_requesters: str | int = (
+        requester_count_file_path.read_text().strip() if requester_count_file_path.exists() else 0
+    )
+    if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
+        number_of_requesters = int(number_of_requesters)
+
     archive_totals = {
         "total_bytes_sent": int(summary["bytes_sent"].sum()),
         "number_of_unique_regions": number_of_unique_regions,
         "number_of_unique_countries": number_of_unique_countries,
         "total_number_of_requests": int(summary["number_of_requests"].sum()),
         "total_number_of_downloads": int(summary["number_of_downloads"].sum()),
+        "number_of_requesters": number_of_requesters,
     }
 
     archive_totals_file_path = summary_directory / "archive_totals.json"

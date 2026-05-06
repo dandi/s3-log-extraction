@@ -1,8 +1,10 @@
+import json
 import pathlib
 import shutil
 
 import pandas
 import py
+import pytest
 
 import s3_log_extraction
 
@@ -46,3 +48,68 @@ def test_generic_summaries(tmpdir: py.path.local):
                 f"{str(exception)}\n\n"
             )
             raise AssertionError(message)
+
+    # Verify requester_count.txt files
+    test_txt_paths = {
+        path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="requester_count.txt")
+    }
+    expected_txt_paths = {
+        path.relative_to(expected_summaries_dir): path
+        for path in expected_summaries_dir.rglob(pattern="requester_count.txt")
+    }
+    assert set(test_txt_paths.keys()) == set(expected_txt_paths.keys())
+
+    for relative_path, expected_txt_path in expected_txt_paths.items():
+        test_txt_path = test_summary_dir / relative_path
+        assert test_txt_path.read_text().strip() == expected_txt_path.read_text().strip(), (
+            f"\n\nMismatch in {relative_path}:\n"
+            f"  test:     {test_txt_path.read_text().strip()!r}\n"
+            f"  expected: {expected_txt_path.read_text().strip()!r}\n"
+        )
+
+    # Verify totals.json
+    test_totals = json.loads((test_summary_dir / "totals.json").read_text())
+    expected_totals = json.loads((expected_summaries_dir / "totals.json").read_text())
+    assert (
+        test_totals == expected_totals
+    ), f"\n\ntotals.json mismatch:\n  test:     {test_totals}\n  expected: {expected_totals}\n"
+
+    # Verify archive_totals.json
+    test_archive_totals = json.loads((test_summary_dir / "archive_totals.json").read_text())
+    expected_archive_totals = json.loads((expected_summaries_dir / "archive_totals.json").read_text())
+    assert (
+        test_archive_totals == expected_archive_totals
+    ), f"\n\narchive_totals.json mismatch:\n  test:     {test_archive_totals}\n  expected: {expected_archive_totals}\n"
+
+
+@pytest.mark.ai_generated
+def test_round_requester_count_below_unit():
+    """Values strictly below the rounding unit produce the ``<{unit}`` sentinel."""
+    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
+
+    assert _round_requester_count(count=0) == "<10"
+    assert _round_requester_count(count=1) == "<10"
+    assert _round_requester_count(count=9) == "<10"
+
+
+@pytest.mark.ai_generated
+def test_round_requester_count_at_and_above_unit():
+    """Values at or above the rounding unit are rounded to the nearest multiple."""
+    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
+
+    assert _round_requester_count(count=10) == 10
+    assert _round_requester_count(count=14) == 10
+    assert _round_requester_count(count=15) == 20
+    assert _round_requester_count(count=100) == 100
+    assert _round_requester_count(count=123) == 120
+
+
+@pytest.mark.ai_generated
+def test_round_requester_count_custom_unit():
+    """Custom ``unit`` values are respected for both the threshold and rounding."""
+    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
+
+    assert _round_requester_count(count=4, unit=5) == "<5"
+    assert _round_requester_count(count=5, unit=5) == 5
+    assert _round_requester_count(count=7, unit=5) == 5
+    assert _round_requester_count(count=8, unit=5) == 10

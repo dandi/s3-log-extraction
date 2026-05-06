@@ -2,6 +2,13 @@
 
 # Upcoming
 
+Added `number_of_requesters` field to `totals.json` (per dandiset) and `archive_totals.json` (archive-wide).
+This reports the number of unique requester IP addresses per dandiset and for the entire archive.
+To protect privacy, the count is rounded to the nearest 10 and a ``"<10"`` sentinel is used for counts
+below 10 (the minimum threshold).
+The unique requester count is intentionally not coupled to region information and is not reported
+at the per-asset level.
+
 Added a new `DownloadsLogicPreValidator` that detects aberrant raw S3 log lines where `bytes_sent` is a valid
 number and is less than the object size (`total_bytes`), yet the HTTP status code is exactly `200`.
 A `200` status indicates a complete download, so `bytes_sent` should equal the object size; any deviation is
