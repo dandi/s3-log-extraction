@@ -14,7 +14,7 @@ on:
 env:
   S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
   IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
-  OPENCAGE_API_KEY: ${{ secrets.OPENCAGE_KEY }}
+  OPENCAGE_API_KEY: ${{ secrets.OPENCAGE_API_KEY }}
 
 jobs:
 
