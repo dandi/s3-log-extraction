@@ -6,7 +6,7 @@ on:
         required: true
       IPINFO_API_KEY:
         required: true
-      OPENCAGE_KEY:
+      OPENCAGE_API_KEY:
         required: true
       CODECOV_CREDENTIALS:
         required: true
@@ -14,7 +14,7 @@ on:
 env:
   S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
   IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}
-  OPENCAGE_KEY: ${{ secrets.OPENCAGE_KEY }}
+  OPENCAGE_API_KEY: ${{ secrets.OPENCAGE_API_KEY }}
 
 jobs:
 
@@ -59,10 +59,9 @@ jobs:
           ls ~/.s3_log_extraction
           cat ~/.s3_log_extraction/ip_hash_to_region.yaml
 
-      # TODO: add remote tests and update to `pytest -m "remote"`
       - name: Run pytest with coverage and printout coverage for debugging
         run: |
-          pytest -m "not remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+          pytest -m "remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
           cat ./coverage.xml
 
       - name: Upload coverage to Codecov
