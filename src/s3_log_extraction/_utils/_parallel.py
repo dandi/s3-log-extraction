@@ -28,8 +28,9 @@ def _handle_max_workers(*, workers: int) -> int:
         warnings.warn(message=message, stacklevel=2)
         workers = -2
 
-    cpu_count = os.cpu_count()
+    cpu_count = os.cpu_count() or 1
     if workers < 0:
+        # workers % cpu_count + 1 == cpu_count - |workers| + 1 (use all but |workers|-1 CPUs)
         max_workers = workers % cpu_count + 1
     elif workers > cpu_count:
         max_workers = cpu_count
