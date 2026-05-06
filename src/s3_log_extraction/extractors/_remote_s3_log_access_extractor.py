@@ -241,16 +241,16 @@ class RemoteS3LogAccessExtractor:
                 loaded = yaml.safe_load(stream=file_stream)
                 self.processed_dates = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
 
-        unprocessed_s3_urls_from_manifest = self._get_unprocessed_s3_urls_from_manifest(
-            manifest_file_path=manifest_file_path, s3_root=s3_root
-        )
-        if inventory_directory is not None:
-            unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_local_inventory(
+        if manifest_file_path is not None:
+            unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_manifest(
+                manifest_file_path=manifest_file_path, s3_root=s3_root
+            )
+        elif inventory_directory is not None:
+            unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_local_inventory(
                 inventory_directory=inventory_directory, s3_root=s3_root
             )
         else:
-            unprocessed_s3_urls_from_inventory_or_remote = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
-        unprocessed_s3_urls = unprocessed_s3_urls_from_manifest + unprocessed_s3_urls_from_inventory_or_remote
+            unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
 
         del self.s3_url_processing_end_record  # Free memory
 
@@ -282,16 +282,11 @@ class RemoteS3LogAccessExtractor:
             )
             raise ValueError(message)
 
-    def _get_unprocessed_s3_urls_from_manifest(
-        self, manifest_file_path: pathlib.Path | None, s3_root: str
-    ) -> list[str]:
+    def _get_unprocessed_s3_urls_from_manifest(self, manifest_file_path: pathlib.Path, s3_root: str) -> list[str]:
         s3_base = "/".join(s3_root.split("/")[:3])
 
-        manifest = dict()
-        manifest_file_path = pathlib.Path(manifest_file_path) if manifest_file_path is not None else None
-        if manifest_file_path is not None:
-            with manifest_file_path.open(mode="r") as file_stream:
-                manifest = json.load(fp=file_stream)
+        with manifest_file_path.open(mode="r") as file_stream:
+            manifest = json.load(fp=file_stream)
 
         dates_from_manifest = [date for date in manifest.keys()]
         unprocessed_dates = list(set(dates_from_manifest) - self.processed_dates)
