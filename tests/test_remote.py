@@ -45,13 +45,9 @@ def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     assert index_to_region_file.exists(), "index_to_region.yaml was not created"
 
     index_to_region = yaml.safe_load(index_to_region_file.read_text()) or {}
-    assert test_index in index_to_region, (
-        f"Expected index {test_index} to be resolved, got: {index_to_region}"
-    )
+    assert test_index in index_to_region, f"Expected index {test_index} to be resolved, got: {index_to_region}"
     region = index_to_region[test_index]
-    assert isinstance(region, str) and len(region) > 0, (
-        f"Expected a non-empty region string, got: {region!r}"
-    )
+    assert isinstance(region, str) and len(region) > 0, f"Expected a non-empty region string, got: {region!r}"
 
 
 @pytest.mark.remote
@@ -83,16 +79,10 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
     assert coordinates_file.exists(), "region_codes_to_coordinates.yaml was not created"
 
     coordinates = yaml.safe_load(coordinates_file.read_text()) or {}
-    assert region_code in coordinates, (
-        f"Expected '{region_code}' to be geocoded, got keys: {list(coordinates.keys())}"
-    )
+    assert region_code in coordinates, f"Expected '{region_code}' to be geocoded, got keys: {list(coordinates.keys())}"
     entry = coordinates[region_code]
-    assert "latitude" in entry and "longitude" in entry, (
-        f"Expected latitude/longitude keys in entry for '{region_code}', got: {entry}"
-    )
-    assert isinstance(entry["latitude"], float), (
-        f"Expected float latitude, got: {entry['latitude']!r}"
-    )
-    assert isinstance(entry["longitude"], float), (
-        f"Expected float longitude, got: {entry['longitude']!r}"
-    )
+    assert (
+        "latitude" in entry and "longitude" in entry
+    ), f"Expected latitude/longitude keys in entry for '{region_code}', got: {entry}"
+    assert isinstance(entry["latitude"], float), f"Expected float latitude, got: {entry['latitude']!r}"
+    assert isinstance(entry["longitude"], float), f"Expected float longitude, got: {entry['longitude']!r}"
