@@ -81,13 +81,13 @@ class S3LogAccessExtractor:
         directory = pathlib.Path(directory)
         max_workers = _handle_max_workers(workers=workers)
 
-        all_log_file_keys = {
+        all_relative_log_paths = {
             str(file_path.relative_to(directory))
             for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
         }
-        unextracted_keys = list(all_log_file_keys - self.file_processing_end_record)
+        unextracted_relative_paths = list(all_relative_log_paths - self.file_processing_end_record)
         # Resolve back to absolute paths for the actual extraction
-        unextracted_files = [str((directory / key).absolute()) for key in unextracted_keys]
+        unextracted_files = [str((directory / rel_path).absolute()) for rel_path in unextracted_relative_paths]
 
         files_to_extract = unextracted_files[:limit] if limit is not None else unextracted_files
         random.shuffle(files_to_extract)
