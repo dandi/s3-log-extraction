@@ -21,6 +21,8 @@ class RemoteS3BucketValidator:
       - updatable
     """
 
+    tqdm_description = "Validating S3 log file existence"
+
     def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
         self.records_directory = get_records_directory(cache_directory=cache_directory)
 
@@ -102,7 +104,7 @@ class RemoteS3BucketValidator:
         s3_filesystem = fsspec.filesystem("s3")
         for s3_url in tqdm.tqdm(
             iterable=urls_to_validate,
-            desc="Validating S3 log file existence",
+            desc=self.tqdm_description,
             total=len(urls_to_validate),
             unit="files",
             smoothing=0,
@@ -145,7 +147,7 @@ class RemoteS3BucketValidator:
             inventory_directory=inventory_directory,
             s3_root=s3_root,
         )
-        return [url for urls in inventory.values() for url in urls]
+        return [url for url_list in inventory.values() for url in url_list]
 
     def _record_s3_url_success(self, s3_url: str) -> None:
         """
