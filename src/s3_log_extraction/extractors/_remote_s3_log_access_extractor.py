@@ -293,10 +293,7 @@ class RemoteS3LogAccessExtractor:
 
         s3_urls = [f"{s3_base}/{filename}" for date in unprocessed_dates for filename in manifest[date]]
 
-        s3_root_prefix = s3_root.rstrip("/") + "/"
-        unprocessed_s3_urls = [
-            url for url in s3_urls if url[len(s3_root_prefix) :] not in self.s3_url_processing_end_record
-        ]
+        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_local_inventory(
@@ -341,10 +338,7 @@ class RemoteS3LogAccessExtractor:
 
         s3_urls = [url for date in unprocessed_dates for url in inventory[date]]
 
-        s3_root_prefix = s3_root.rstrip("/") + "/"
-        unprocessed_s3_urls = [
-            url for url in s3_urls if url[len(s3_root_prefix) :] not in self.s3_url_processing_end_record
-        ]
+        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
@@ -411,10 +405,7 @@ class RemoteS3LogAccessExtractor:
                 [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
             )
 
-        s3_root_prefix = s3_root.rstrip("/") + "/"
-        unprocessed_s3_urls = [
-            url for url in s3_urls if url[len(s3_root_prefix) :] not in self.s3_url_processing_end_record
-        ]
+        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
         return unprocessed_s3_urls
 
     def _extract_s3_url(
@@ -435,8 +426,7 @@ class RemoteS3LogAccessExtractor:
             extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
 
-        s3_root_prefix = s3_root.rstrip("/") + "/" if s3_root is not None else ""
-        record_key = s3_url[len(s3_root_prefix) :] if s3_root is not None else s3_url
+        record_key = s3_url.split("/")[-1]
 
         # Record the start of the extraction step
         with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
