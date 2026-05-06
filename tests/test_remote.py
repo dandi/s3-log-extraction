@@ -14,6 +14,14 @@ import yaml
 
 import s3_log_extraction
 
+_AUTH_ERROR_PATTERNS = ("401", "403", "Unknown token", "Unauthorized", "not authorized")
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    """Return True if *exc* looks like an API authentication/authorization failure."""
+    exc_str = str(exc).lower()
+    return any(pattern.lower() in exc_str for pattern in _AUTH_ERROR_PATTERNS)
+
 
 @pytest.mark.remote
 @pytest.mark.ai_generated
@@ -46,8 +54,7 @@ def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     try:
         s3_log_extraction.ip_utils.update_index_to_region_codes(cache_directory=tmp_path, encrypt=False)
     except Exception as exc:
-        exc_str = str(exc)
-        if "403" in exc_str or "401" in exc_str or "Unknown token" in exc_str or "Unauthorized" in exc_str:
+        if _is_auth_error(exc):
             pytest.fail(
                 f"IPINFO_API_KEY is set but the token was rejected by the IPInfo API ({exc}). "
                 "Please verify that the IPINFO_API_KEY GitHub secret contains a valid token "
@@ -96,8 +103,7 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
     try:
         s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path)
     except Exception as exc:
-        exc_str = str(exc)
-        if "not authorized" in exc_str.lower() or "401" in exc_str or "403" in exc_str or "Unauthorized" in exc_str:
+        if _is_auth_error(exc):
             pytest.fail(
                 f"OPENCAGE_API_KEY is set but was rejected by the OpenCage API ({exc}). "
                 "Please verify that the OPENCAGE_API_KEY GitHub secret contains a valid key "
