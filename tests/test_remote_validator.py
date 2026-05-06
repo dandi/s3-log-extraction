@@ -1,4 +1,4 @@
-"""Tests for the remote-based validation methods on BaseValidator."""
+"""Tests for the RemoteS3BucketValidator class."""
 
 import csv
 import gzip
@@ -9,7 +9,7 @@ import unittest.mock
 
 import pytest
 
-from s3_log_extraction.validate import DownloadsLogicPreValidator
+from s3_log_extraction.validate import RemoteS3BucketValidator
 
 
 def _build_inventory_directory(
@@ -78,9 +78,9 @@ def _build_inventory_directory(
     return inventory_dir
 
 
-def _make_validator(tmp_path: pathlib.Path) -> DownloadsLogicPreValidator:
+def _make_validator(tmp_path: pathlib.Path) -> RemoteS3BucketValidator:
     """
-    Return a DownloadsLogicPreValidator whose records directory is inside *tmp_path*.
+    Return a RemoteS3BucketValidator whose records directory is inside *tmp_path*.
 
     Parameters
     ----------
@@ -89,12 +89,12 @@ def _make_validator(tmp_path: pathlib.Path) -> DownloadsLogicPreValidator:
 
     Returns
     -------
-    DownloadsLogicPreValidator
+    RemoteS3BucketValidator
         Validator instance backed by an isolated records directory.
     """
     records_dir = tmp_path / "records"
     records_dir.mkdir()
-    validator = DownloadsLogicPreValidator()
+    validator = RemoteS3BucketValidator()
     # Override the records directory and record file path to use the temp directory
     validator.records_directory = records_dir
     validator.record_file_path = records_dir / "test_record.txt"
