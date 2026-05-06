@@ -11,18 +11,6 @@ import pytest
 
 from s3_log_extraction.validate import DownloadsLogicPreValidator
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-_LOG_PREFIX = "abc123 bucket [01/Jan/2020:00:00:00 +0000] 10.0.0.1 - REQ123 REST.GET.OBJECT test/file.dat "
-_LOG_SUFFIX = ' 10 5 "-" "TestAgent" - - - - - - - - -'
-
-
-def _make_valid_log_line() -> str:
-    """Return a minimal valid S3 log line where bytes_sent == total_bytes with status 200."""
-    return f'{_LOG_PREFIX}"GET /test/file.dat HTTP/1.1" 200 - 1000 1000{_LOG_SUFFIX}\n'
-
 
 def _build_inventory_directory(
     tmp_path: pathlib.Path,
@@ -196,7 +184,7 @@ def test_validate_s3_bucket_raises_without_inventory_directory(tmp_path: pathlib
 @pytest.mark.ai_generated
 def test_validate_s3_bucket_validates_unrecorded_urls(tmp_path: pathlib.Path) -> None:
     """
-    validate_s3_bucket should download and validate files not yet in the record,
+    validate_s3_bucket should assert file existence for files not yet in the record,
     then add the S3 URLs to the record.
     """
     validator = _make_validator(tmp_path)
@@ -204,28 +192,18 @@ def test_validate_s3_bucket_validates_unrecorded_urls(tmp_path: pathlib.Path) ->
     keys = ["logs/2024/01/01/file-A", "logs/2024/01/01/file-B"]
     inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    valid_content = _make_valid_log_line().encode()
-
-    with (
-        unittest.mock.patch("fsspec.open") as mock_open,
-        unittest.mock.patch.object(validator, "_run_validation") as mock_validate,
-    ):
-        mock_file = unittest.mock.MagicMock()
-        mock_file.__enter__ = lambda s: s
-        mock_file.__exit__ = unittest.mock.MagicMock(return_value=False)
-        mock_file.read.return_value = valid_content
-        mock_open.return_value = mock_file
-
+    mock_fs = unittest.mock.MagicMock()
+    mock_fs.exists.return_value = True
+    with unittest.mock.patch("fsspec.filesystem", return_value=mock_fs):
         validator.validate_s3_bucket(s3_root=f"s3://{source_bucket}/logs", inventory_directory=inventory_dir)
 
-    assert mock_validate.call_count == 2
     assert "s3://my-bucket/logs/2024/01/01/file-A" in validator.record
     assert "s3://my-bucket/logs/2024/01/01/file-B" in validator.record
 
 
 @pytest.mark.ai_generated
 def test_validate_s3_bucket_skips_already_recorded_urls(tmp_path: pathlib.Path) -> None:
-    """URLs already present in the validator record are not re-downloaded or re-validated."""
+    """URLs already present in the validator record are not re-checked."""
     validator = _make_validator(tmp_path)
     source_bucket = "my-bucket"
     keys = ["logs/2024/01/01/file-A", "logs/2024/01/01/file-B"]
@@ -235,40 +213,26 @@ def test_validate_s3_bucket_skips_already_recorded_urls(tmp_path: pathlib.Path) 
     already_done = "s3://my-bucket/logs/2024/01/01/file-A"
     validator.record.add(already_done)
 
-    with (
-        unittest.mock.patch("fsspec.open") as mock_open,
-        unittest.mock.patch.object(validator, "_run_validation") as mock_validate,
-    ):
-        mock_file = unittest.mock.MagicMock()
-        mock_file.__enter__ = lambda s: s
-        mock_file.__exit__ = unittest.mock.MagicMock(return_value=False)
-        mock_file.read.return_value = b""
-        mock_open.return_value = mock_file
-
+    mock_fs = unittest.mock.MagicMock()
+    mock_fs.exists.return_value = True
+    with unittest.mock.patch("fsspec.filesystem", return_value=mock_fs):
         validator.validate_s3_bucket(s3_root=f"s3://{source_bucket}/logs", inventory_directory=inventory_dir)
 
-    # Only the second file should have been validated
-    assert mock_validate.call_count == 1
+    # Only the second file should have been checked
+    assert mock_fs.exists.call_count == 1
 
 
 @pytest.mark.ai_generated
 def test_validate_s3_bucket_respects_limit(tmp_path: pathlib.Path) -> None:
-    """Only up to `limit` files are validated when there are more unrecorded URLs."""
+    """Only up to `limit` files are checked when there are more unrecorded URLs."""
     validator = _make_validator(tmp_path)
     source_bucket = "my-bucket"
     keys = [f"logs/2024/01/01/file-{i}" for i in range(10)]
     inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    with (
-        unittest.mock.patch("fsspec.open") as mock_open,
-        unittest.mock.patch.object(validator, "_run_validation"),
-    ):
-        mock_file = unittest.mock.MagicMock()
-        mock_file.__enter__ = lambda s: s
-        mock_file.__exit__ = unittest.mock.MagicMock(return_value=False)
-        mock_file.read.return_value = b""
-        mock_open.return_value = mock_file
-
+    mock_fs = unittest.mock.MagicMock()
+    mock_fs.exists.return_value = True
+    with unittest.mock.patch("fsspec.filesystem", return_value=mock_fs):
         validator.validate_s3_bucket(
             s3_root=f"s3://{source_bucket}/logs",
             inventory_directory=inventory_dir,
@@ -286,16 +250,9 @@ def test_validate_s3_bucket_persists_record_to_disk(tmp_path: pathlib.Path) -> N
     keys = ["logs/2024/01/01/file-X"]
     inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    with (
-        unittest.mock.patch("fsspec.open") as mock_open,
-        unittest.mock.patch.object(validator, "_run_validation"),
-    ):
-        mock_file = unittest.mock.MagicMock()
-        mock_file.__enter__ = lambda s: s
-        mock_file.__exit__ = unittest.mock.MagicMock(return_value=False)
-        mock_file.read.return_value = b""
-        mock_open.return_value = mock_file
-
+    mock_fs = unittest.mock.MagicMock()
+    mock_fs.exists.return_value = True
+    with unittest.mock.patch("fsspec.filesystem", return_value=mock_fs):
         validator.validate_s3_bucket(s3_root=f"s3://{source_bucket}/logs", inventory_directory=inventory_dir)
 
     saved = {line.strip() for line in validator.record_file_path.read_text().splitlines() if line.strip()}
@@ -303,25 +260,16 @@ def test_validate_s3_bucket_persists_record_to_disk(tmp_path: pathlib.Path) -> N
 
 
 @pytest.mark.ai_generated
-def test_validate_s3_bucket_temp_file_cleaned_up_after_validation_error(tmp_path: pathlib.Path) -> None:
-    """Temp file is deleted even when _run_validation raises an exception."""
+def test_validate_s3_bucket_skips_nonexistent_files(tmp_path: pathlib.Path) -> None:
+    """URLs for which fsspec reports the file does not exist are not recorded."""
     validator = _make_validator(tmp_path)
     source_bucket = "my-bucket"
-    keys = ["logs/2024/01/01/file-BAD"]
+    keys = ["logs/2024/01/01/file-MISSING"]
     inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    with (
-        unittest.mock.patch("fsspec.open") as mock_open,
-        unittest.mock.patch.object(validator, "_run_validation", side_effect=RuntimeError("validation failed")),
-    ):
-        mock_file = unittest.mock.MagicMock()
-        mock_file.__enter__ = lambda s: s
-        mock_file.__exit__ = unittest.mock.MagicMock(return_value=False)
-        mock_file.read.return_value = b""
-        mock_open.return_value = mock_file
+    mock_fs = unittest.mock.MagicMock()
+    mock_fs.exists.return_value = False
+    with unittest.mock.patch("fsspec.filesystem", return_value=mock_fs):
+        validator.validate_s3_bucket(s3_root=f"s3://{source_bucket}/logs", inventory_directory=inventory_dir)
 
-        with pytest.raises(RuntimeError, match="validation failed"):
-            validator.validate_s3_bucket(s3_root=f"s3://{source_bucket}/logs", inventory_directory=inventory_dir)
-
-    # URL must NOT have been recorded since validation raised
-    assert "s3://my-bucket/logs/2024/01/01/file-BAD" not in validator.record
+    assert "s3://my-bucket/logs/2024/01/01/file-MISSING" not in validator.record

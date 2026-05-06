@@ -2,7 +2,6 @@ import abc
 import hashlib
 import pathlib
 import random
-import tempfile
 
 import tqdm
 
@@ -112,15 +111,19 @@ class BaseValidator(abc.ABC):
         inventory_directory: str | pathlib.Path | None = None,
     ) -> None:
         """
-        Validate a random selection of S3 log files present in the inventory but not yet in this validator's record.
+        Assert that a random selection of S3 log files from the inventory exist on the bucket.
+
+        For each sampled URL that has not yet been recorded, the method checks
+        whether the file is present on the S3 bucket.  URLs that are confirmed
+        to exist are appended to this validator's record.
 
         Parameters
         ----------
         s3_root : str
             The root S3 path of the log bucket (e.g. ``s3://my-logs-bucket/logs``).
         limit : int or None, optional
-            Maximum number of files to validate.  If ``None`` (default), all
-            unvalidated files are validated.
+            Maximum number of files to check.  If ``None`` (default), all
+            unvalidated files are checked.
         inventory_directory : path-like or None, optional
             Path to a local pre-downloaded S3 inventory directory.  The
             directory must follow the standard AWS S3 Inventory layout::
@@ -165,27 +168,19 @@ class BaseValidator(abc.ABC):
         random.shuffle(unvalidated_urls)
         urls_to_validate = unvalidated_urls[:limit] if limit is not None else unvalidated_urls
 
-        with tempfile.TemporaryDirectory(prefix="s3logextraction-validate-") as tmp_dir:
-            tmp_path = pathlib.Path(tmp_dir)
-            for s3_url in tqdm.tqdm(
-                iterable=urls_to_validate,
-                desc=self.tqdm_description,
-                total=len(urls_to_validate),
-                unit="files",
-                smoothing=0,
-            ):
-                filename = s3_url.split("/")[-1]
-                temp_file = tmp_path / filename
-                with fsspec.open(urlpath=s3_url, mode="rb") as remote_file:
-                    temp_file.write_bytes(remote_file.read())
+        s3_filesystem = fsspec.filesystem("s3")
+        for s3_url in tqdm.tqdm(
+            iterable=urls_to_validate,
+            desc=self.tqdm_description,
+            total=len(urls_to_validate),
+            unit="files",
+            smoothing=0,
+        ):
+            if not s3_filesystem.exists(s3_url):
+                continue
 
-                try:
-                    self._run_validation(file_path=temp_file)
-                finally:
-                    temp_file.unlink(missing_ok=True)
-
-                self.record.add(s3_url)
-                self._record_s3_url_success(s3_url=s3_url)
+            self.record.add(s3_url)
+            self._record_s3_url_success(s3_url=s3_url)
 
     def _get_s3_urls_from_local_inventory(
         self,
