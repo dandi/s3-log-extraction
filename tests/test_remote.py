@@ -43,7 +43,17 @@ def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     indexed_ips_file = ip_cache_dir / "indexed_ips.yaml"
     indexed_ips_file.write_text(yaml.dump({test_index: test_ip}))
 
-    s3_log_extraction.ip_utils.update_index_to_region_codes(cache_directory=tmp_path, encrypt=False)
+    try:
+        s3_log_extraction.ip_utils.update_index_to_region_codes(cache_directory=tmp_path, encrypt=False)
+    except Exception as exc:
+        exc_str = str(exc)
+        if "403" in exc_str or "401" in exc_str or "Unknown token" in exc_str or "Unauthorized" in exc_str:
+            pytest.fail(
+                f"IPINFO_API_KEY is set but the token was rejected by the IPInfo API ({exc}). "
+                "Please verify that the IPINFO_API_KEY GitHub secret contains a valid token "
+                "from https://ipinfo.io/account/token"
+            )
+        raise
 
     index_to_region_file = ip_cache_dir / "index_to_region.yaml"
     assert index_to_region_file.exists(), "index_to_region.yaml was not created"
@@ -83,7 +93,17 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
     index_to_region_file = ip_cache_dir / "index_to_region.yaml"
     index_to_region_file.write_text(yaml.dump({12345: region_code}))
 
-    s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path)
+    try:
+        s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path)
+    except Exception as exc:
+        exc_str = str(exc)
+        if "not authorized" in exc_str.lower() or "401" in exc_str or "403" in exc_str or "Unauthorized" in exc_str:
+            pytest.fail(
+                f"OPENCAGE_API_KEY is set but was rejected by the OpenCage API ({exc}). "
+                "Please verify that the OPENCAGE_API_KEY GitHub secret contains a valid key "
+                "from https://opencagedata.com/dashboard#api-keys"
+            )
+        raise
 
     coordinates_file = ip_cache_dir / "region_codes_to_coordinates.yaml"
     assert coordinates_file.exists(), "region_codes_to_coordinates.yaml was not created"
