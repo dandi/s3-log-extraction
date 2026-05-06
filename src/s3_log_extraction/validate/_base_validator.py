@@ -176,9 +176,6 @@ class BaseValidator(abc.ABC):
                 unit="files",
                 smoothing=0,
             ):
-                if s3_url in self.record:
-                    continue
-
                 filename = s3_url.split("/")[-1]
                 temp_file = tmp_path / filename
                 with fsspec.open(urlpath=s3_url, mode="rb") as remote_file:
