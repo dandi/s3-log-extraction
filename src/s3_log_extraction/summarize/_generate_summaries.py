@@ -35,6 +35,29 @@ def _round_requester_count(count: int, unit: int = 10) -> str | int:
     return round(count / unit) * unit
 
 
+def _collect_unique_ip_indexes(asset_directories: list[pathlib.Path]) -> set[str]:
+    """
+    Collect all unique IP indexes across the given asset directories.
+
+    Parameters
+    ----------
+    asset_directories : list of pathlib.Path
+        Paths to per-asset extraction directories containing ``indexed_ips.txt`` files.
+
+    Returns
+    -------
+    set of str
+        The set of unique IP index strings found across all ``indexed_ips.txt`` files.
+    """
+    unique_ip_indexes: set[str] = set()
+    for asset_directory in asset_directories:
+        indexed_ips_file_path = asset_directory / "indexed_ips.txt"
+        if not indexed_ips_file_path.exists():
+            continue
+        unique_ip_indexes.update(ip.strip() for ip in indexed_ips_file_path.read_text().splitlines())
+    return unique_ip_indexes
+
+
 def _summarize_dataset_requester_count(
     *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path
 ) -> None:
@@ -52,13 +75,7 @@ def _summarize_dataset_requester_count(
     summary_file_path : pathlib.Path
         Destination file where the rounded count (as a string) will be written.
     """
-    unique_ip_indexes: set[str] = set()
-    for asset_directory in asset_directories:
-        indexed_ips_file_path = asset_directory / "indexed_ips.txt"
-        if not indexed_ips_file_path.exists():
-            continue
-        indexed_ips = [ip.strip() for ip in indexed_ips_file_path.read_text().splitlines()]
-        unique_ip_indexes.update(indexed_ips)
+    unique_ip_indexes = _collect_unique_ip_indexes(asset_directories=asset_directories)
 
     if not unique_ip_indexes:
         return
@@ -119,13 +136,7 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
             index_to_region=index_to_region,
         )
 
-        for asset_directory in asset_directories:
-            indexed_ips_file_path = asset_directory / "indexed_ips.txt"
-            if indexed_ips_file_path.exists():
-                all_archive_unique_ip_indexes.update(
-                    ip.strip() for ip in indexed_ips_file_path.read_text().splitlines()
-                )
-
+        all_archive_unique_ip_indexes.update(_collect_unique_ip_indexes(asset_directories=asset_directories))
     if all_archive_unique_ip_indexes:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
