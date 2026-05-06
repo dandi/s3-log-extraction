@@ -59,7 +59,6 @@ jobs:
           ls ~/.s3_log_extraction
           cat ~/.s3_log_extraction/ip_hash_to_region.yaml
 
-      # Run only the remote-marked tests (requires live API keys set in env above)
       - name: Run pytest with coverage and printout coverage for debugging
         run: |
           pytest -m "remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
