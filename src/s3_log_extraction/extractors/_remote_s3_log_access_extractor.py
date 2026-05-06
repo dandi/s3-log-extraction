@@ -282,9 +282,7 @@ class RemoteS3LogAccessExtractor:
             )
             raise ValueError(message)
 
-    def _get_unprocessed_s3_urls_from_manifest(
-        self, manifest_file_path: pathlib.Path, s3_root: str
-    ) -> list[str]:
+    def _get_unprocessed_s3_urls_from_manifest(self, manifest_file_path: pathlib.Path, s3_root: str) -> list[str]:
         s3_base = "/".join(s3_root.split("/")[:3])
 
         with pathlib.Path(manifest_file_path).open(mode="r") as file_stream:

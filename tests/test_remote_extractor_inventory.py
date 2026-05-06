@@ -370,9 +370,7 @@ def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path
     with (
         unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_manifest") as mock_manifest,
         unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_local_inventory") as mock_inventory,
-        unittest.mock.patch.object(
-            extractor, "_get_unprocessed_s3_urls_from_remote", return_value=[]
-        ) as mock_remote,
+        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_remote", return_value=[]) as mock_remote,
         unittest.mock.patch.object(extractor, "_get_end_record_and_check_consistency"),
     ):
         extractor.s3_url_processing_end_record = set()
