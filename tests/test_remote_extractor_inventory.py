@@ -196,10 +196,10 @@ def test_get_unprocessed_s3_urls_from_local_inventory_skips_already_done_urls(tm
     """
     s3_root = "s3://my-bucket"
     source_bucket = "my-bucket"
-    # Record stores relative keys (path after s3_root prefix)
-    already_done_relative = "2024/01/01/2024-01-01-00-00-00-AAAA"
+    # Record stores only the log filename (not the full relative path)
+    already_done_filename = "2024-01-01-00-00-00-AAAA"
     extractor = _make_extractor(tmp_path)
-    extractor.s3_url_processing_end_record = {already_done_relative}
+    extractor.s3_url_processing_end_record = {already_done_filename}
 
     keys = [
         "2024/01/01/2024-01-01-00-00-00-AAAA",
@@ -517,3 +517,46 @@ def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested_skip
         f"s3://{source_bucket}/2020-01-02-00-00-00-0000000000000002",
         f"s3://{source_bucket}/769362853226/us-east-2/dandiarchive/2026/01/06/2026-01-06-00-00-00-BBBB",
     }
+
+
+@pytest.mark.ai_generated
+def test_get_unprocessed_s3_urls_from_local_inventory_mixed_record_stores_only_filename(
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    The ``s3_url_processing_end_record`` stores only the log filename, not the full path.
+
+    S3 log filenames are globally unique (``YYYY-MM-DD-HH-MM-SS-UniqueHex``), so
+    only the final component of the S3 URL needs to be recorded.  This holds
+    regardless of whether the file is stored flat (directly at the bucket root)
+    or under a deep ``account-id/region/bucket/year/month/day/`` prefix.
+    Consequently, seeding the record with just the filename correctly suppresses
+    re-processing even when ``s3_root`` is set to the outer bucket root.
+    """
+    source_bucket = "dandiarchive-logs"
+    s3_root = f"s3://{source_bucket}"
+
+    flat_key = "2020-01-01-05-06-35-0000000000000001"
+    nested_key = "769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-00-00-00-AAAA"
+    other_key = "769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-01-00-00-BBBB"
+
+    extractor = _make_extractor(tmp_path)
+    # Seed the record with only filenames (not full relative paths)
+    extractor.s3_url_processing_end_record = {
+        "2020-01-01-05-06-35-0000000000000001",
+        "2026-01-05-00-00-00-AAAA",
+    }
+
+    inventory_dir = _build_inventory_directory(
+        tmp_path,
+        source_bucket=source_bucket,
+        keys=[flat_key, nested_key, other_key],
+    )
+
+    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
+        inventory_directory=inventory_dir,
+        s3_root=s3_root,
+    )
+
+    # Only the one file not in the end-record should be returned
+    assert result == [f"s3://{source_bucket}/{other_key}"]
