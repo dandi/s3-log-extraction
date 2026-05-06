@@ -5,6 +5,7 @@ S3 log extraction
 Extraction of minimal information from consolidated raw S3 logs for public sharing and plotting.
 """
 
+from . import utils
 from .config import reset_extraction
 
 __all__ = [

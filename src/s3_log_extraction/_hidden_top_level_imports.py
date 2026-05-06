@@ -10,7 +10,6 @@ from .extractors import S3LogAccessExtractor
 from .ip_utils import _index_ips
 from .summarize import generate_archive_totals
 from .testing import assert_expected_extraction_content
-from .utils.encryption import get_key
 from .validate import HttpSplitCountPreValidator
 
 _hide = True
