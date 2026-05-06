@@ -49,13 +49,13 @@ def test_generic_summaries(tmpdir: py.path.local):
             )
             raise AssertionError(message)
 
-    # Verify requester_count.txt files
+    # Verify requester_count.tsv files
     test_txt_paths = {
-        path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="requester_count.txt")
+        path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="requester_count.tsv")
     }
     expected_txt_paths = {
         path.relative_to(expected_summaries_dir): path
-        for path in expected_summaries_dir.rglob(pattern="requester_count.txt")
+        for path in expected_summaries_dir.rglob(pattern="requester_count.tsv")
     }
     assert set(test_txt_paths.keys()) == set(expected_txt_paths.keys())
 
@@ -83,36 +83,31 @@ def test_generic_summaries(tmpdir: py.path.local):
 
 
 @pytest.mark.ai_generated
-def test_round_requester_count_below_minimum():
-    """Counts strictly below ``minimum`` produce the ``"<{minimum}"`` sentinel."""
+@pytest.mark.parametrize(
+    ("count", "modulo", "minimum", "expected"),
+    [
+        # Below minimum → sentinel string
+        (0, 20, 50, "<50"),
+        (1, 20, 50, "<50"),
+        (49, 20, 50, "<50"),
+        # At or above minimum → rounded to nearest multiple of modulo
+        (50, 20, 50, 40),  # round(2.5)=2 (banker's rounding)
+        (55, 20, 50, 60),  # round(2.75)=3
+        (60, 20, 50, 60),
+        (100, 20, 50, 100),
+        (123, 20, 50, 120),
+        # Custom modulo and minimum
+        (4, 5, 5, "<5"),
+        (5, 5, 5, 5),
+        (7, 5, 5, 5),
+        (8, 5, 5, 10),
+        # minimum can differ from modulo
+        (9, 10, 5, 10),
+        (3, 10, 5, "<5"),
+    ],
+)
+def test_round_requester_count(count: int, modulo: int, minimum: int, expected: str | int):
+    """Privacy-rounding returns the sentinel below minimum and rounds to the nearest modulo otherwise."""
     from s3_log_extraction.summarize._generate_summaries import _round_requester_count
 
-    assert _round_requester_count(count=0, modulo=20, minimum=50) == "<50"
-    assert _round_requester_count(count=1, modulo=20, minimum=50) == "<50"
-    assert _round_requester_count(count=49, modulo=20, minimum=50) == "<50"
-
-
-@pytest.mark.ai_generated
-def test_round_requester_count_at_and_above_minimum():
-    """Counts at or above ``minimum`` are rounded to the nearest multiple of ``modulo``."""
-    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
-
-    assert _round_requester_count(count=50, modulo=20, minimum=50) == 40  # round(2.5)=2 (banker's rounding)
-    assert _round_requester_count(count=55, modulo=20, minimum=50) == 60  # round(2.75)=3
-    assert _round_requester_count(count=60, modulo=20, minimum=50) == 60
-    assert _round_requester_count(count=100, modulo=20, minimum=50) == 100
-    assert _round_requester_count(count=123, modulo=20, minimum=50) == 120
-
-
-@pytest.mark.ai_generated
-def test_round_requester_count_custom_modulo_and_minimum():
-    """Custom ``modulo`` and ``minimum`` values are each respected independently."""
-    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
-
-    assert _round_requester_count(count=4, modulo=5, minimum=5) == "<5"
-    assert _round_requester_count(count=5, modulo=5, minimum=5) == 5
-    assert _round_requester_count(count=7, modulo=5, minimum=5) == 5
-    assert _round_requester_count(count=8, modulo=5, minimum=5) == 10
-    # minimum can differ from modulo
-    assert _round_requester_count(count=9, modulo=10, minimum=5) == 10
-    assert _round_requester_count(count=3, modulo=10, minimum=5) == "<5"
+    assert _round_requester_count(count=count, modulo=modulo, minimum=minimum) == expected

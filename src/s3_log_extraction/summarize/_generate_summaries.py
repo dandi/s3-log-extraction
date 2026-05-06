@@ -153,7 +153,7 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
         rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ip_indexes), modulo=20, minimum=50)
-        (archive_directory / "requester_count.txt").write_text(str(rounded_archive_count))
+        (archive_directory / "requester_count.tsv").write_text(str(rounded_archive_count))
 
 
 def _summarize_dataset(
@@ -178,7 +178,7 @@ def _summarize_dataset(
     )
     _summarize_dataset_requester_count(
         asset_directories=asset_directories,
-        summary_file_path=summary_directory / dataset_id / "requester_count.txt",
+        summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
     )
 
 

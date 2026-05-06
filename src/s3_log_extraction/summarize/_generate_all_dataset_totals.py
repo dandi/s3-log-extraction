@@ -49,7 +49,7 @@ def generate_all_dataset_totals(
         number_of_unique_regions = len(summary["region"])
         number_of_unique_countries = len(unique_countries)
 
-        requester_count_file_path = summary_directory / datatset_id / "requester_count.txt"
+        requester_count_file_path = summary_directory / datatset_id / "requester_count.tsv"
         number_of_requesters: str | int = (
             requester_count_file_path.read_text().strip() if requester_count_file_path.exists() else 0
         )
