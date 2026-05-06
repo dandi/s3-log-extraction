@@ -16,9 +16,8 @@ import yaml
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess, _handle_aws_credentials
-from .._inventory_utils import _read_s3_urls_from_local_inventory
-from .._parallel._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
+from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
 
 
 class RemoteS3LogAccessExtractor:

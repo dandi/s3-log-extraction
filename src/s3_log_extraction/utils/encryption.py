@@ -20,6 +20,19 @@ def get_key() -> bytes:
 
 
 def encrypt_bytes(data: bytes) -> bytes:
+    """
+    Encrypt bytes using Fernet symmetric encryption.
+
+    Parameters
+    ----------
+    data : bytes
+        The plaintext bytes to encrypt.
+
+    Returns
+    -------
+    bytes
+        The encrypted bytes.
+    """
     key = get_key()
     fernet = cryptography.fernet.Fernet(key=key)
 
@@ -28,8 +41,28 @@ def encrypt_bytes(data: bytes) -> bytes:
 
 
 def decrypt_bytes(encrypted_data: bytes) -> bytes:
+    """
+    Decrypt bytes using Fernet symmetric encryption.
+
+    Parameters
+    ----------
+    encrypted_data : bytes
+        The encrypted bytes to decrypt.
+
+    Returns
+    -------
+    bytes
+        The decrypted plaintext bytes.
+    """
     key = get_key()
     fernet = cryptography.fernet.Fernet(key=key)
 
     decrypted_data = fernet.decrypt(token=encrypted_data)
     return decrypted_data
+
+
+__all__ = [
+    "get_key",
+    "encrypt_bytes",
+    "decrypt_bytes",
+]

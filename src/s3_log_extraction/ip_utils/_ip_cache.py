@@ -4,7 +4,7 @@ import typing
 import yaml
 
 from ..config import get_ip_cache_directory
-from ..encryption_utils import decrypt_bytes, encrypt_bytes
+from ..utils.encryption import decrypt_bytes, encrypt_bytes
 
 
 def load_index_to_ip(
