@@ -11,7 +11,6 @@ import pytest
 
 from s3_log_extraction.validate import DownloadsLogicPreValidator
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
