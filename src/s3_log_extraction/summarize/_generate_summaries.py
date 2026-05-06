@@ -163,6 +163,8 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
         if download_file_path.exists():
             downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
             number_of_downloads_by_asset[asset_path] += sum(downloads)
+        else:
+            number_of_downloads_by_asset[asset_path] += 0
 
     if len(summarized_activity_by_asset) == 0:
         return
