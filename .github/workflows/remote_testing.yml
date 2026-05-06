@@ -6,7 +6,7 @@ on:
         required: true
       IPINFO_API_KEY:
         required: true
-      OPENCAGE_KEY:
+      OPENCAGE_API_KEY:
         required: true
       CODECOV_CREDENTIALS:
         required: true
