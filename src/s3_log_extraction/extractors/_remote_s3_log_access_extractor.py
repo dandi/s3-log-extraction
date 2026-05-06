@@ -156,7 +156,7 @@ class RemoteS3LogAccessExtractor:
             for s3_url in tqdm.tqdm(
                 iterable=s3_urls_to_extract, total=len(s3_urls_to_extract), leave=True, **tqdm_style_kwargs
             ):
-                self._extract_s3_url(s3_url=s3_url)
+                self._extract_s3_url(s3_url=s3_url, s3_root=s3_root)
         else:
             batches = itertools.batched(iterable=s3_urls_to_extract, n=batch_size)
             number_of_batches = math.ceil(len(s3_urls_to_extract) / batch_size)
@@ -176,7 +176,13 @@ class RemoteS3LogAccessExtractor:
 
                     tqdm_style_kwargs["total"] = len(batch)
                     futures = [
-                        executor.submit(self._extract_s3_url, s3_url=s3_url, enable_stop=False, parallel_mode=True)
+                        executor.submit(
+                            self._extract_s3_url,
+                            s3_url=s3_url,
+                            enable_stop=False,
+                            parallel_mode=True,
+                            s3_root=s3_root,
+                        )
                         for s3_url in batch
                     ]
                     collections.deque(
@@ -294,7 +300,10 @@ class RemoteS3LogAccessExtractor:
 
         s3_urls = [f"{s3_base}/{filename}" for date in unprocessed_dates for filename in manifest[date]]
 
-        unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
+        s3_root_prefix = s3_root.rstrip("/") + "/"
+        unprocessed_s3_urls = [
+            url for url in s3_urls if url[len(s3_root_prefix) :] not in self.s3_url_processing_end_record
+        ]
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_local_inventory(
@@ -389,7 +398,10 @@ class RemoteS3LogAccessExtractor:
 
         s3_urls = [url for date in unprocessed_dates for url in inventory[date]]
 
-        unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
+        s3_root_prefix = s3_root.rstrip("/") + "/"
+        unprocessed_s3_urls = [
+            url for url in s3_urls if url[len(s3_root_prefix) :] not in self.s3_url_processing_end_record
+        ]
         return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
@@ -456,7 +468,10 @@ class RemoteS3LogAccessExtractor:
                 [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
             )
 
-        unprocessed_s3_urls = list(set(s3_urls) - self.s3_url_processing_end_record)
+        s3_root_prefix = s3_root.rstrip("/") + "/"
+        unprocessed_s3_urls = [
+            url for url in s3_urls if url[len(s3_root_prefix) :] not in self.s3_url_processing_end_record
+        ]
         return unprocessed_s3_urls
 
     def _extract_s3_url(
@@ -464,6 +479,7 @@ class RemoteS3LogAccessExtractor:
         s3_url: str,
         enable_stop: bool = True,
         parallel_mode: bool = False,
+        s3_root: str | None = None,
     ) -> None:
         import fsspec
 
@@ -476,9 +492,12 @@ class RemoteS3LogAccessExtractor:
             extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
 
+        s3_root_prefix = s3_root.rstrip("/") + "/" if s3_root is not None else ""
+        record_key = s3_url[len(s3_root_prefix) :] if s3_root is not None else s3_url
+
         # Record the start of the extraction step
         with self.s3_url_processing_start_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{s3_url}\n")
+            file_stream.write(f"{record_key}\n")
 
         temporary_file_path = self.temporary_directory / s3_url.split("/")[-1]
         with fsspec.open(urlpath=s3_url, mode="rb") as file_stream:
@@ -488,7 +507,7 @@ class RemoteS3LogAccessExtractor:
 
         # Record final success and cleanup
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
-            file_stream.write(f"{s3_url}\n")
+            file_stream.write(f"{record_key}\n")
         temporary_file_path.unlink()
 
     def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
