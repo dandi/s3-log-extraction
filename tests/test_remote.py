@@ -6,6 +6,7 @@ remote-testing CI workflow, which supplies valid ``IPINFO_API_KEY`` and
 ``OPENCAGE_API_KEY`` environment variables.
 """
 
+import os
 import pathlib
 
 import pytest
@@ -31,6 +32,9 @@ def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     """
     test_ip = "4.4.4.4"
     test_index = 12345
+
+    ipinfo_api_key = os.environ.get("IPINFO_API_KEY", "")
+    assert ipinfo_api_key.strip(), "IPINFO_API_KEY environment variable must be set to a non-empty value"
 
     ip_cache_dir = tmp_path / "ips"
     ip_cache_dir.mkdir()
@@ -65,6 +69,12 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
         Pytest-provided temporary directory for test isolation.
     """
     region_code = "US/California"
+
+    ipinfo_api_key = os.environ.get("IPINFO_API_KEY", "")
+    assert ipinfo_api_key.strip(), "IPINFO_API_KEY environment variable must be set to a non-empty value"
+
+    opencage_api_key = os.environ.get("OPENCAGE_API_KEY", "")
+    assert opencage_api_key.strip(), "OPENCAGE_API_KEY environment variable must be set to a non-empty value"
 
     ip_cache_dir = tmp_path / "ips"
     ip_cache_dir.mkdir()
