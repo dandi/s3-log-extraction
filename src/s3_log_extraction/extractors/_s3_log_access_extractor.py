@@ -81,10 +81,13 @@ class S3LogAccessExtractor:
         directory = pathlib.Path(directory)
         max_workers = _handle_max_workers(workers=workers)
 
-        all_log_files = {
-            str(file_path.absolute()) for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
+        all_log_file_keys = {
+            str(file_path.relative_to(directory))
+            for file_path in natsort.natsorted(seq=directory.rglob(pattern="*-*-*-*-*-*-*"))
         }
-        unextracted_files = list(all_log_files - self.file_processing_end_record)
+        unextracted_keys = list(all_log_file_keys - self.file_processing_end_record)
+        # Resolve back to absolute paths for the actual extraction
+        unextracted_files = [str((directory / key).absolute()) for key in unextracted_keys]
 
         files_to_extract = unextracted_files[:limit] if limit is not None else unextracted_files
         random.shuffle(files_to_extract)
@@ -97,7 +100,7 @@ class S3LogAccessExtractor:
         }
         if max_workers == 1:
             for file_path in tqdm.tqdm(iterable=files_to_extract, **tqdm_style_kwargs):
-                self.extract_file(file_path=file_path)
+                self.extract_file(file_path=file_path, log_root=directory)
         else:
             batches = itertools.batched(iterable=files_to_extract, n=batch_size)
             number_of_batches = math.ceil(len(files_to_extract) / batch_size)
@@ -120,7 +123,13 @@ class S3LogAccessExtractor:
 
                     tqdm_style_kwargs["total"] = len(batch)
                     futures = [
-                        executor.submit(self.extract_file, file_path=file_path, enable_stop=False, parallel_mode=True)
+                        executor.submit(
+                            self.extract_file,
+                            file_path=file_path,
+                            enable_stop=False,
+                            parallel_mode=True,
+                            log_root=directory,
+                        )
                         for file_path in batch
                     ]
                     collections.deque(
@@ -159,7 +168,11 @@ class S3LogAccessExtractor:
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
     def extract_file(
-        self, file_path: str | pathlib.Path, enable_stop: bool = True, parallel_mode: bool = False
+        self,
+        file_path: str | pathlib.Path,
+        enable_stop: bool = True,
+        parallel_mode: bool = False,
+        log_root: pathlib.Path | None = None,
     ) -> None:
         if enable_stop is True and self.stop_file_path.exists() is True:
             return
@@ -171,19 +184,22 @@ class S3LogAccessExtractor:
             extraction_directory.mkdir(exist_ok=True)
 
         file_path = pathlib.Path(file_path)
-        absolute_file_path = str(file_path.absolute())
-        if absolute_file_path in self.file_processing_end_record:
+        if log_root is not None:
+            record_key = str(file_path.resolve().relative_to(log_root.resolve()))
+        else:
+            record_key = str(file_path.absolute())
+        if record_key in self.file_processing_end_record:
             return
 
         # Record the start of the mirror copy step
-        content = f"{absolute_file_path}\n"
+        content = f"{record_key}\n"
         with self.file_processing_start_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
         self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
 
         # Record final success and cleanup
-        self.file_processing_end_record.add(absolute_file_path)
+        self.file_processing_end_record.add(record_key)
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
 
