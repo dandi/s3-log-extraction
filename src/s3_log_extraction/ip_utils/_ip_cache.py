@@ -3,8 +3,8 @@ import typing
 
 import yaml
 
-from .._utils.encryption import decrypt_bytes, encrypt_bytes
 from ..config import get_ip_cache_directory
+from ..utils.encryption import decrypt_bytes, encrypt_bytes
 
 
 def load_index_to_ip(

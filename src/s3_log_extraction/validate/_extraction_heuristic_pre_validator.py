@@ -4,7 +4,7 @@ import subprocess
 
 from ._base_validator import BaseValidator
 from .._regex import DROGON_IP_REGEX_ENCRYPTED
-from .._utils.encryption import decrypt_bytes
+from ..utils.encryption import decrypt_bytes
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):

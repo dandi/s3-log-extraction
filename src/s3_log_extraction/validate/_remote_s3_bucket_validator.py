@@ -3,8 +3,8 @@ import random
 
 import tqdm
 
-from .._utils import _read_s3_urls_from_local_inventory
 from ..config import get_records_directory
+from ..utils import _read_s3_urls_from_local_inventory
 
 
 class RemoteS3BucketValidator:

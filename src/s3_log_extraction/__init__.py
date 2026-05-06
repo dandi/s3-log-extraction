@@ -16,6 +16,7 @@ __all__ = [
     "ip_utils",
     "summarize",
     "testing",
+    "utils",
     "validate",
 ]
 
