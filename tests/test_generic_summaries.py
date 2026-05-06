@@ -83,33 +83,36 @@ def test_generic_summaries(tmpdir: py.path.local):
 
 
 @pytest.mark.ai_generated
-def test_round_requester_count_below_unit():
-    """Values strictly below the rounding unit produce the ``<{unit}`` sentinel."""
+def test_round_requester_count_below_minimum():
+    """Counts strictly below ``minimum`` produce the ``"<{minimum}"`` sentinel."""
     from s3_log_extraction.summarize._generate_summaries import _round_requester_count
 
-    assert _round_requester_count(count=0) == "<10"
-    assert _round_requester_count(count=1) == "<10"
-    assert _round_requester_count(count=9) == "<10"
+    assert _round_requester_count(count=0, modulo=20, minimum=50) == "<50"
+    assert _round_requester_count(count=1, modulo=20, minimum=50) == "<50"
+    assert _round_requester_count(count=49, modulo=20, minimum=50) == "<50"
 
 
 @pytest.mark.ai_generated
-def test_round_requester_count_at_and_above_unit():
-    """Values at or above the rounding unit are rounded to the nearest multiple."""
+def test_round_requester_count_at_and_above_minimum():
+    """Counts at or above ``minimum`` are rounded to the nearest multiple of ``modulo``."""
     from s3_log_extraction.summarize._generate_summaries import _round_requester_count
 
-    assert _round_requester_count(count=10) == 10
-    assert _round_requester_count(count=14) == 10
-    assert _round_requester_count(count=15) == 20
-    assert _round_requester_count(count=100) == 100
-    assert _round_requester_count(count=123) == 120
+    assert _round_requester_count(count=50, modulo=20, minimum=50) == 40  # round(2.5)=2 (banker's rounding)
+    assert _round_requester_count(count=55, modulo=20, minimum=50) == 60  # round(2.75)=3
+    assert _round_requester_count(count=60, modulo=20, minimum=50) == 60
+    assert _round_requester_count(count=100, modulo=20, minimum=50) == 100
+    assert _round_requester_count(count=123, modulo=20, minimum=50) == 120
 
 
 @pytest.mark.ai_generated
-def test_round_requester_count_custom_unit():
-    """Custom ``unit`` values are respected for both the threshold and rounding."""
+def test_round_requester_count_custom_modulo_and_minimum():
+    """Custom ``modulo`` and ``minimum`` values are each respected independently."""
     from s3_log_extraction.summarize._generate_summaries import _round_requester_count
 
-    assert _round_requester_count(count=4, unit=5) == "<5"
-    assert _round_requester_count(count=5, unit=5) == 5
-    assert _round_requester_count(count=7, unit=5) == 5
-    assert _round_requester_count(count=8, unit=5) == 10
+    assert _round_requester_count(count=4, modulo=5, minimum=5) == "<5"
+    assert _round_requester_count(count=5, modulo=5, minimum=5) == 5
+    assert _round_requester_count(count=7, modulo=5, minimum=5) == 5
+    assert _round_requester_count(count=8, modulo=5, minimum=5) == 10
+    # minimum can differ from modulo
+    assert _round_requester_count(count=9, modulo=10, minimum=5) == 10
+    assert _round_requester_count(count=3, modulo=10, minimum=5) == "<5"

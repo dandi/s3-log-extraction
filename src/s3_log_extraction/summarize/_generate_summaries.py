@@ -9,30 +9,33 @@ from ..config import get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
-def _round_requester_count(count: int, unit: int = 10) -> str | int:
+def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     """
-    Round a unique requester count to the nearest aggregate unit for privacy protection.
+    Round a unique requester count for privacy protection.
 
-    If the count is less than the rounding unit, returns a string indicating the count
-    is below the minimum threshold (e.g., ``"<10"``). Otherwise, rounds to the nearest
-    multiple of ``unit``.
+    If the count is less than ``minimum``, returns a sentinel string indicating
+    the count is below the threshold (e.g., ``"<50"``).  Otherwise, rounds to
+    the nearest multiple of ``modulo``.
 
     Parameters
     ----------
     count : int
         The exact number of unique requesters to round.
-    unit : int, optional
-        The rounding unit and minimum threshold. Default is ``10``.
+    modulo : int
+        The granularity used for rounding (e.g., ``20`` rounds to the nearest 20).
+    minimum : int
+        The minimum disclosure threshold.  Counts below this value are reported
+        as ``"<{minimum}"`` to protect privacy.
 
     Returns
     -------
     str or int
-        A string of the form ``"<{unit}"`` if ``count < unit``, otherwise an integer
-        rounded to the nearest multiple of ``unit``.
+        A string of the form ``"<{minimum}"`` if ``count < minimum``, otherwise
+        an integer rounded to the nearest multiple of ``modulo``.
     """
-    if count < unit:
-        return f"<{unit}"
-    return round(count / unit) * unit
+    if count < minimum:
+        return f"<{minimum}"
+    return round(count / modulo) * modulo
 
 
 def _collect_unique_ip_indexes(asset_directories: list[pathlib.Path]) -> set[str]:
@@ -59,7 +62,11 @@ def _collect_unique_ip_indexes(asset_directories: list[pathlib.Path]) -> set[str
 
 
 def _summarize_dataset_requester_count(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path
+    *,
+    asset_directories: list[pathlib.Path],
+    summary_file_path: pathlib.Path,
+    modulo: int = 20,
+    minimum: int = 50,
 ) -> None:
     """
     Compute and save the privacy-rounded unique requester count for a dataset.
@@ -74,13 +81,18 @@ def _summarize_dataset_requester_count(
         Paths to the per-asset extraction directories containing ``indexed_ips.txt`` files.
     summary_file_path : pathlib.Path
         Destination file where the rounded count (as a string) will be written.
+    modulo : int, optional
+        Granularity for rounding.  Default is ``20``.
+    minimum : int, optional
+        Minimum disclosure threshold.  Counts below this are reported as ``"<{minimum}"``.
+        Default is ``50``.
     """
     unique_ip_indexes = _collect_unique_ip_indexes(asset_directories=asset_directories)
 
     if not unique_ip_indexes:
         return
 
-    rounded_count = _round_requester_count(count=len(unique_ip_indexes))
+    rounded_count = _round_requester_count(count=len(unique_ip_indexes), modulo=modulo, minimum=minimum)
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_file_path.write_text(str(rounded_count))
 
@@ -140,7 +152,7 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
     if all_archive_unique_ip_indexes:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
-        rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ip_indexes))
+        rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ip_indexes), modulo=20, minimum=50)
         (archive_directory / "requester_count.txt").write_text(str(rounded_archive_count))
 
 
