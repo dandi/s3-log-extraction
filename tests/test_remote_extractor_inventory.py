@@ -171,9 +171,10 @@ def test_get_unprocessed_s3_urls_from_local_inventory_skips_already_done_urls(tm
     """
     s3_root = "s3://my-bucket"
     source_bucket = "my-bucket"
-    already_done = "s3://my-bucket/2024/01/01/2024-01-01-00-00-00-AAAA"
+    # Record stores relative keys (path after s3_root prefix)
+    already_done_relative = "2024/01/01/2024-01-01-00-00-00-AAAA"
     extractor = _make_extractor(tmp_path)
-    extractor.s3_url_processing_end_record = {already_done}
+    extractor.s3_url_processing_end_record = {already_done_relative}
 
     keys = [
         "2024/01/01/2024-01-01-00-00-00-AAAA",
