@@ -3,7 +3,7 @@ import random
 
 import tqdm
 
-from .._inventory_utils import _read_s3_urls_from_local_inventory
+from .._utils import _read_s3_urls_from_local_inventory
 from ..config import get_records_directory
 
 

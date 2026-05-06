@@ -13,7 +13,7 @@ import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess
-from .._parallel._utils import _handle_max_workers
+from .._utils import _handle_max_workers
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 
 
