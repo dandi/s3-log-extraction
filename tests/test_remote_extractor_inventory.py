@@ -520,7 +520,7 @@ def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested_skip
 
 
 @pytest.mark.ai_generated
-def test_get_unprocessed_s3_urls_from_local_inventory_mixed_record_stores_only_filename(
+def test_local_inventory_filename_only_record(
     tmp_path: pathlib.Path,
 ) -> None:
     """
