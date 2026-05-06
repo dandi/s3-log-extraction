@@ -5,6 +5,36 @@ import json
 import pathlib
 
 
+def _extract_date_from_log_filename(filename: str) -> str | None:
+    """
+    Extract ``YYYY-MM-DD`` from a standard S3 server access log filename.
+
+    S3 access log files are named ``YYYY-MM-DD-HH-MM-SS-UniqueString``.
+    This function validates that the first three dash-separated components
+    look like a valid calendar date.
+
+    Parameters
+    ----------
+    filename : str
+        The file name component of an S3 object key (no directory separators).
+
+    Returns
+    -------
+    str or None
+        The date string ``"YYYY-MM-DD"`` when the filename matches the S3
+        access log naming convention, otherwise ``None``.
+    """
+    parts = filename.split("-")
+    if len(parts) < 3:
+        return None
+    year_str, month_str, day_str = parts[0], parts[1], parts[2]
+    if len(year_str) != 4 or len(month_str) != 2 or len(day_str) != 2:
+        return None
+    if not (year_str.isdigit() and month_str.isdigit() and day_str.isdigit()):
+        return None
+    return f"{year_str}-{month_str}-{day_str}"
+
+
 def _read_s3_urls_from_local_inventory(
     inventory_directory: pathlib.Path,
     s3_root: str,
@@ -17,6 +47,24 @@ def _read_s3_urls_from_local_inventory(
     every referenced ``data/*.csv.gz`` file.  Only keys whose full
     ``s3://`` URL starts with ``s3_root`` (trailing slash normalised) are
     included.
+
+    Dates are extracted from each matching key using two strategies, applied
+    in order:
+
+    1. **Path-based** — if the path relative to ``s3_root`` starts with
+       components that look like ``YYYY/MM/DD/…`` (each part is the expected
+       number of digits), the date is taken from those three components.
+    2. **Filename-based** — if path-based extraction fails (e.g. flat log
+       files stored directly in the bucket root, or logs nested under an
+       ``account-id/region/bucket/`` prefix before the date directories),
+       the date is extracted from the log filename itself.  S3 server access
+       log files use the naming convention
+       ``YYYY-MM-DD-HH-MM-SS-UniqueString``, so the date is always present
+       in the filename regardless of path depth.
+
+    This dual strategy means the function correctly handles buckets that have
+    a mix of flat-storage (legacy) and nested-storage (current) log files,
+    even when ``s3_root`` is set to the outer bucket root.
 
     The AWS S3 Inventory directory must follow the standard layout::
 
@@ -35,7 +83,8 @@ def _read_s3_urls_from_local_inventory(
         Root of the pre-downloaded S3 inventory tree.
     s3_root : str
         S3 prefix used to filter object keys
-        (e.g. ``"s3://my-logs-bucket/logs"``).
+        (e.g. ``"s3://my-logs-bucket/logs"`` or ``"s3://my-logs-bucket"``
+        for a bucket-root prefix that covers both flat and nested files).
 
     Returns
     -------
@@ -99,10 +148,34 @@ def _read_s3_urls_from_local_inventory(
                     continue
                 relative_path = s3_url[len(s3_root_prefix) :]
                 parts = relative_path.split("/")
-                if len(parts) < 4:
+
+                # Strategy 1: path-based date extraction for year/month/day/... structure.
+                # Validate that the first three components look like a calendar date so that
+                # deeply-nested paths (e.g. account-id/region/bucket/year/month/day/logfile)
+                # are not misidentified.
+                date = None
+                if len(parts) >= 4:
+                    year, month, day = parts[0], parts[1], parts[2]
+                    if (
+                        len(year) == 4
+                        and year.isdigit()
+                        and len(month) == 2
+                        and month.isdigit()
+                        and len(day) == 2
+                        and day.isdigit()
+                    ):
+                        date = f"{year}-{month}-{day}"
+
+                # Strategy 2: filename-based date extraction as a fallback.
+                # Handles flat files stored directly in the bucket root as well as
+                # files nested under a non-date prefix (e.g. account-id/region/bucket/).
+                # S3 server access log filenames always start with YYYY-MM-DD-HH-MM-SS-*.
+                if date is None:
+                    date = _extract_date_from_log_filename(parts[-1])
+
+                if date is None:
                     continue
-                year, month, day = parts[0], parts[1], parts[2]
-                date = f"{year}-{month}-{day}"
+
                 inventory[date].append(s3_url)
 
     return dict(inventory)

@@ -10,6 +10,31 @@ import unittest.mock
 import pytest
 
 from s3_log_extraction.extractors._remote_s3_log_access_extractor import RemoteS3LogAccessExtractor
+from s3_log_extraction.utils.inventory import _extract_date_from_log_filename
+
+# ---------------------------------------------------------------------------
+# Tests for _extract_date_from_log_filename
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.ai_generated
+def test_extract_date_from_log_filename_standard_format() -> None:
+    """A filename in the standard S3 access log format returns the correct date."""
+    assert _extract_date_from_log_filename("2024-01-05-00-00-00-ABCDEF1234567890") == "2024-01-05"
+
+
+@pytest.mark.ai_generated
+def test_extract_date_from_log_filename_returns_none_for_non_log_filename() -> None:
+    """A filename that does not start with YYYY-MM-DD returns None."""
+    assert _extract_date_from_log_filename("dandiarchive") is None
+    assert _extract_date_from_log_filename("file-A") is None
+    assert _extract_date_from_log_filename("us-east-2") is None
+
+
+@pytest.mark.ai_generated
+def test_extract_date_from_log_filename_returns_none_for_short_name() -> None:
+    """Filenames with fewer than three dash-separated components return None."""
+    assert _extract_date_from_log_filename("2024-01") is None
 
 
 def _make_extractor(tmp_path: pathlib.Path) -> RemoteS3LogAccessExtractor:
@@ -403,3 +428,92 @@ def test_get_unprocessed_s3_urls_from_remote_emits_performance_warning(tmp_path:
     ):
         with pytest.warns(UserWarning, match="Consider setting up AWS S3 Inventory"):
             extractor._get_unprocessed_s3_urls_from_remote(s3_root="s3://my-bucket")
+
+
+@pytest.mark.ai_generated
+def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested(
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    Buckets with a mix of flat (legacy) and deeply-nested log files are handled correctly.
+
+    A bucket may accumulate log files in two formats:
+
+    * **Flat** – files stored directly in the bucket root before nested logging
+      was enabled, e.g. ``2020-01-01-05-06-35-AAAA``.
+    * **Nested** – files stored under a deep ``account-id/region/bucket/year/month/day/``
+      prefix once nested delivery was turned on, e.g.
+      ``769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-00-00-00-BBBB``.
+
+    When ``s3_root`` is set to the bucket root (outer level), the inventory
+    function must return *all* matching files with correctly extracted dates so
+    that previously-processed dates can be skipped and the end-record filter
+    works properly.
+    """
+    extractor = _make_extractor(tmp_path)
+    source_bucket = "dandiarchive-logs"
+    s3_root = f"s3://{source_bucket}"
+
+    # Flat files – stored directly at the bucket root; date lives in the filename.
+    flat_keys = [
+        "2020-01-01-05-06-35-0000000000000001",
+        "2020-01-01-10-30-00-0000000000000002",
+        "2020-01-02-00-00-00-0000000000000003",
+    ]
+    # Nested files – stored under account-id/region/bucket/year/month/day/;
+    # date is available both in the path and in the filename itself.
+    nested_keys = [
+        "769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-00-00-00-AAAA",
+        "769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-01-00-00-BBBB",
+        "769362853226/us-east-2/dandiarchive/2026/01/06/2026-01-06-00-00-00-CCCC",
+    ]
+    all_keys = flat_keys + nested_keys
+
+    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=all_keys)
+
+    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
+        inventory_directory=inventory_dir,
+        s3_root=s3_root,
+    )
+
+    expected = {f"s3://{source_bucket}/{k}" for k in all_keys}
+    assert set(result) == expected
+
+
+@pytest.mark.ai_generated
+def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested_skips_processed_dates(
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    Processed dates are correctly filtered from both flat and nested log files.
+
+    When ``processed_dates`` contains a date that appears in flat *and* nested
+    log files, all files for that date must be excluded from the result,
+    regardless of how the date was stored (in the filename or in the path).
+    """
+    extractor = _make_extractor(tmp_path)
+    extractor.processed_dates = {"2020-01-01", "2026-01-05"}
+
+    source_bucket = "dandiarchive-logs"
+    s3_root = f"s3://{source_bucket}"
+
+    flat_keys = [
+        "2020-01-01-05-06-35-0000000000000001",  # processed → excluded
+        "2020-01-02-00-00-00-0000000000000002",  # NOT processed → included
+    ]
+    nested_keys = [
+        "769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-00-00-00-AAAA",  # processed → excluded
+        "769362853226/us-east-2/dandiarchive/2026/01/06/2026-01-06-00-00-00-BBBB",  # NOT processed → included
+    ]
+    all_keys = flat_keys + nested_keys
+    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=all_keys)
+
+    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
+        inventory_directory=inventory_dir,
+        s3_root=s3_root,
+    )
+
+    assert set(result) == {
+        f"s3://{source_bucket}/2020-01-02-00-00-00-0000000000000002",
+        f"s3://{source_bucket}/769362853226/us-east-2/dandiarchive/2026/01/06/2026-01-06-00-00-00-BBBB",
+    }
