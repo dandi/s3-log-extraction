@@ -49,7 +49,7 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     relative_expected_files = {
         file.relative_to(expected_output_directory)
         for file in expected_output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem
+        if "indexed_ips" not in file.stem and "summaries" not in file.parts
     }
     assert relative_output_files == relative_expected_files
 

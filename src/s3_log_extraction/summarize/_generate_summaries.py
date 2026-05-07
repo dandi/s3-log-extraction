@@ -9,6 +9,94 @@ from ..config import get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 
 
+def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
+    """
+    Round a unique requester count for privacy protection.
+
+    If the count is less than ``minimum``, returns a sentinel string indicating
+    the count is below the threshold (e.g., ``"<50"``).  Otherwise, rounds to
+    the nearest multiple of ``modulo``.
+
+    Parameters
+    ----------
+    count : int
+        The exact number of unique requesters to round.
+    modulo : int
+        The granularity used for rounding (e.g., ``20`` rounds to the nearest 20).
+    minimum : int
+        The minimum disclosure threshold.  Counts below this value are reported
+        as ``"<{minimum}"`` to protect privacy.
+
+    Returns
+    -------
+    str or int
+        A string of the form ``"<{minimum}"`` if ``count < minimum``, otherwise
+        an integer rounded to the nearest multiple of ``modulo``.
+    """
+    if count < minimum:
+        return f"<{minimum}"
+    return round(count / modulo) * modulo
+
+
+def _collect_unique_ip_indexes(asset_directories: list[pathlib.Path]) -> set[str]:
+    """
+    Collect all unique IP indexes across the given asset directories.
+
+    Parameters
+    ----------
+    asset_directories : list of pathlib.Path
+        Paths to per-asset extraction directories containing ``indexed_ips.txt`` files.
+
+    Returns
+    -------
+    set of str
+        The set of unique IP index strings found across all ``indexed_ips.txt`` files.
+    """
+    unique_ip_indexes: set[str] = set()
+    for asset_directory in asset_directories:
+        indexed_ips_file_path = asset_directory / "indexed_ips.txt"
+        if not indexed_ips_file_path.exists():
+            continue
+        unique_ip_indexes.update(ip.strip() for ip in indexed_ips_file_path.read_text().splitlines())
+    return unique_ip_indexes
+
+
+def _summarize_dataset_requester_count(
+    *,
+    asset_directories: list[pathlib.Path],
+    summary_file_path: pathlib.Path,
+    modulo: int = 20,
+    minimum: int = 50,
+) -> None:
+    """
+    Compute and save the privacy-rounded unique requester count for a dataset.
+
+    Reads all ``indexed_ips.txt`` files from the given asset directories, counts the
+    number of unique IP indexes across the entire dataset, rounds the result via
+    :func:`_round_requester_count`, and writes the value to ``summary_file_path``.
+
+    Parameters
+    ----------
+    asset_directories : list of pathlib.Path
+        Paths to the per-asset extraction directories containing ``indexed_ips.txt`` files.
+    summary_file_path : pathlib.Path
+        Destination file where the rounded count (as a string) will be written.
+    modulo : int, optional
+        Granularity for rounding.  Default is ``20``.
+    minimum : int, optional
+        Minimum disclosure threshold.  Counts below this are reported as ``"<{minimum}"``.
+        Default is ``50``.
+    """
+    unique_ip_indexes = _collect_unique_ip_indexes(asset_directories=asset_directories)
+
+    if not unique_ip_indexes:
+        return
+
+    rounded_count = _round_requester_count(count=len(unique_ip_indexes), modulo=modulo, minimum=minimum)
+    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_file_path.write_text(str(rounded_count))
+
+
 def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | None = None) -> None:
     """
     Generate summaries for each dataset in the extraction directory.
@@ -39,6 +127,7 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
     index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
 
     datasets = [item for item in extraction_directory.iterdir() if item.is_dir()]
+    all_archive_unique_ip_indexes: set[str] = set()
     for dataset in tqdm.tqdm(
         iterable=datasets,
         total=len(datasets),
@@ -58,6 +147,13 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
             summary_directory=summary_directory,
             index_to_region=index_to_region,
         )
+
+        all_archive_unique_ip_indexes.update(_collect_unique_ip_indexes(asset_directories=asset_directories))
+    if all_archive_unique_ip_indexes:
+        archive_directory = summary_directory / "archive"
+        archive_directory.mkdir(exist_ok=True)
+        rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ip_indexes), modulo=20, minimum=50)
+        (archive_directory / "requester_count.tsv").write_text(str(rounded_archive_count))
 
 
 def _summarize_dataset(
@@ -79,6 +175,10 @@ def _summarize_dataset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
         index_to_region=index_to_region,
+    )
+    _summarize_dataset_requester_count(
+        asset_directories=asset_directories,
+        summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
     )
 
 

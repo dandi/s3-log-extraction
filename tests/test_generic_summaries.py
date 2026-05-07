@@ -1,8 +1,10 @@
+import json
 import pathlib
 import shutil
 
 import pandas
 import py
+import pytest
 
 import s3_log_extraction
 
@@ -46,3 +48,66 @@ def test_generic_summaries(tmpdir: py.path.local):
                 f"{str(exception)}\n\n"
             )
             raise AssertionError(message)
+
+    # Verify requester_count.tsv files
+    test_tsv_paths = {
+        path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="requester_count.tsv")
+    }
+    expected_tsv_paths = {
+        path.relative_to(expected_summaries_dir): path
+        for path in expected_summaries_dir.rglob(pattern="requester_count.tsv")
+    }
+    assert set(test_tsv_paths.keys()) == set(expected_tsv_paths.keys())
+
+    for relative_path, expected_txt_path in expected_tsv_paths.items():
+        test_txt_path = test_summary_dir / relative_path
+        assert test_txt_path.read_text().strip() == expected_txt_path.read_text().strip(), (
+            f"\n\nMismatch in {relative_path}:\n"
+            f"  test:     {test_txt_path.read_text().strip()!r}\n"
+            f"  expected: {expected_txt_path.read_text().strip()!r}\n"
+        )
+
+    # Verify totals.json
+    test_totals = json.loads((test_summary_dir / "totals.json").read_text())
+    expected_totals = json.loads((expected_summaries_dir / "totals.json").read_text())
+    assert (
+        test_totals == expected_totals
+    ), f"\n\ntotals.json mismatch:\n  test:     {test_totals}\n  expected: {expected_totals}\n"
+
+    # Verify archive_totals.json
+    test_archive_totals = json.loads((test_summary_dir / "archive_totals.json").read_text())
+    expected_archive_totals = json.loads((expected_summaries_dir / "archive_totals.json").read_text())
+    assert (
+        test_archive_totals == expected_archive_totals
+    ), f"\n\narchive_totals.json mismatch:\n  test:     {test_archive_totals}\n  expected: {expected_archive_totals}\n"
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("count", "modulo", "minimum", "expected"),
+    [
+        # Below minimum → sentinel string
+        (0, 20, 50, "<50"),
+        (1, 20, 50, "<50"),
+        (49, 20, 50, "<50"),
+        # At or above minimum → rounded to nearest multiple of modulo
+        (50, 20, 50, 40),  # round(2.5)=2 (banker's rounding)
+        (55, 20, 50, 60),  # round(2.75)=3
+        (60, 20, 50, 60),
+        (100, 20, 50, 100),
+        (123, 20, 50, 120),
+        # Custom modulo and minimum
+        (4, 5, 5, "<5"),
+        (5, 5, 5, 5),
+        (7, 5, 5, 5),
+        (8, 5, 5, 10),
+        # minimum can differ from modulo
+        (9, 10, 5, 10),
+        (3, 10, 5, "<5"),
+    ],
+)
+def test_round_requester_count(count: int, modulo: int, minimum: int, expected: str | int):
+    """Privacy-rounding returns the sentinel below minimum and rounds to the nearest modulo otherwise."""
+    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
+
+    assert _round_requester_count(count=count, modulo=modulo, minimum=minimum) == expected
