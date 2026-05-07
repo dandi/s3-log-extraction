@@ -82,7 +82,7 @@ s3logextraction extract <log directory>
 To override the cache directory for a single extraction run (without changing global config):
 
 ```bash
-s3logextraction extract <log directory> --cache-directory <cache directory>
+s3logextraction extract <log directory> --cache <cache directory>
 ```
 
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:

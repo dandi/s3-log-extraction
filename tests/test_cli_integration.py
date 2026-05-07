@@ -35,7 +35,7 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     # Run extraction via CLI
     result = runner.invoke(
         _s3logextraction_cli,
-        ["extract", str(test_logs_directory), "--workers", str(workers), "--cache-directory", str(output_directory)],
+        ["extract", str(test_logs_directory), "--workers", str(workers), "--cache", str(output_directory)],
     )
     assert result.exit_code == 0, f"Extraction failed: {result.output}"
 

@@ -58,7 +58,8 @@ def _s3logextraction_cli():
     default=-2,
 )
 @rich_click.option(
-    "--cache-directory",
+    "--cache",
+    "cache_directory",
     help=(
         "Use a non-default cache directory for this extraction run only. "
         "This overrides the configured cache directory without modifying saved config."
@@ -122,11 +123,11 @@ def _extract_cli(
 
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
-    cache_directory_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
 
     match mode:
         case "remote":
-            extractor = RemoteS3LogAccessExtractor(cache_directory=cache_directory_path)
+            extractor = RemoteS3LogAccessExtractor(cache_directory=cache_path)
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -135,7 +136,7 @@ def _extract_cli(
                 inventory_directory=inventory_directory,
             )
         case _:
-            extractor = S3LogAccessExtractor(cache_directory=cache_directory_path)
+            extractor = S3LogAccessExtractor(cache_directory=cache_path)
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
