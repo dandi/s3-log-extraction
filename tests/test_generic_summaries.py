@@ -50,16 +50,16 @@ def test_generic_summaries(tmpdir: py.path.local):
             raise AssertionError(message)
 
     # Verify requester_count.tsv files
-    test_txt_paths = {
+    test_tsv_paths = {
         path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="requester_count.tsv")
     }
-    expected_txt_paths = {
+    expected_tsv_paths = {
         path.relative_to(expected_summaries_dir): path
         for path in expected_summaries_dir.rglob(pattern="requester_count.tsv")
     }
-    assert set(test_txt_paths.keys()) == set(expected_txt_paths.keys())
+    assert set(test_tsv_paths.keys()) == set(expected_tsv_paths.keys())
 
-    for relative_path, expected_txt_path in expected_txt_paths.items():
+    for relative_path, expected_txt_path in expected_tsv_paths.items():
         test_txt_path = test_summary_dir / relative_path
         assert test_txt_path.read_text().strip() == expected_txt_path.read_text().strip(), (
             f"\n\nMismatch in {relative_path}:\n"
