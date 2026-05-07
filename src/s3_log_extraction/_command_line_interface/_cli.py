@@ -1,6 +1,7 @@
 """Command line interface definitions for the S3 log extraction tool."""
 
 import os
+import pathlib
 import typing
 
 import pydantic
@@ -57,6 +58,16 @@ def _s3logextraction_cli():
     default=-2,
 )
 @rich_click.option(
+    "--cache-directory",
+    help=(
+        "Use a non-default cache directory for this extraction run only. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+@rich_click.option(
     "--mode",
     help=(
         "Special parsing mode related to expected object key structure; "
@@ -98,6 +109,7 @@ def _extract_cli(
     directory: str,
     limit: int | None = None,
     workers: int = -2,
+    cache_directory: str | None = None,
     mode: typing.Literal["remote"] | None = None,
     manifest_file_path: str | None = None,
     inventory_directory: str | None = None,
@@ -110,9 +122,11 @@ def _extract_cli(
 
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
+    extraction_cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else None
+
     match mode:
         case "remote":
-            extractor = RemoteS3LogAccessExtractor()
+            extractor = RemoteS3LogAccessExtractor(cache_directory=extraction_cache_directory)
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -121,7 +135,7 @@ def _extract_cli(
                 inventory_directory=inventory_directory,
             )
         case _:
-            extractor = S3LogAccessExtractor()
+            extractor = S3LogAccessExtractor(cache_directory=extraction_cache_directory)
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
