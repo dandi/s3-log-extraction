@@ -122,11 +122,11 @@ def _extract_cli(
 
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
-    extraction_cache_directory = pathlib.Path(cache_directory) if cache_directory is not None else None
+    cache_directory_path = pathlib.Path(cache_directory) if cache_directory is not None else None
 
     match mode:
         case "remote":
-            extractor = RemoteS3LogAccessExtractor(cache_directory=extraction_cache_directory)
+            extractor = RemoteS3LogAccessExtractor(cache_directory=cache_directory_path)
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -135,7 +135,7 @@ def _extract_cli(
                 inventory_directory=inventory_directory,
             )
         case _:
-            extractor = S3LogAccessExtractor(cache_directory=extraction_cache_directory)
+            extractor = S3LogAccessExtractor(cache_directory=cache_directory_path)
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
