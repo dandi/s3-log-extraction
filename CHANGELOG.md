@@ -2,6 +2,10 @@
 
 # Upcoming
 
+
+
+# v1.9.2
+
 Added `number_of_requesters` field to `totals.json` (per dandiset) and `archive_totals.json` (archive-wide).
 This reports the number of unique requester IP addresses per dandiset and for the entire archive.
 To protect privacy, the count is rounded to the nearest 10 and a `"<10"` sentinel is used for counts
