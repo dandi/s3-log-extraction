@@ -21,6 +21,7 @@ from ..summarize import (
     generate_summaries,
 )
 from ..testing import generate_benchmark
+from ..utils import get_log_bucket_stats
 from ..validate import (
     DownloadsLogicPreValidator,
     ExtractionHeuristicPreValidator,
@@ -374,3 +375,35 @@ def _validate_cli(
         case "timestamps_parsing":
             validator = TimestampsParsingPreValidator()
             validator.validate_directory(directory=directory)
+
+
+# s3logextraction stats --inventory <path>
+@_s3logextraction_cli.command(name="stats")
+@rich_click.option(
+    "--inventory",
+    "inventory_directory",
+    help=(
+        "Path to a local pre-downloaded AWS S3 Inventory directory. "
+        "The directory must contain a 'hive/' sub-folder with Hive-partitioned symlink files "
+        "(e.g. hive/dt=YYYY-MM-DD-HH-MM/symlink.txt), a 'data/' sub-folder with the "
+        "gzip-compressed CSV inventory files, and timestamped manifest directories "
+        "(e.g. 2026-05-03T01-00Z/manifest.json)."
+    ),
+    required=True,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+)
+def _stats_cli(inventory_directory: str) -> None:
+    """
+    Report the number of log files and total size recorded in the inventory.
+
+    Reads a local pre-downloaded AWS S3 Inventory directory and prints the
+    file count and total size in bytes for all objects in the inventory.
+    """
+    stats = get_log_bucket_stats(
+        inventory_directory=pathlib.Path(inventory_directory),
+    )
+    rich_click.echo(f"File count      : {stats['file_count']}")
+    if stats["total_size_bytes"] is not None:
+        rich_click.echo(f"Total size (B)  : {stats['total_size_bytes']}")
+    else:
+        rich_click.echo("Total size (B)  : N/A (Size column not present in inventory)")
