@@ -7,12 +7,12 @@ import typing
 
 
 class LogBucketStats(typing.TypedDict):
-    """Statistics for a log bucket prefix derived from a local S3 Inventory.
+    """Statistics for all objects in a local S3 Inventory.
 
     Attributes
     ----------
     file_count : int
-        Number of object keys matching the given S3 prefix.
+        Total number of object keys recorded in the inventory.
     total_size_bytes : int or None
         Sum of object sizes in bytes, or ``None`` if the inventory does not
         include a ``Size`` column.
@@ -227,16 +227,13 @@ def _read_s3_urls_from_local_inventory(
 
 def get_log_bucket_stats(
     inventory_directory: pathlib.Path,
-    s3_root: str | None = None,
 ) -> LogBucketStats:
     """
-    Return the file count and total size for objects under ``s3_root``.
+    Return the file count and total size for all objects in the inventory.
 
     Reads the most recent hive partition of a local AWS S3 Inventory
     directory, follows the ``symlink.txt`` references, and accumulates
-    statistics for every object key whose full ``s3://`` URL starts with
-    ``s3_root``.  When ``s3_root`` is ``None`` the source bucket recorded
-    in ``manifest.json`` is used, so statistics cover the entire bucket.
+    statistics for every object key recorded in the inventory CSV files.
 
     The AWS S3 Inventory directory must follow the standard layout::
 
@@ -253,11 +250,6 @@ def get_log_bucket_stats(
     ----------
     inventory_directory : pathlib.Path
         Root of the pre-downloaded S3 inventory tree.
-    s3_root : str, optional
-        S3 prefix used to filter object keys
-        (e.g. ``"s3://my-logs-bucket/logs"``).  When omitted, the source
-        bucket is read from ``manifest.json`` and all keys in the inventory
-        are counted.
 
     Returns
     -------
@@ -265,7 +257,7 @@ def get_log_bucket_stats(
         A typed dict with:
 
         ``file_count`` : int
-            Number of object keys under ``s3_root``.
+            Total number of object keys in the inventory.
         ``total_size_bytes`` : int or None
             Sum of object sizes in bytes, or ``None`` when the inventory
             does not include a ``Size`` column.
@@ -278,7 +270,7 @@ def get_log_bucket_stats(
         If the ``Key`` column is absent from the inventory schema.
     """
     inventory_directory = pathlib.Path(inventory_directory)
-    source_bucket, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
+    _, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
 
     if "Key" not in file_schema:
         message = f"'Key' column not found in inventory schema: {file_schema}"
@@ -288,8 +280,6 @@ def get_log_bucket_stats(
 
     symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
 
-    effective_root = s3_root if s3_root is not None else f"s3://{source_bucket}"
-    s3_root_prefix = effective_root.rstrip("/") + "/"
     file_count = 0
     total_size_bytes: int | None = 0 if size_index is not None else None
 
@@ -300,10 +290,6 @@ def get_log_bucket_stats(
             reader = csv.reader(gz_file)
             for row in reader:
                 if len(row) <= key_index:
-                    continue
-                key = row[key_index]
-                s3_url = f"s3://{source_bucket}/{key}"
-                if not s3_url.startswith(s3_root_prefix):
                     continue
                 file_count += 1
                 if size_index is not None and len(row) > size_index:

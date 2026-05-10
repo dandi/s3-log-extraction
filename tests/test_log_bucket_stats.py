@@ -99,11 +99,8 @@ _API_PARAMS = [
         [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
             (SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
-            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-CCCC", 300),
-            # Key outside s3_root — must be excluded.
-            (SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 999),
+            (SOURCE_BUCKET, "other/2024-01-02-00-00-00-CCCC", 300),
         ],
-        "s3://my-bucket/logs",
         3,
         600,
         id="with_size_column",
@@ -114,7 +111,6 @@ _API_PARAMS = [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
             (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
         ],
-        "s3://my-bucket/logs",
         2,
         None,
         id="without_size_column",
@@ -124,19 +120,18 @@ _API_PARAMS = [
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("file_schema", "rows", "s3_root", "expected_count", "expected_size"),
+    ("file_schema", "rows", "expected_count", "expected_size"),
     _API_PARAMS,
 )
-def test_get_log_bucket_stats_with_prefix(
+def test_get_log_bucket_stats(
     tmp_path: pathlib.Path,
     file_schema: str,
     rows: list[tuple],
-    s3_root: str,
     expected_count: int,
     expected_size: int | None,
 ) -> None:
     """
-    File count and total size are correctly computed for a filtered prefix.
+    All inventory keys are counted regardless of their path prefix.
 
     Covers the ``Size`` column present and absent cases.  Also validates that
     the return value is a ``LogBucketStats`` typed dict with the expected keys.
@@ -148,7 +143,7 @@ def test_get_log_bucket_stats_with_prefix(
         file_schema=file_schema,
     )
 
-    stats = get_log_bucket_stats(inventory_directory=inventory_dir, s3_root=s3_root)
+    stats = get_log_bucket_stats(inventory_directory=inventory_dir)
 
     assert stats["file_count"] == expected_count
     assert stats["total_size_bytes"] == expected_size
@@ -156,48 +151,6 @@ def test_get_log_bucket_stats_with_prefix(
     assert isinstance(stats, dict)
     assert "file_count" in stats
     assert "total_size_bytes" in stats
-
-
-@pytest.mark.ai_generated
-def test_get_log_bucket_stats_empty_prefix(tmp_path: pathlib.Path) -> None:
-    """
-    No files match a prefix that doesn't exist in the inventory; count is 0.
-    """
-    rows = [(SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50)]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=SOURCE_BUCKET,
-        rows=rows,
-        file_schema="Bucket, Key, Size",
-    )
-
-    stats = get_log_bucket_stats(inventory_directory=inventory_dir, s3_root="s3://my-bucket/no-match")
-
-    assert stats["file_count"] == 0
-    assert stats["total_size_bytes"] == 0
-
-
-@pytest.mark.ai_generated
-def test_get_log_bucket_stats_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) -> None:
-    """
-    When s3_root is omitted, all keys in the inventory are counted (whole-bucket default).
-    The source bucket is derived from manifest.json so no explicit prefix is required.
-    """
-    rows = [
-        (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
-        (SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 200),
-    ]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=SOURCE_BUCKET,
-        rows=rows,
-        file_schema="Bucket, Key, Size",
-    )
-
-    stats = get_log_bucket_stats(inventory_directory=inventory_dir)
-
-    assert stats["file_count"] == 2
-    assert stats["total_size_bytes"] == 300
 
 
 # ---------------------------------------------------------------------------
@@ -209,9 +162,8 @@ _CLI_PARAMS = [
         "Bucket, Key, Size",
         [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
-            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB", 400),
+            (SOURCE_BUCKET, "other/2024-01-02-00-00-00-BBBB", 400),
         ],
-        ["--prefix", "s3://my-bucket/logs"],
         ["File count", "Total size", "2", "500"],
         id="with_size_column",
     ),
@@ -220,9 +172,8 @@ _CLI_PARAMS = [
         [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
             (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
-            (SOURCE_BUCKET, "logs/2024-01-03-00-00-00-CCCC"),
+            (SOURCE_BUCKET, "other/2024-01-03-00-00-00-CCCC"),
         ],
-        ["--prefix", "s3://my-bucket/logs"],
         ["File count", "3", "N/A"],
         id="without_size_column",
     ),
@@ -231,18 +182,17 @@ _CLI_PARAMS = [
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("file_schema", "rows", "extra_args", "expected_in_output"),
+    ("file_schema", "rows", "expected_in_output"),
     _CLI_PARAMS,
 )
 def test_stats_cli(
     tmp_path: pathlib.Path,
     file_schema: str,
     rows: list[tuple],
-    extra_args: list[str],
     expected_in_output: list[str],
 ) -> None:
     """
-    The 'stats' CLI command produces the expected output for each schema variant.
+    The 'stats' CLI command counts all inventory keys and produces the expected output.
 
     Covers the ``Size`` column present and absent cases, and validates that the
     ``File count`` and ``Total size`` labels always appear.
@@ -257,36 +207,9 @@ def test_stats_cli(
     runner = CliRunner()
     result = runner.invoke(
         _s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir), *extra_args],
+        ["stats", "--inventory", str(inventory_dir)],
     )
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     for expected in expected_in_output:
         assert expected in result.output
-
-
-@pytest.mark.ai_generated
-def test_stats_cli_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) -> None:
-    """
-    When --prefix is omitted the CLI reports stats for every key in the inventory.
-    """
-    rows = [
-        (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50),
-        (SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 50),
-    ]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=SOURCE_BUCKET,
-        rows=rows,
-        file_schema="Bucket, Key, Size",
-    )
-
-    runner = CliRunner()
-    result = runner.invoke(
-        _s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir)],
-    )
-
-    assert result.exit_code == 0, f"CLI failed: {result.output}"
-    assert "2" in result.output
-    assert "100" in result.output
