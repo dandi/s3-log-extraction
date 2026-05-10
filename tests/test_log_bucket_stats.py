@@ -117,6 +117,7 @@ def test_get_log_bucket_stats_with_size_column(tmp_path: pathlib.Path) -> None:
 
     assert stats["file_count"] == 3
     assert stats["total_size_bytes"] == 600
+    # The 'other/...' key (size 999) must not be counted since it is outside s3_root.
 
 
 @pytest.mark.ai_generated
