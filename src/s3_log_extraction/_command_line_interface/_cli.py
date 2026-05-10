@@ -37,6 +37,10 @@ def _s3logextraction_cli():
     pass
 
 
+# Public alias for downstream consumers (e.g., plugin injection wrappers).
+s3logextraction_cli = _s3logextraction_cli
+
+
 # s3logextraction extract < directory >
 @_s3logextraction_cli.command(name="extract")
 @rich_click.argument("directory", type=rich_click.Path(writable=False))

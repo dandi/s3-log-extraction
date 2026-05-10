@@ -7,10 +7,12 @@ Extraction of minimal information from consolidated raw S3 logs for public shari
 
 from . import utils
 from .config import reset_extraction
+from ._command_line_interface._cli import s3logextraction_cli
 
 __all__ = [
     # Public methods
     "reset_extraction",
+    "s3logextraction_cli",
     # Public submodules
     "config",
     "extractors",
