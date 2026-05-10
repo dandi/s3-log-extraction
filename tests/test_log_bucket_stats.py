@@ -9,7 +9,7 @@ import pathlib
 import pytest
 from click.testing import CliRunner
 
-from s3_log_extraction._command_line_interface._cli import _s3logextraction_cli
+from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
 from s3_log_extraction.utils.inventory import get_log_bucket_stats
 
 
@@ -208,7 +208,7 @@ def test_stats_cli(
 
     runner = CliRunner()
     result = runner.invoke(
-        _s3logextraction_cli,
+        s3logextraction_cli,
         ["stats", "--inventory", str(inventory_dir)],
     )
 

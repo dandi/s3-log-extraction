@@ -33,16 +33,12 @@ from ..validate import (
 
 # s3logextraction
 @rich_click.group()
-def _s3logextraction_cli():
+def s3logextraction_cli():
     pass
 
 
-# Public alias for downstream consumers (e.g., plugin injection wrappers).
-s3logextraction_cli = _s3logextraction_cli
-
-
 # s3logextraction extract < directory >
-@_s3logextraction_cli.command(name="extract")
+@s3logextraction_cli.command(name="extract")
 @rich_click.argument("directory", type=rich_click.Path(writable=False))
 @rich_click.option(
     "--limit",
@@ -146,7 +142,7 @@ def _extract_cli(
 
 
 # s3logextraction stop
-@_s3logextraction_cli.command(name="stop")
+@s3logextraction_cli.command(name="stop")
 @rich_click.option(
     "--timeout",
     "max_timeout_in_seconds",
@@ -170,7 +166,7 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
 
 
 # s3logextraction config
-@_s3logextraction_cli.group(name="config")
+@s3logextraction_cli.group(name="config")
 def _config_cli() -> None:
     """Configuration options, such as cache management."""
     pass
@@ -200,7 +196,7 @@ def _set_cache_cli(directory: str) -> None:
 
 
 # s3logextraction reset
-@_s3logextraction_cli.group(name="reset")
+@s3logextraction_cli.group(name="reset")
 def _reset_cli() -> None:
     pass
 
@@ -212,7 +208,7 @@ def _reset_extraction_cli() -> None:
 
 
 # s3logextraction update
-@_s3logextraction_cli.group(name="update")
+@s3logextraction_cli.group(name="update")
 def _update_cli() -> None:
     pass
 
@@ -322,7 +318,7 @@ def _update_totals_cli(mode: typing.Literal["archive"] | None = None) -> None:
 
 
 # s3logextraction testing
-@_s3logextraction_cli.group(name="testing")
+@s3logextraction_cli.group(name="testing")
 def _testing_cli() -> None:
     """Testing utilities for the S3 log extraction."""
     pass
@@ -348,7 +344,7 @@ def _generate_benchmark_cli(directory: str) -> None:
 
 
 # s3logextraction validate < protocol > < directory >
-@_s3logextraction_cli.command(name="validate")
+@s3logextraction_cli.command(name="validate")
 @rich_click.argument(
     "protocol",
     type=rich_click.Choice(
@@ -382,7 +378,7 @@ def _validate_cli(
 
 
 # s3logextraction stats --inventory <path>
-@_s3logextraction_cli.command(name="stats")
+@s3logextraction_cli.command(name="stats")
 @rich_click.option(
     "--inventory",
     "inventory_directory",
