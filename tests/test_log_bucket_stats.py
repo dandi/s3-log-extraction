@@ -91,57 +91,71 @@ def _build_inventory_directory(
 # API helper tests
 # ---------------------------------------------------------------------------
 
+_SOURCE_BUCKET = "my-bucket"
+
+_API_PARAMS = [
+    pytest.param(
+        "Bucket, Key, Size",
+        [
+            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (_SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
+            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-CCCC", 300),
+            # Key outside s3_root — must be excluded.
+            (_SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 999),
+        ],
+        "s3://my-bucket/logs",
+        3,
+        600,
+        id="with_size_column",
+    ),
+    pytest.param(
+        "Bucket, Key",
+        [
+            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
+            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
+        ],
+        "s3://my-bucket/logs",
+        2,
+        None,
+        id="without_size_column",
+    ),
+]
+
 
 @pytest.mark.ai_generated
-def test_get_log_bucket_stats_with_size_column(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize(
+    ("file_schema", "rows", "s3_root", "expected_count", "expected_size"),
+    _API_PARAMS,
+)
+def test_get_log_bucket_stats_with_prefix(
+    tmp_path: pathlib.Path,
+    file_schema: str,
+    rows: list[tuple],
+    s3_root: str,
+    expected_count: int,
+    expected_size: int | None,
+) -> None:
     """
-    File count and total size are correctly computed when a Size column is present.
+    File count and total size are correctly computed for a filtered prefix.
+
+    Covers the ``Size`` column present and absent cases.  Also validates that
+    the return value is a ``LogBucketStats`` typed dict with the expected keys.
     """
-    source_bucket = "my-bucket"
-    s3_root = "s3://my-bucket/logs"
-    rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 100),
-        (source_bucket, "logs/2024-01-01-00-05-00-BBBB", 200),
-        (source_bucket, "logs/2024-01-02-00-00-00-CCCC", 300),
-        # This key is outside s3_root and should be ignored.
-        (source_bucket, "other/2024-01-01-00-00-00-XXXX", 999),
-    ]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=source_bucket,
+        source_bucket=_SOURCE_BUCKET,
         rows=rows,
-        file_schema="Bucket, Key, Size",
+        file_schema=file_schema,
     )
 
     stats = get_log_bucket_stats(inventory_directory=inventory_dir, s3_root=s3_root)
 
-    assert stats["file_count"] == 3
-    assert stats["total_size_bytes"] == 600
-    # The 'other/...' key (size 999) must not be counted since it is outside s3_root.
-
-
-@pytest.mark.ai_generated
-def test_get_log_bucket_stats_without_size_column(tmp_path: pathlib.Path) -> None:
-    """
-    File count is reported and total_size_bytes is None when Size is absent.
-    """
-    source_bucket = "my-bucket"
-    s3_root = "s3://my-bucket/logs"
-    rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA"),
-        (source_bucket, "logs/2024-01-02-00-00-00-BBBB"),
-    ]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=source_bucket,
-        rows=rows,
-        file_schema="Bucket, Key",
-    )
-
-    stats = get_log_bucket_stats(inventory_directory=inventory_dir, s3_root=s3_root)
-
-    assert stats["file_count"] == 2
-    assert stats["total_size_bytes"] is None
+    assert stats["file_count"] == expected_count
+    assert stats["total_size_bytes"] == expected_size
+    # Structural check: must be a dict with both expected keys.
+    assert isinstance(stats, dict)
+    assert "file_count" in stats
+    assert "total_size_bytes" in stats
 
 
 @pytest.mark.ai_generated
@@ -149,13 +163,10 @@ def test_get_log_bucket_stats_empty_prefix(tmp_path: pathlib.Path) -> None:
     """
     No files match a prefix that doesn't exist in the inventory; count is 0.
     """
-    source_bucket = "my-bucket"
-    rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 50),
-    ]
+    rows = [(_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50)]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=source_bucket,
+        source_bucket=_SOURCE_BUCKET,
         rows=rows,
         file_schema="Bucket, Key, Size",
     )
@@ -167,40 +178,18 @@ def test_get_log_bucket_stats_empty_prefix(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.ai_generated
-def test_get_log_bucket_stats_returns_typed_dict(tmp_path: pathlib.Path) -> None:
-    """
-    The return value is a LogBucketStats typed dict with the expected keys.
-    """
-    source_bucket = "my-bucket"
-    rows = [(source_bucket, "logs/2024-01-01-00-00-00-AAAA", 42)]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=source_bucket,
-        rows=rows,
-        file_schema="Bucket, Key, Size",
-    )
-
-    stats = get_log_bucket_stats(inventory_directory=inventory_dir, s3_root="s3://my-bucket/logs")
-
-    assert isinstance(stats, dict)
-    assert "file_count" in stats
-    assert "total_size_bytes" in stats
-
-
-@pytest.mark.ai_generated
 def test_get_log_bucket_stats_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) -> None:
     """
     When s3_root is omitted, all keys in the inventory are counted (whole-bucket default).
     The source bucket is derived from manifest.json so no explicit prefix is required.
     """
-    source_bucket = "my-bucket"
     rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 100),
-        (source_bucket, "other/2024-01-01-00-00-00-XXXX", 200),
+        (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+        (_SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 200),
     ]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=source_bucket,
+        source_bucket=_SOURCE_BUCKET,
         rows=rows,
         file_schema="Bucket, Key, Size",
     )
@@ -215,89 +204,65 @@ def test_get_log_bucket_stats_no_prefix_defaults_to_whole_bucket(tmp_path: pathl
 # CLI command tests
 # ---------------------------------------------------------------------------
 
+_CLI_PARAMS = [
+    pytest.param(
+        "Bucket, Key, Size",
+        [
+            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB", 400),
+        ],
+        ["--prefix", "s3://my-bucket/logs"],
+        ["File count", "Total size", "2", "500"],
+        id="with_size_column",
+    ),
+    pytest.param(
+        "Bucket, Key",
+        [
+            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
+            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
+            (_SOURCE_BUCKET, "logs/2024-01-03-00-00-00-CCCC"),
+        ],
+        ["--prefix", "s3://my-bucket/logs"],
+        ["File count", "3", "N/A"],
+        id="without_size_column",
+    ),
+]
+
 
 @pytest.mark.ai_generated
-def test_stats_cli_with_size_column(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize(
+    ("file_schema", "rows", "extra_args", "expected_in_output"),
+    _CLI_PARAMS,
+)
+def test_stats_cli(
+    tmp_path: pathlib.Path,
+    file_schema: str,
+    rows: list[tuple],
+    extra_args: list[str],
+    expected_in_output: list[str],
+) -> None:
     """
-    The 'stats' CLI command prints file count and total size when Size is present.
+    The 'stats' CLI command produces the expected output for each schema variant.
+
+    Covers the ``Size`` column present and absent cases, and validates that the
+    ``File count`` and ``Total size`` labels always appear.
     """
-    source_bucket = "my-bucket"
-    s3_root = "s3://my-bucket/logs"
-    rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 100),
-        (source_bucket, "logs/2024-01-02-00-00-00-BBBB", 400),
-    ]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=source_bucket,
+        source_bucket=_SOURCE_BUCKET,
         rows=rows,
-        file_schema="Bucket, Key, Size",
+        file_schema=file_schema,
     )
 
     runner = CliRunner()
     result = runner.invoke(
         _s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir), "--prefix", s3_root],
+        ["stats", "--inventory", str(inventory_dir), *extra_args],
     )
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
-    assert "2" in result.output
-    assert "500" in result.output
-
-
-@pytest.mark.ai_generated
-def test_stats_cli_without_size_column(tmp_path: pathlib.Path) -> None:
-    """
-    The 'stats' CLI command reports N/A for total size when Size column is absent.
-    """
-    source_bucket = "my-bucket"
-    s3_root = "s3://my-bucket/logs"
-    rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA"),
-        (source_bucket, "logs/2024-01-02-00-00-00-BBBB"),
-        (source_bucket, "logs/2024-01-03-00-00-00-CCCC"),
-    ]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=source_bucket,
-        rows=rows,
-        file_schema="Bucket, Key",
-    )
-
-    runner = CliRunner()
-    result = runner.invoke(
-        _s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir), "--prefix", s3_root],
-    )
-
-    assert result.exit_code == 0, f"CLI failed: {result.output}"
-    assert "3" in result.output
-    assert "N/A" in result.output
-
-
-@pytest.mark.ai_generated
-def test_stats_cli_shows_file_count_label(tmp_path: pathlib.Path) -> None:
-    """
-    The 'stats' CLI output contains the 'File count' label.
-    """
-    source_bucket = "my-bucket"
-    rows = [(source_bucket, "logs/2024-01-01-00-00-00-AAAA", 10)]
-    inventory_dir = _build_inventory_directory(
-        tmp_path,
-        source_bucket=source_bucket,
-        rows=rows,
-        file_schema="Bucket, Key, Size",
-    )
-
-    runner = CliRunner()
-    result = runner.invoke(
-        _s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir), "--prefix", "s3://my-bucket/logs"],
-    )
-
-    assert result.exit_code == 0, f"CLI failed: {result.output}"
-    assert "File count" in result.output
-    assert "Total size" in result.output
+    for expected in expected_in_output:
+        assert expected in result.output
 
 
 @pytest.mark.ai_generated
@@ -305,14 +270,13 @@ def test_stats_cli_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) ->
     """
     When --prefix is omitted the CLI reports stats for every key in the inventory.
     """
-    source_bucket = "my-bucket"
     rows = [
-        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 50),
-        (source_bucket, "other/2024-01-01-00-00-00-XXXX", 50),
+        (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50),
+        (_SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 50),
     ]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=source_bucket,
+        source_bucket=_SOURCE_BUCKET,
         rows=rows,
         file_schema="Bucket, Key, Size",
     )

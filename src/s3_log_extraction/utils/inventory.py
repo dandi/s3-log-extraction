@@ -52,6 +52,54 @@ def _extract_date_from_log_filename(filename: str) -> str | None:
     return f"{year_str}-{month_str}-{day_str}"
 
 
+def _load_inventory_manifest(
+    inventory_directory: pathlib.Path,
+) -> tuple[str, list[str], pathlib.Path]:
+    """
+    Load the most recent inventory manifest and return parsing metadata.
+
+    Parameters
+    ----------
+    inventory_directory : pathlib.Path
+        Root of the pre-downloaded S3 inventory tree.
+
+    Returns
+    -------
+    source_bucket : str
+        The bucket name recorded in ``manifest.json``.
+    file_schema : list[str]
+        Ordered list of column names from the inventory CSV.
+    symlink_path : pathlib.Path
+        Path to the ``symlink.txt`` file in the most recent hive partition.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no ``dt=*`` hive partitions are found.
+    """
+    hive_directory = inventory_directory / "hive"
+    hive_partitions = sorted(hive_directory.glob("dt=*"))
+    if not hive_partitions:
+        message = f"No hive partitions found in {hive_directory}."
+        raise FileNotFoundError(message)
+    latest_partition = hive_partitions[-1]
+
+    dt_value = latest_partition.name[len("dt=") :]
+    date_part = dt_value[:10]
+    time_part = dt_value[11:]
+    timestamp_dir_name = f"{date_part}T{time_part}Z"
+    manifest_path = inventory_directory / timestamp_dir_name / "manifest.json"
+
+    with manifest_path.open(mode="r") as file_stream:
+        manifest = json.load(fp=file_stream)
+
+    source_bucket: str = manifest["sourceBucket"]
+    file_schema = [col.strip() for col in manifest["fileSchema"].split(",")]
+    symlink_path = latest_partition / "symlink.txt"
+
+    return source_bucket, file_schema, symlink_path
+
+
 def _read_s3_urls_from_local_inventory(
     inventory_directory: pathlib.Path,
     s3_root: str,
@@ -117,38 +165,17 @@ def _read_s3_urls_from_local_inventory(
         If the ``Key`` column is absent from the inventory schema.
     """
     inventory_directory = pathlib.Path(inventory_directory)
+    source_bucket, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
 
-    # 1. Find the most recent hive partition (alphabetical sort works for dt=YYYY-MM-DD-HH-MM)
-    hive_directory = inventory_directory / "hive"
-    hive_partitions = sorted(hive_directory.glob("dt=*"))
-    if not hive_partitions:
-        message = f"No hive partitions found in {hive_directory}."
-        raise FileNotFoundError(message)
-    latest_partition = hive_partitions[-1]
-
-    # 2. Derive the corresponding timestamp directory name.
-    #    dt=2026-05-03-01-00  →  2026-05-03T01-00Z
-    dt_value = latest_partition.name[len("dt=") :]  # e.g. "2026-05-03-01-00"
-    date_part = dt_value[:10]  # "2026-05-03"
-    time_part = dt_value[11:]  # "01-00"
-    timestamp_dir_name = f"{date_part}T{time_part}Z"  # "2026-05-03T01-00Z"
-    manifest_path = inventory_directory / timestamp_dir_name / "manifest.json"
-
-    with manifest_path.open(mode="r") as file_stream:
-        manifest = json.load(fp=file_stream)
-
-    source_bucket: str = manifest["sourceBucket"]
-    file_schema = [col.strip() for col in manifest["fileSchema"].split(",")]
     if "Key" not in file_schema:
         message = f"'Key' column not found in inventory schema: {file_schema}"
         raise ValueError(message)
     key_index = file_schema.index("Key")
 
-    # 3. Read symlink.txt — each line is an S3 path to a data/*.csv.gz file.
-    symlink_path = latest_partition / "symlink.txt"
+    # Read symlink.txt — each line is an S3 path to a data/*.csv.gz file.
     symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
 
-    # 4. Parse each local CSV.gz file referenced by the symlink.
+    # Parse each local CSV.gz file referenced by the symlink.
     s3_root_prefix = s3_root.rstrip("/") + "/"
     inventory: dict[str, list[str]] = collections.defaultdict(list)
     for s3_data_path in symlink_lines:
@@ -196,54 +223,6 @@ def _read_s3_urls_from_local_inventory(
                 inventory[date].append(s3_url)
 
     return dict(inventory)
-
-
-def _load_inventory_manifest(
-    inventory_directory: pathlib.Path,
-) -> tuple[str, list[str], pathlib.Path]:
-    """
-    Load the most recent inventory manifest and return parsing metadata.
-
-    Parameters
-    ----------
-    inventory_directory : pathlib.Path
-        Root of the pre-downloaded S3 inventory tree.
-
-    Returns
-    -------
-    source_bucket : str
-        The bucket name recorded in ``manifest.json``.
-    file_schema : list[str]
-        Ordered list of column names from the inventory CSV.
-    symlink_path : pathlib.Path
-        Path to the ``symlink.txt`` file in the most recent hive partition.
-
-    Raises
-    ------
-    FileNotFoundError
-        If no ``dt=*`` hive partitions are found.
-    """
-    hive_directory = inventory_directory / "hive"
-    hive_partitions = sorted(hive_directory.glob("dt=*"))
-    if not hive_partitions:
-        message = f"No hive partitions found in {hive_directory}."
-        raise FileNotFoundError(message)
-    latest_partition = hive_partitions[-1]
-
-    dt_value = latest_partition.name[len("dt=") :]
-    date_part = dt_value[:10]
-    time_part = dt_value[11:]
-    timestamp_dir_name = f"{date_part}T{time_part}Z"
-    manifest_path = inventory_directory / timestamp_dir_name / "manifest.json"
-
-    with manifest_path.open(mode="r") as file_stream:
-        manifest = json.load(fp=file_stream)
-
-    source_bucket: str = manifest["sourceBucket"]
-    file_schema = [col.strip() for col in manifest["fileSchema"].split(",")]
-    symlink_path = latest_partition / "symlink.txt"
-
-    return source_bucket, file_schema, symlink_path
 
 
 def get_log_bucket_stats(
