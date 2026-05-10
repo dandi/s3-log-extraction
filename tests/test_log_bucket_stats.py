@@ -187,6 +187,30 @@ def test_get_log_bucket_stats_returns_typed_dict(tmp_path: pathlib.Path) -> None
     assert "total_size_bytes" in stats
 
 
+@pytest.mark.ai_generated
+def test_get_log_bucket_stats_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) -> None:
+    """
+    When s3_root is omitted, all keys in the inventory are counted (whole-bucket default).
+    The source bucket is derived from manifest.json so no explicit prefix is required.
+    """
+    source_bucket = "my-bucket"
+    rows = [
+        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 100),
+        (source_bucket, "other/2024-01-01-00-00-00-XXXX", 200),
+    ]
+    inventory_dir = _build_inventory_directory(
+        tmp_path,
+        source_bucket=source_bucket,
+        rows=rows,
+        file_schema="Bucket, Key, Size",
+    )
+
+    stats = get_log_bucket_stats(inventory_directory=inventory_dir)
+
+    assert stats["file_count"] == 2
+    assert stats["total_size_bytes"] == 300
+
+
 # ---------------------------------------------------------------------------
 # CLI command tests
 # ---------------------------------------------------------------------------
@@ -274,3 +298,31 @@ def test_stats_cli_shows_file_count_label(tmp_path: pathlib.Path) -> None:
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     assert "File count" in result.output
     assert "Total size" in result.output
+
+
+@pytest.mark.ai_generated
+def test_stats_cli_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) -> None:
+    """
+    When --prefix is omitted the CLI reports stats for every key in the inventory.
+    """
+    source_bucket = "my-bucket"
+    rows = [
+        (source_bucket, "logs/2024-01-01-00-00-00-AAAA", 50),
+        (source_bucket, "other/2024-01-01-00-00-00-XXXX", 50),
+    ]
+    inventory_dir = _build_inventory_directory(
+        tmp_path,
+        source_bucket=source_bucket,
+        rows=rows,
+        file_schema="Bucket, Key, Size",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        _s3logextraction_cli,
+        ["stats", "--inventory", str(inventory_dir)],
+    )
+
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert "2" in result.output
+    assert "100" in result.output

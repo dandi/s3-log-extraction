@@ -248,7 +248,7 @@ def _load_inventory_manifest(
 
 def get_log_bucket_stats(
     inventory_directory: pathlib.Path,
-    s3_root: str,
+    s3_root: str | None = None,
 ) -> LogBucketStats:
     """
     Return the file count and total size for objects under ``s3_root``.
@@ -256,7 +256,8 @@ def get_log_bucket_stats(
     Reads the most recent hive partition of a local AWS S3 Inventory
     directory, follows the ``symlink.txt`` references, and accumulates
     statistics for every object key whose full ``s3://`` URL starts with
-    ``s3_root``.
+    ``s3_root``.  When ``s3_root`` is ``None`` the source bucket recorded
+    in ``manifest.json`` is used, so statistics cover the entire bucket.
 
     The AWS S3 Inventory directory must follow the standard layout::
 
@@ -273,9 +274,11 @@ def get_log_bucket_stats(
     ----------
     inventory_directory : pathlib.Path
         Root of the pre-downloaded S3 inventory tree.
-    s3_root : str
+    s3_root : str, optional
         S3 prefix used to filter object keys
-        (e.g. ``"s3://my-logs-bucket/logs"``).
+        (e.g. ``"s3://my-logs-bucket/logs"``).  When omitted, the source
+        bucket is read from ``manifest.json`` and all keys in the inventory
+        are counted.
 
     Returns
     -------
@@ -306,7 +309,8 @@ def get_log_bucket_stats(
 
     symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
 
-    s3_root_prefix = s3_root.rstrip("/") + "/"
+    effective_root = s3_root if s3_root is not None else f"s3://{source_bucket}"
+    s3_root_prefix = effective_root.rstrip("/") + "/"
     file_count = 0
     total_size_bytes: int | None = 0 if size_index is not None else None
 

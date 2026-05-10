@@ -377,7 +377,7 @@ def _validate_cli(
             validator.validate_directory(directory=directory)
 
 
-# s3logextraction stats --inventory <path> --prefix <s3://bucket/prefix>
+# s3logextraction stats --inventory <path> [--prefix <s3://bucket/prefix>]
 @_s3logextraction_cli.command(name="stats")
 @rich_click.option(
     "--inventory",
@@ -395,17 +395,24 @@ def _validate_cli(
 @rich_click.option(
     "--prefix",
     "s3_root",
-    help="The S3 prefix (e.g. 's3://my-logs-bucket/logs') to report statistics for.",
-    required=True,
+    help=(
+        "Optional S3 prefix to filter reported statistics "
+        "(e.g. 's3://my-logs-bucket/logs'). "
+        "When omitted, statistics are reported for the entire source bucket "
+        "as recorded in the inventory manifest."
+    ),
+    required=False,
+    default=None,
     type=rich_click.STRING,
 )
-def _stats_cli(inventory_directory: str, s3_root: str) -> None:
+def _stats_cli(inventory_directory: str, s3_root: str | None = None) -> None:
     """
     Report the number of log files and total size under a given S3 prefix.
 
     Reads a local pre-downloaded AWS S3 Inventory directory and prints the
     file count and total size in bytes for all objects whose key starts with
-    the given prefix.
+    the given prefix.  When no prefix is supplied the source bucket is read
+    from the inventory manifest and all keys are counted.
     """
     stats = get_log_bucket_stats(
         inventory_directory=pathlib.Path(inventory_directory),
