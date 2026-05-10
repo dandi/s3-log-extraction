@@ -100,16 +100,17 @@ _API_PARAMS = [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
             (SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
             (SOURCE_BUCKET, "other/2024-01-02-00-00-00-CCCC", 300),
+            (SOURCE_BUCKET, "other/2024-01-02-00-05-00-DDDD", 400),
         ],
-        3,
-        600,
+        4,
+        1000,
         id="with_size_column",
     ),
     pytest.param(
         "Bucket, Key",
         [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
-            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
+            (SOURCE_BUCKET, "other/2024-01-02-00-00-00-BBBB"),
         ],
         2,
         None,
@@ -163,8 +164,9 @@ _CLI_PARAMS = [
         [
             (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
             (SOURCE_BUCKET, "other/2024-01-02-00-00-00-BBBB", 400),
+            (SOURCE_BUCKET, "other/2024-01-02-00-05-00-CCCC", 500),
         ],
-        ["File count", "Total size", "2", "500"],
+        ["File count", "Total size", "3", "1000"],
         id="with_size_column",
     ),
     pytest.param(
