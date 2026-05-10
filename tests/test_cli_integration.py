@@ -8,7 +8,6 @@ import py
 from click.testing import CliRunner
 
 import s3_log_extraction
-from s3_log_extraction._command_line_interface._cli import _s3logextraction_cli
 
 
 def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
@@ -34,7 +33,7 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
 
     # Run extraction via CLI
     result = runner.invoke(
-        _s3logextraction_cli,
+        s3_log_extraction.s3logextraction_cli,
         ["extract", str(test_logs_directory), "--workers", str(workers), "--cache", str(output_directory)],
     )
     assert result.exit_code == 0, f"Extraction failed: {result.output}"
@@ -88,27 +87,27 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     runner = CliRunner()
 
     # Set cache directory via CLI
-    result = runner.invoke(_s3logextraction_cli, ["config", "cache", "set", str(test_dir)])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["config", "cache", "set", str(test_dir)])
     assert result.exit_code == 0, f"Failed to set cache: {result.output}"
 
     # Update IP indexes via CLI
-    result = runner.invoke(_s3logextraction_cli, ["update", "ip", "indexes"])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "ip", "indexes"])
     assert result.exit_code == 0, f"Failed to update IP indexes: {result.output}"
 
     # Generate summaries via CLI
-    result = runner.invoke(_s3logextraction_cli, ["update", "summaries"])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "summaries"])
     assert result.exit_code == 0, f"Failed to generate summaries: {result.output}"
 
     # Generate dataset totals via CLI
-    result = runner.invoke(_s3logextraction_cli, ["update", "totals"])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "totals"])
     assert result.exit_code == 0, f"Failed to generate totals: {result.output}"
 
     # Generate archive summaries via CLI
-    result = runner.invoke(_s3logextraction_cli, ["update", "summaries", "--mode", "archive"])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "summaries", "--mode", "archive"])
     assert result.exit_code == 0, f"Failed to generate archive summaries: {result.output}"
 
     # Generate archive totals via CLI
-    result = runner.invoke(_s3logextraction_cli, ["update", "totals", "--mode", "archive"])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "totals", "--mode", "archive"])
     assert result.exit_code == 0, f"Failed to generate archive totals: {result.output}"
 
     # Verify the output matches expected files
