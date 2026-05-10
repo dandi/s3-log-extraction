@@ -3,6 +3,23 @@ import csv
 import gzip
 import json
 import pathlib
+import typing
+
+
+class LogBucketStats(typing.TypedDict):
+    """Statistics for a log bucket prefix derived from a local S3 Inventory.
+
+    Attributes
+    ----------
+    file_count : int
+        Number of object keys matching the given S3 prefix.
+    total_size_bytes : int or None
+        Sum of object sizes in bytes, or ``None`` if the inventory does not
+        include a ``Size`` column.
+    """
+
+    file_count: int
+    total_size_bytes: int | None
 
 
 def _extract_date_from_log_filename(filename: str) -> str | None:
@@ -179,3 +196,134 @@ def _read_s3_urls_from_local_inventory(
                 inventory[date].append(s3_url)
 
     return dict(inventory)
+
+
+def _load_inventory_manifest(
+    inventory_directory: pathlib.Path,
+) -> tuple[str, list[str], pathlib.Path]:
+    """
+    Load the most recent inventory manifest and return parsing metadata.
+
+    Parameters
+    ----------
+    inventory_directory : pathlib.Path
+        Root of the pre-downloaded S3 inventory tree.
+
+    Returns
+    -------
+    source_bucket : str
+        The bucket name recorded in ``manifest.json``.
+    file_schema : list[str]
+        Ordered list of column names from the inventory CSV.
+    symlink_path : pathlib.Path
+        Path to the ``symlink.txt`` file in the most recent hive partition.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no ``dt=*`` hive partitions are found.
+    """
+    hive_directory = inventory_directory / "hive"
+    hive_partitions = sorted(hive_directory.glob("dt=*"))
+    if not hive_partitions:
+        message = f"No hive partitions found in {hive_directory}."
+        raise FileNotFoundError(message)
+    latest_partition = hive_partitions[-1]
+
+    dt_value = latest_partition.name[len("dt=") :]
+    date_part = dt_value[:10]
+    time_part = dt_value[11:]
+    timestamp_dir_name = f"{date_part}T{time_part}Z"
+    manifest_path = inventory_directory / timestamp_dir_name / "manifest.json"
+
+    with manifest_path.open(mode="r") as file_stream:
+        manifest = json.load(fp=file_stream)
+
+    source_bucket: str = manifest["sourceBucket"]
+    file_schema = [col.strip() for col in manifest["fileSchema"].split(",")]
+    symlink_path = latest_partition / "symlink.txt"
+
+    return source_bucket, file_schema, symlink_path
+
+
+def get_log_bucket_stats(
+    inventory_directory: pathlib.Path,
+    s3_root: str,
+) -> LogBucketStats:
+    """
+    Return the file count and total size for objects under ``s3_root``.
+
+    Reads the most recent hive partition of a local AWS S3 Inventory
+    directory, follows the ``symlink.txt`` references, and accumulates
+    statistics for every object key whose full ``s3://`` URL starts with
+    ``s3_root``.
+
+    The AWS S3 Inventory directory must follow the standard layout::
+
+        <inventory_directory>/
+        ├── <timestamp>/          # e.g. 2026-05-03T01-00Z/
+        │   └── manifest.json
+        ├── data/
+        │   └── <uuid>.csv.gz
+        └── hive/
+            └── dt=<YYYY-MM-DD-HH-MM>/
+                └── symlink.txt
+
+    Parameters
+    ----------
+    inventory_directory : pathlib.Path
+        Root of the pre-downloaded S3 inventory tree.
+    s3_root : str
+        S3 prefix used to filter object keys
+        (e.g. ``"s3://my-logs-bucket/logs"``).
+
+    Returns
+    -------
+    LogBucketStats
+        A typed dict with:
+
+        ``file_count`` : int
+            Number of object keys under ``s3_root``.
+        ``total_size_bytes`` : int or None
+            Sum of object sizes in bytes, or ``None`` when the inventory
+            does not include a ``Size`` column.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no ``dt=*`` hive partitions are found.
+    ValueError
+        If the ``Key`` column is absent from the inventory schema.
+    """
+    inventory_directory = pathlib.Path(inventory_directory)
+    source_bucket, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
+
+    if "Key" not in file_schema:
+        message = f"'Key' column not found in inventory schema: {file_schema}"
+        raise ValueError(message)
+    key_index = file_schema.index("Key")
+    size_index = file_schema.index("Size") if "Size" in file_schema else None
+
+    symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
+
+    s3_root_prefix = s3_root.rstrip("/") + "/"
+    file_count = 0
+    total_size_bytes: int | None = 0 if size_index is not None else None
+
+    for s3_data_path in symlink_lines:
+        uuid_filename = s3_data_path.split("/")[-1]
+        local_csv_gz_path = inventory_directory / "data" / uuid_filename
+        with gzip.open(local_csv_gz_path, "rt", newline="") as gz_file:
+            reader = csv.reader(gz_file)
+            for row in reader:
+                if len(row) <= key_index:
+                    continue
+                key = row[key_index]
+                s3_url = f"s3://{source_bucket}/{key}"
+                if not s3_url.startswith(s3_root_prefix):
+                    continue
+                file_count += 1
+                if size_index is not None and len(row) > size_index:
+                    total_size_bytes += int(row[size_index])  # type: ignore[operator]
+
+    return LogBucketStats(file_count=file_count, total_size_bytes=total_size_bytes)
