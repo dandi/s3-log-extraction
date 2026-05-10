@@ -91,17 +91,17 @@ def _build_inventory_directory(
 # API helper tests
 # ---------------------------------------------------------------------------
 
-_SOURCE_BUCKET = "my-bucket"
+SOURCE_BUCKET = "my-bucket"
 
 _API_PARAMS = [
     pytest.param(
         "Bucket, Key, Size",
         [
-            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
-            (_SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
-            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-CCCC", 300),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-CCCC", 300),
             # Key outside s3_root — must be excluded.
-            (_SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 999),
+            (SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 999),
         ],
         "s3://my-bucket/logs",
         3,
@@ -111,8 +111,8 @@ _API_PARAMS = [
     pytest.param(
         "Bucket, Key",
         [
-            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
-            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
         ],
         "s3://my-bucket/logs",
         2,
@@ -143,7 +143,7 @@ def test_get_log_bucket_stats_with_prefix(
     """
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=_SOURCE_BUCKET,
+        source_bucket=SOURCE_BUCKET,
         rows=rows,
         file_schema=file_schema,
     )
@@ -163,10 +163,10 @@ def test_get_log_bucket_stats_empty_prefix(tmp_path: pathlib.Path) -> None:
     """
     No files match a prefix that doesn't exist in the inventory; count is 0.
     """
-    rows = [(_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50)]
+    rows = [(SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50)]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=_SOURCE_BUCKET,
+        source_bucket=SOURCE_BUCKET,
         rows=rows,
         file_schema="Bucket, Key, Size",
     )
@@ -184,12 +184,12 @@ def test_get_log_bucket_stats_no_prefix_defaults_to_whole_bucket(tmp_path: pathl
     The source bucket is derived from manifest.json so no explicit prefix is required.
     """
     rows = [
-        (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
-        (_SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 200),
+        (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+        (SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 200),
     ]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=_SOURCE_BUCKET,
+        source_bucket=SOURCE_BUCKET,
         rows=rows,
         file_schema="Bucket, Key, Size",
     )
@@ -208,8 +208,8 @@ _CLI_PARAMS = [
     pytest.param(
         "Bucket, Key, Size",
         [
-            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
-            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB", 400),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB", 400),
         ],
         ["--prefix", "s3://my-bucket/logs"],
         ["File count", "Total size", "2", "500"],
@@ -218,9 +218,9 @@ _CLI_PARAMS = [
     pytest.param(
         "Bucket, Key",
         [
-            (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
-            (_SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
-            (_SOURCE_BUCKET, "logs/2024-01-03-00-00-00-CCCC"),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA"),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
+            (SOURCE_BUCKET, "logs/2024-01-03-00-00-00-CCCC"),
         ],
         ["--prefix", "s3://my-bucket/logs"],
         ["File count", "3", "N/A"],
@@ -249,7 +249,7 @@ def test_stats_cli(
     """
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=_SOURCE_BUCKET,
+        source_bucket=SOURCE_BUCKET,
         rows=rows,
         file_schema=file_schema,
     )
@@ -271,12 +271,12 @@ def test_stats_cli_no_prefix_defaults_to_whole_bucket(tmp_path: pathlib.Path) ->
     When --prefix is omitted the CLI reports stats for every key in the inventory.
     """
     rows = [
-        (_SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50),
-        (_SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 50),
+        (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 50),
+        (SOURCE_BUCKET, "other/2024-01-01-00-00-00-XXXX", 50),
     ]
     inventory_dir = _build_inventory_directory(
         tmp_path,
-        source_bucket=_SOURCE_BUCKET,
+        source_bucket=SOURCE_BUCKET,
         rows=rows,
         file_schema="Bucket, Key, Size",
     )
