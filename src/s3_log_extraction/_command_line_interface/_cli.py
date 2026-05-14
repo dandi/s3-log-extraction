@@ -4,7 +4,6 @@ import os
 import pathlib
 import typing
 
-import pydantic
 import rich_click
 
 from ..config import get_summary_directory, reset_extraction, set_cache_directory
@@ -356,7 +355,7 @@ def _validate_cli(
     protocol: typing.Literal[
         "downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"
     ],
-    directory: pydantic.DirectoryPath,
+    directory: pathlib.Path,
 ) -> None:
     """Run a pre-validation protocol."""
     match protocol:

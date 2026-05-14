@@ -12,7 +12,7 @@ packages = ["src/s3_log_extraction"]
 
 [project]
 name = "s3-log-extraction"
-version="1.9.4"
+version="1.9.5"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
@@ -39,7 +39,7 @@ dependencies = [
     "natsort",
     "psutil",
     "cryptography",
-    "pydantic",
+    "beartype",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
