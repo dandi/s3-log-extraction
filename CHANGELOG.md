@@ -2,6 +2,8 @@
 
 # Upcoming
 
+Swapped all runtime type checking from `pydantic` to `beartype`.
+
 
 
 # v1.9.2

@@ -1,13 +1,13 @@
 import json
 import pathlib
 
+import beartype
 import pandas
-import pydantic
 
 from ..config import get_summary_directory
 
 
-@pydantic.validate_call
+@beartype.beartype
 def generate_archive_totals(
     summary_directory: str | pathlib.Path | None = None,
 ) -> None:

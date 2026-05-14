@@ -8,9 +8,11 @@ import pathlib
 import random
 import shutil
 import tempfile
+import typing
 import warnings
 
-import pydantic
+import beartype
+import beartype.vale
 import tqdm
 import yaml
 
@@ -18,6 +20,8 @@ from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess, _handle_aws_credentials
 from ..config import get_cache_directory, get_extraction_directory, get_records_directory
 from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
+
+_ExistingFilePath = typing.Annotated[pathlib.Path, beartype.vale.Is[lambda path: path.is_file()]]
 
 
 class RemoteS3LogAccessExtractor:
@@ -458,8 +462,8 @@ class RemoteS3LogAccessExtractor:
         )
 
     @staticmethod
-    @pydantic.validate_call
-    def parse_manifest(*, file_path: pydantic.FilePath) -> None:
+    @beartype.beartype
+    def parse_manifest(*, file_path: _ExistingFilePath) -> None:
         """
         Read the manifest file and save it as a parsed JSON object, adjacent to the initial file.
 
