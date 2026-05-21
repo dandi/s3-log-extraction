@@ -439,8 +439,7 @@ def _completion_cli(inventory_directory: str, cache_directory: str | None = None
     Report extraction completion percentage from end records vs latest inventory.
 
     The command compares the number of unique entries in the remote extraction
-    end record against the current inventory file count and also reports the
-    inventory total size when available.
+    end record against the current inventory file count.
     """
     completion = get_extraction_completion(
         inventory_directory=pathlib.Path(inventory_directory),
@@ -449,7 +448,3 @@ def _completion_cli(inventory_directory: str, cache_directory: str | None = None
     rich_click.echo(f"Processed files  : {completion['processed_file_count']}")
     rich_click.echo(f"Inventory files  : {completion['inventory_file_count']}")
     rich_click.echo(f"Percent complete : {completion['percent_complete']:.2f}%")
-    if completion["total_size_bytes"] is not None:
-        rich_click.echo(f"Total size (B)   : {completion['total_size_bytes']}")
-    else:
-        rich_click.echo("Total size (B)   : N/A (Size column not present in inventory)")

@@ -260,7 +260,7 @@ def test_completion_cli(
     tmp_path: pathlib.Path,
 ) -> None:
     """
-    The completion CLI reports processed count, inventory count, size, and % complete.
+    The completion CLI reports processed count, inventory count, and % complete.
     """
     inventory_dir = _build_inventory_directory(
         tmp_path,
@@ -290,4 +290,4 @@ def test_completion_cli(
     assert "Inventory files" in result.output
     assert "Percent complete" in result.output
     assert "50.00%" in result.output
-    assert "1000" in result.output
+    assert "Total size (B)" not in result.output
