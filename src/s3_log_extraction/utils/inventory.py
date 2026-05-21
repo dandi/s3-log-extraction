@@ -332,8 +332,8 @@ def get_extraction_completion(
     This helper reads:
 
     - latest inventory file count/size via :func:`get_log_bucket_stats`
-    - current remote extraction end record
-      (``RemoteS3LogAccessExtractor_s3-url-processing-end.txt``)
+    - current remote extraction end records (all files in ``records/`` whose
+      names end with ``processing-end.txt``)
 
     and returns a simple percentage complete summary.
 
@@ -355,11 +355,18 @@ def get_extraction_completion(
 
     inventory_stats = get_log_bucket_stats(inventory_directory=inventory_directory)
     records_directory = get_records_directory(cache_directory=cache_directory)
-    record_file_path = records_directory / "RemoteS3LogAccessExtractor_s3-url-processing-end.txt"
+    record_file_paths = [
+        record_file_path
+        for record_file_path in records_directory.iterdir()
+        if record_file_path.is_file() and record_file_path.name.endswith("processing-end.txt")
+    ]
 
-    processed_file_count = 0
-    if record_file_path.exists():
-        processed_file_count = len({line.strip() for line in record_file_path.read_text().splitlines() if line.strip()})
+    processed_file_record_keys: set[str] = set()
+    for record_file_path in record_file_paths:
+        processed_file_record_keys.update(
+            {line.strip() for line in record_file_path.read_text().splitlines() if line.strip()}
+        )
+    processed_file_count = len(processed_file_record_keys)
 
     inventory_file_count = inventory_stats["file_count"]
     percent_complete = 0.0 if inventory_file_count == 0 else processed_file_count / inventory_file_count * 100.0

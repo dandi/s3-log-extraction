@@ -242,9 +242,10 @@ def test_get_extraction_completion(
     cache_dir = tmp_path / "cache"
     records_dir = cache_dir / "records"
     records_dir.mkdir(parents=True)
-    (records_dir / "RemoteS3LogAccessExtractor_s3-url-processing-end.txt").write_text(
+    (records_dir / "CustomExtractor-processing-end.txt").write_text(
         "2024-01-01-00-00-00-AAAA\n2024-01-01-00-00-00-AAAA\n2024-01-01-00-05-00-BBBB\n"
     )
+    (records_dir / "CustomExtractor-processing-start.txt").write_text("2024-01-02-00-00-00-CCCC\n")
 
     completion = get_extraction_completion(inventory_directory=inventory_dir, cache_directory=cache_dir)
 
@@ -276,9 +277,7 @@ def test_completion_cli(
     cache_dir = tmp_path / "cache"
     records_dir = cache_dir / "records"
     records_dir.mkdir(parents=True)
-    (records_dir / "RemoteS3LogAccessExtractor_s3-url-processing-end.txt").write_text(
-        "2024-01-01-00-00-00-AAAA\n2024-01-01-00-05-00-BBBB\n"
-    )
+    (records_dir / "AnotherName-processing-end.txt").write_text("2024-01-01-00-00-00-AAAA\n2024-01-01-00-05-00-BBBB\n")
 
     runner = CliRunner()
     result = runner.invoke(
