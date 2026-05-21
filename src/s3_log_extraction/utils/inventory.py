@@ -22,6 +22,25 @@ class LogBucketStats(typing.TypedDict):
     total_size_bytes: int | None
 
 
+class ExtractionCompletionStats(typing.TypedDict):
+    """Completion statistics comparing processed records against inventory size.
+
+    Attributes
+    ----------
+    processed_file_count : int
+        Number of unique log filenames found in the remote extraction end record.
+    inventory_file_count : int
+        Total number of object keys recorded in the latest inventory snapshot.
+    percent_complete : float
+        ``processed_file_count / inventory_file_count * 100`` (or ``0.0`` when
+        ``inventory_file_count`` is zero).
+    """
+
+    processed_file_count: int
+    inventory_file_count: int
+    percent_complete: float
+
+
 def _extract_date_from_log_filename(filename: str) -> str | None:
     """
     Extract ``YYYY-MM-DD`` from a standard S3 server access log filename.
@@ -296,3 +315,60 @@ def get_log_bucket_stats(
                     total_size_bytes += int(row[size_index])  # type: ignore[operator]
 
     return LogBucketStats(file_count=file_count, total_size_bytes=total_size_bytes)
+
+
+def get_extraction_completion(
+    inventory_directory: pathlib.Path,
+    *,
+    cache_directory: pathlib.Path | None = None,
+) -> ExtractionCompletionStats:
+    """
+    Compare remote extraction progress against the latest local inventory count.
+
+    This helper reads:
+
+    - latest inventory file count via :func:`get_log_bucket_stats`
+    - current remote extraction end records (all files in ``records/`` whose
+      names end with ``processing-end.txt``)
+
+    and returns a simple percentage complete summary.
+
+    Parameters
+    ----------
+    inventory_directory : pathlib.Path
+        Root of the pre-downloaded S3 inventory tree.
+    cache_directory : pathlib.Path or None, optional
+        Cache directory containing the ``records/`` subdirectory.  If omitted,
+        the configured default cache directory is used.
+
+    Returns
+    -------
+    ExtractionCompletionStats
+        A typed dict with processed count, inventory count, and completion
+        percentage.
+    """
+    from ..config import get_records_directory
+
+    inventory_stats = get_log_bucket_stats(inventory_directory=inventory_directory)
+    records_directory = get_records_directory(cache_directory=cache_directory)
+    record_file_paths = [
+        record_file_path
+        for record_file_path in records_directory.iterdir()
+        if record_file_path.is_file() and record_file_path.name.endswith("processing-end.txt")
+    ]
+
+    processed_file_record_keys: set[str] = set()
+    for record_file_path in record_file_paths:
+        processed_file_record_keys.update(
+            {line.strip() for line in record_file_path.read_text().splitlines() if line.strip()}
+        )
+    processed_file_count = len(processed_file_record_keys)
+
+    inventory_file_count = inventory_stats["file_count"]
+    percent_complete = 0.0 if inventory_file_count == 0 else processed_file_count / inventory_file_count * 100.0
+
+    return ExtractionCompletionStats(
+        processed_file_count=processed_file_count,
+        inventory_file_count=inventory_file_count,
+        percent_complete=percent_complete,
+    )

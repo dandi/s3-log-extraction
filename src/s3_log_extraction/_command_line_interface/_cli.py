@@ -20,7 +20,7 @@ from ..summarize import (
     generate_summaries,
 )
 from ..testing import generate_benchmark
-from ..utils import get_log_bucket_stats
+from ..utils import get_extraction_completion, get_log_bucket_stats
 from ..validate import (
     DownloadsLogicPreValidator,
     ExtractionHeuristicPreValidator,
@@ -406,3 +406,45 @@ def _stats_cli(inventory_directory: str) -> None:
         rich_click.echo(f"Total size (B)  : {stats['total_size_bytes']}")
     else:
         rich_click.echo("Total size (B)  : N/A (Size column not present in inventory)")
+
+
+# s3logextraction completion --inventory <path> [--cache <path>]
+@s3logextraction_cli.command(name="completion")
+@rich_click.option(
+    "--inventory",
+    "inventory_directory",
+    help=(
+        "Path to a local pre-downloaded AWS S3 Inventory directory. "
+        "The directory must contain a 'hive/' sub-folder with Hive-partitioned symlink files "
+        "(e.g. hive/dt=YYYY-MM-DD-HH-MM/symlink.txt), a 'data/' sub-folder with the "
+        "gzip-compressed CSV inventory files, and timestamped manifest directories "
+        "(e.g. 2026-05-03T01-00Z/manifest.json)."
+    ),
+    required=True,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+)
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Optional cache directory containing extraction records. "
+        "If omitted, uses the configured default cache directory."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _completion_cli(inventory_directory: str, cache_directory: str | None = None) -> None:
+    """
+    Report extraction completion percentage from end records vs latest inventory.
+
+    The command compares the number of unique entries in the remote extraction
+    end record against the current inventory file count.
+    """
+    completion = get_extraction_completion(
+        inventory_directory=pathlib.Path(inventory_directory),
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+    )
+    rich_click.echo(f"Processed files  : {completion['processed_file_count']}")
+    rich_click.echo(f"Inventory files  : {completion['inventory_file_count']}")
+    rich_click.echo(f"Percent complete : {completion['percent_complete']:.2f}%")

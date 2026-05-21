@@ -10,7 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
-from s3_log_extraction.utils.inventory import get_log_bucket_stats
+from s3_log_extraction.utils.inventory import get_extraction_completion, get_log_bucket_stats
 
 
 def _build_inventory_directory(
@@ -215,3 +215,77 @@ def test_stats_cli(
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     for expected in expected_in_output:
         assert expected in result.output
+
+
+@pytest.mark.ai_generated
+def test_get_extraction_completion(
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    Completion helper compares end-record count against inventory file count.
+
+    Also verifies that duplicate record entries are de-duplicated.
+    """
+    inventory_dir = _build_inventory_directory(
+        tmp_path,
+        source_bucket=SOURCE_BUCKET,
+        rows=[
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-CCCC", 300),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-05-00-DDDD", 400),
+        ],
+        file_schema="Bucket, Key, Size",
+    )
+
+    cache_dir = tmp_path / "cache"
+    records_dir = cache_dir / "records"
+    records_dir.mkdir(parents=True)
+    (records_dir / "CustomExtractor-processing-end.txt").write_text(
+        "2024-01-01-00-00-00-AAAA\n2024-01-01-00-00-00-AAAA\n2024-01-01-00-05-00-BBBB\n"
+    )
+    (records_dir / "CustomExtractor-processing-start.txt").write_text("2024-01-02-00-00-00-CCCC\n")
+
+    completion = get_extraction_completion(inventory_directory=inventory_dir, cache_directory=cache_dir)
+
+    assert completion["processed_file_count"] == 2
+    assert completion["inventory_file_count"] == 4
+    assert completion["percent_complete"] == 50.0
+
+
+@pytest.mark.ai_generated
+def test_completion_cli(
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    The completion CLI reports processed count, inventory count, and % complete.
+    """
+    inventory_dir = _build_inventory_directory(
+        tmp_path,
+        source_bucket=SOURCE_BUCKET,
+        rows=[
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB", 200),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-CCCC", 300),
+            (SOURCE_BUCKET, "logs/2024-01-02-00-05-00-DDDD", 400),
+        ],
+        file_schema="Bucket, Key, Size",
+    )
+
+    cache_dir = tmp_path / "cache"
+    records_dir = cache_dir / "records"
+    records_dir.mkdir(parents=True)
+    (records_dir / "AnotherName-processing-end.txt").write_text("2024-01-01-00-00-00-AAAA\n2024-01-01-00-05-00-BBBB\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        s3logextraction_cli,
+        ["completion", "--inventory", str(inventory_dir), "--cache", str(cache_dir)],
+    )
+
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert "Processed files" in result.output
+    assert "Inventory files" in result.output
+    assert "Percent complete" in result.output
+    assert "50.00%" in result.output
+    assert "Total size (B)" not in result.output
