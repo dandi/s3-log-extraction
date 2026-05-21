@@ -224,8 +224,7 @@ def test_get_extraction_completion(
     """
     Completion helper compares end-record count against inventory file count.
 
-    Also verifies that duplicate record entries are de-duplicated and that
-    inventory total size is included when available.
+    Also verifies that duplicate record entries are de-duplicated.
     """
     inventory_dir = _build_inventory_directory(
         tmp_path,
@@ -252,7 +251,6 @@ def test_get_extraction_completion(
     assert completion["processed_file_count"] == 2
     assert completion["inventory_file_count"] == 4
     assert completion["percent_complete"] == 50.0
-    assert completion["total_size_bytes"] == 1000
 
 
 @pytest.mark.ai_generated

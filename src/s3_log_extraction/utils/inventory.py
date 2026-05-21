@@ -31,9 +31,6 @@ class ExtractionCompletionStats(typing.TypedDict):
         Number of unique log filenames found in the remote extraction end record.
     inventory_file_count : int
         Total number of object keys recorded in the latest inventory snapshot.
-    total_size_bytes : int or None
-        Sum of object sizes in bytes, or ``None`` if the inventory lacks a
-        ``Size`` column.
     percent_complete : float
         ``processed_file_count / inventory_file_count * 100`` (or ``0.0`` when
         ``inventory_file_count`` is zero).
@@ -41,7 +38,6 @@ class ExtractionCompletionStats(typing.TypedDict):
 
     processed_file_count: int
     inventory_file_count: int
-    total_size_bytes: int | None
     percent_complete: float
 
 
@@ -331,7 +327,7 @@ def get_extraction_completion(
 
     This helper reads:
 
-    - latest inventory file count/size via :func:`get_log_bucket_stats`
+    - latest inventory file count via :func:`get_log_bucket_stats`
     - current remote extraction end records (all files in ``records/`` whose
       names end with ``processing-end.txt``)
 
@@ -348,8 +344,8 @@ def get_extraction_completion(
     Returns
     -------
     ExtractionCompletionStats
-        A typed dict with processed count, inventory count, inventory total
-        size (when available), and completion percentage.
+        A typed dict with processed count, inventory count, and completion
+        percentage.
     """
     from ..config import get_records_directory
 
@@ -374,6 +370,5 @@ def get_extraction_completion(
     return ExtractionCompletionStats(
         processed_file_count=processed_file_count,
         inventory_file_count=inventory_file_count,
-        total_size_bytes=inventory_stats["total_size_bytes"],
         percent_complete=percent_complete,
     )

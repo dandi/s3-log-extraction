@@ -6,7 +6,7 @@ Swapped all runtime type checking from `pydantic` to `beartype`.
 
 Added `s3logextraction completion` and `get_extraction_completion` for inventory-based extraction progress,
 including support for any end-record filename that ends with `processing-end.txt`.
-Also removed the byte-size line from completion command output.
+Also removed byte-size reporting from completion API/CLI output.
 
 
 
