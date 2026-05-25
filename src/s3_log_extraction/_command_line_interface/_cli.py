@@ -154,14 +154,28 @@ def _extract_cli(
     type=rich_click.IntRange(min=1),
     default=600,  # 10 minutes
 )
-def _stop_extraction_cli(max_timeout_in_seconds: int = 600) -> None:
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str | None = None) -> None:
     """
     Stop the extraction processes if any are currently running in other windows.
 
     Note that you should not attempt to interrupt the extraction process using Ctrl+C or pkill, as this may lead to
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
     """
-    stop_extraction(max_timeout_in_seconds=max_timeout_in_seconds)
+    stop_extraction(
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        max_timeout_in_seconds=max_timeout_in_seconds,
+    )
 
 
 # s3logextraction config
@@ -202,8 +216,19 @@ def _reset_cli() -> None:
 
 # s3logextraction reset extraction
 @_reset_cli.command(name="extraction")
-def _reset_extraction_cli() -> None:
-    reset_extraction()
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _reset_extraction_cli(cache_directory: str | None = None) -> None:
+    reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
 
 
 # s3logextraction update
@@ -220,8 +245,19 @@ def _update_ip_cli() -> None:
 
 # s3logextraction update ip indexes
 @_update_ip_cli.command(name="indexes")
-def _update_ip_indexes_cli() -> None:
-    index_ips()
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _update_ip_indexes_cli(cache_directory: str | None = None) -> None:
+    index_ips(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
 
 
 # s3logextraction update ip regions
@@ -236,14 +272,41 @@ def _update_ip_indexes_cli() -> None:
     type=int,
     default=None,
 )
-def _update_ip_regions_cli(batch_limit: int | None = None) -> None:
-    update_index_to_region_codes(batch_limit=batch_limit)
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _update_ip_regions_cli(batch_limit: int | None = None, cache_directory: str | None = None) -> None:
+    update_index_to_region_codes(
+        batch_limit=batch_limit,
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+    )
 
 
 # s3logextraction update ip coordinates
 @_update_ip_cli.command(name="coordinates")
-def _update_ip_coordinates_cli() -> None:
-    update_region_code_coordinates()
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _update_ip_coordinates_cli(cache_directory: str | None = None) -> None:
+    update_region_code_coordinates(
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None
+    )
 
 
 # s3logextraction update summaries
@@ -284,18 +347,31 @@ def _update_ip_coordinates_cli() -> None:
     type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
 )
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
 def _update_summaries_cli(
     mode: typing.Literal["archive"] | None = None,
     pick: str | None = None,
     skip: str | None = None,
     workers: int = -2,
+    cache_directory: str | None = None,
 ) -> None:
     """Generate condensed summaries of activity."""
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
         case "archive":
-            generate_archive_summaries(get_summary_directory())
+            generate_archive_summaries(get_summary_directory(cache_directory=cache_path))
         case _:
-            generate_summaries()
+            generate_summaries(cache_directory=cache_path)
 
 
 # s3logextraction update totals

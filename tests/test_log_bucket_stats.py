@@ -9,6 +9,7 @@ import pathlib
 import pytest
 from click.testing import CliRunner
 
+import s3_log_extraction._command_line_interface._cli as cli_module
 from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
 from s3_log_extraction.utils.inventory import get_extraction_completion, get_log_bucket_stats
 
@@ -289,3 +290,68 @@ def test_completion_cli(
     assert "Percent complete" in result.output
     assert "50.00%" in result.output
     assert "Total size (B)" not in result.output
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("command", "target_function_name"),
+    [
+        pytest.param(["stop"], "stop_extraction", id="stop"),
+        pytest.param(["reset", "extraction"], "reset_extraction", id="reset_extraction"),
+        pytest.param(["update", "ip", "indexes"], "index_ips", id="update_ip_indexes"),
+        pytest.param(["update", "ip", "regions"], "update_index_to_region_codes", id="update_ip_regions"),
+        pytest.param(["update", "ip", "coordinates"], "update_region_code_coordinates", id="update_ip_coordinates"),
+        pytest.param(["update", "summaries"], "generate_summaries", id="update_summaries"),
+    ],
+)
+def test_cli_commands_forward_cache_directory(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, command: list[str], target_function_name: str
+) -> None:
+    """
+    Commands backed by cache-aware APIs accept ``--cache`` and forward it correctly.
+    """
+    captured: dict[str, object] = {}
+
+    def _stub(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(cli_module, target_function_name, _stub)
+
+    cache_dir = tmp_path / "custom-cache"
+    runner = CliRunner()
+    result = runner.invoke(s3logextraction_cli, [*command, "--cache", str(cache_dir)])
+
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert captured["cache_directory"] == cache_dir
+
+
+@pytest.mark.ai_generated
+def test_update_summaries_archive_forwards_cache_directory(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    ``update summaries --mode archive`` derives archive summary directory from ``--cache``.
+    """
+    captured: dict[str, pathlib.Path] = {}
+    expected_summary_directory = tmp_path / "expected-summaries"
+
+    def _stub_get_summary_directory(*, cache_directory: pathlib.Path | None = None) -> pathlib.Path:
+        captured["cache_directory"] = cache_directory
+        return expected_summary_directory
+
+    def _stub_generate_archive_summaries(summary_directory: pathlib.Path | str | None = None) -> None:
+        captured["summary_directory"] = pathlib.Path(summary_directory) if summary_directory is not None else None
+
+    monkeypatch.setattr(cli_module, "get_summary_directory", _stub_get_summary_directory)
+    monkeypatch.setattr(cli_module, "generate_archive_summaries", _stub_generate_archive_summaries)
+
+    cache_dir = tmp_path / "custom-cache"
+    runner = CliRunner()
+    result = runner.invoke(
+        s3logextraction_cli,
+        ["update", "summaries", "--mode", "archive", "--cache", str(cache_dir)],
+    )
+
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert captured["cache_directory"] == cache_dir
+    assert captured["summary_directory"] == expected_summary_directory
