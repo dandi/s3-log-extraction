@@ -302,6 +302,7 @@ def test_completion_cli(
         pytest.param(["update", "ip", "regions"], "update_index_to_region_codes", id="update_ip_regions"),
         pytest.param(["update", "ip", "coordinates"], "update_region_code_coordinates", id="update_ip_coordinates"),
         pytest.param(["update", "summaries"], "generate_summaries", id="update_summaries"),
+        pytest.param(["update", "totals"], "generate_all_dataset_totals", id="update_totals"),
     ],
 )
 def test_cli_commands_forward_cache_directory(
@@ -330,19 +331,13 @@ def test_update_summaries_archive_forwards_cache_directory(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    ``update summaries --mode archive`` derives archive summary directory from ``--cache``.
+    ``update summaries --mode archive`` passes ``cache_directory`` directly to ``generate_archive_summaries``.
     """
     captured: dict[str, pathlib.Path] = {}
-    expected_summary_directory = tmp_path / "expected-summaries"
 
-    def _stub_get_summary_directory(*, cache_directory: pathlib.Path | None = None) -> pathlib.Path:
-        captured["cache_directory"] = cache_directory
-        return expected_summary_directory
+    def _stub_generate_archive_summaries(cache_directory: pathlib.Path | str | None = None) -> None:
+        captured["cache_directory"] = pathlib.Path(cache_directory) if cache_directory is not None else None
 
-    def _stub_generate_archive_summaries(summary_directory: pathlib.Path | str | None = None) -> None:
-        captured["summary_directory"] = pathlib.Path(summary_directory) if summary_directory is not None else None
-
-    monkeypatch.setattr(cli_module, "get_summary_directory", _stub_get_summary_directory)
     monkeypatch.setattr(cli_module, "generate_archive_summaries", _stub_generate_archive_summaries)
 
     cache_dir = tmp_path / "custom-cache"
@@ -354,4 +349,28 @@ def test_update_summaries_archive_forwards_cache_directory(
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     assert captured["cache_directory"] == cache_dir
-    assert captured["summary_directory"] == expected_summary_directory
+
+
+@pytest.mark.ai_generated
+def test_update_totals_archive_forwards_cache_directory(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    ``update totals --mode archive`` passes ``cache_directory`` directly to ``generate_archive_totals``.
+    """
+    captured: dict[str, pathlib.Path] = {}
+
+    def _stub_generate_archive_totals(cache_directory: pathlib.Path | str | None = None) -> None:
+        captured["cache_directory"] = pathlib.Path(cache_directory) if cache_directory is not None else None
+
+    monkeypatch.setattr(cli_module, "generate_archive_totals", _stub_generate_archive_totals)
+
+    cache_dir = tmp_path / "custom-cache"
+    runner = CliRunner()
+    result = runner.invoke(
+        s3logextraction_cli,
+        ["update", "totals", "--mode", "archive", "--cache", str(cache_dir)],
+    )
+
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert captured["cache_directory"] == cache_dir
