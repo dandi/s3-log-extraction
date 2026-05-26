@@ -69,7 +69,9 @@ def get_cache_directory() -> pathlib.Path:
 
 
 def _establish_cache_subdirectory(
-    *, cache_directory: str | pathlib.Path | None = None, name: typing.Literal["records", "extraction", "ips"]
+    *,
+    cache_directory: str | pathlib.Path | None = None,
+    name: typing.Literal["records", "extraction", "ips", "summaries"],
 ) -> None:
     """
     I prefer to have each of the subdirectories below hard-established for API and docstring exposure.

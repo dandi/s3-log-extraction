@@ -22,9 +22,9 @@ def test_generic_summaries(tmpdir: py.path.local):
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
 
     s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir)
-    s3_log_extraction.summarize.generate_all_dataset_totals(summary_directory=test_summary_dir)
-    s3_log_extraction.summarize.generate_archive_summaries(summary_directory=test_summary_dir)
-    s3_log_extraction.summarize.generate_archive_totals(summary_directory=test_summary_dir)
+    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+    s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
 
     test_file_paths = {path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="*.tsv")}
     expected_file_paths = {

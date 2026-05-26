@@ -7,20 +7,18 @@ from ..config import get_summary_directory
 
 
 def generate_all_dataset_totals(
-    summary_directory: str | pathlib.Path | None = None,
+    cache_directory: str | pathlib.Path | None = None,
 ) -> None:
     """
     Generate top-level totals of summarized access activity for all datasets.
 
     Parameters
     ----------
-    summary_directory : pathlib.Path
-        Path to the folder containing all Dandiset summaries of the S3 access logs.
+    cache_directory : path-like, optional
+        The top-level cache directory from which the summary directory is derived.
+        If not provided, the default cache directory is used.
     """
-    if summary_directory:
-        summary_directory = pathlib.Path(summary_directory)
-    else:
-        summary_directory = get_summary_directory()
+    summary_directory = get_summary_directory(cache_directory=cache_directory)
 
     # TODO: record progress over
 

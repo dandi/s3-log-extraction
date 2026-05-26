@@ -6,7 +6,7 @@ import typing
 
 import rich_click
 
-from ..config import get_summary_directory, reset_extraction, set_cache_directory
+from ..config import reset_extraction, set_cache_directory
 from ..extractors import (
     RemoteS3LogAccessExtractor,
     S3LogAccessExtractor,
@@ -369,7 +369,7 @@ def _update_summaries_cli(
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
         case "archive":
-            generate_archive_summaries(get_summary_directory(cache_directory=cache_path))
+            generate_archive_summaries(cache_directory=cache_path)
         case _:
             generate_summaries(cache_directory=cache_path)
 
@@ -383,13 +383,28 @@ def _update_summaries_cli(
     type=rich_click.Choice(choices=["archive"]),
     default=None,
 )
-def _update_totals_cli(mode: typing.Literal["archive"] | None = None) -> None:
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _update_totals_cli(
+    mode: typing.Literal["archive"] | None = None,
+    cache_directory: str | None = None,
+) -> None:
     """Generate grand totals of all extracted data."""
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
         case "archive":
-            generate_archive_totals(get_summary_directory())
+            generate_archive_totals(cache_directory=cache_path)
         case _:
-            generate_all_dataset_totals()
+            generate_all_dataset_totals(cache_directory=cache_path)
 
 
 # s3logextraction testing
