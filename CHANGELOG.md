@@ -2,6 +2,10 @@
 
 # Upcoming
 
+
+
+# v1.9.12
+
 Swapped all runtime type checking from `pydantic` to `beartype`.
 
 Added `s3logextraction completion` and `get_extraction_completion` for inventory-based extraction progress,
