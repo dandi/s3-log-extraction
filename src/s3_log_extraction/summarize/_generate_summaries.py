@@ -5,7 +5,7 @@ import pathlib
 import pandas
 import tqdm
 
-from ..config import get_extraction_directory, get_summary_directory
+from ..config import get_cache_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
 from ..ip_utils._ip_utils import _read_ips_from_file
 
@@ -123,7 +123,9 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
         )
         raise NotImplementedError(message)
 
-    extraction_directory = get_extraction_directory(cache_directory=cache_directory)
+    cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
+    extraction_directory = cache_dir / "extraction"
+    extraction_directory.mkdir(exist_ok=True)
     summary_directory = get_summary_directory(cache_directory=cache_directory)
     ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
 

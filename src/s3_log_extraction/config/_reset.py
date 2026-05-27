@@ -3,7 +3,7 @@ import itertools
 import pathlib
 import shutil
 
-from ._config import get_extraction_directory, get_records_directory
+from ._config import get_cache_directory, get_records_directory
 
 
 def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
@@ -12,7 +12,9 @@ def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
 
     Note: clears the results and history of ALL extraction modes.
     """
-    extraction_directory = get_extraction_directory(cache_directory=cache_directory)
+    cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
+    extraction_directory = cache_dir / "extraction"
+    extraction_directory.mkdir(exist_ok=True)
     shutil.rmtree(path=extraction_directory)
     extraction_directory.mkdir(exist_ok=True)
 

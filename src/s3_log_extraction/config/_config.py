@@ -71,7 +71,7 @@ def get_cache_directory() -> pathlib.Path:
 def _establish_cache_subdirectory(
     *,
     cache_directory: str | pathlib.Path | None = None,
-    name: typing.Literal["records", "extraction", "ips", "summaries"],
+    name: typing.Literal["records", "ips", "summaries"],
 ) -> None:
     """
     I prefer to have each of the subdirectories below hard-established for API and docstring exposure.
@@ -106,24 +106,6 @@ def get_records_directory(cache_directory: str | pathlib.Path | None = None) -> 
         The main output directory for S3 log extraction.
     """
     return _establish_cache_subdirectory(cache_directory=cache_directory, name="records")
-
-
-def get_extraction_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
-    """
-    Get the main output subdirectory for S3 log extraction.
-
-    Parameters
-    ----------
-    cache_directory : path-like, optional
-        The directory to use as the cache directory.
-        If not provided, the default cache directory is used.
-
-    Returns
-    -------
-    pathlib.Path
-        The records directory for S3 log extraction.
-    """
-    return _establish_cache_subdirectory(cache_directory=cache_directory, name="extraction")
 
 
 def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
