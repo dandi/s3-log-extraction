@@ -7,7 +7,7 @@ import yaml
 
 from ._ip_cache import load_ip_cache, write_ip_cache
 from ._update_ip_to_region_codes import _get_region_code_from_ip_address
-from ..config import get_logs_directory
+from ..config import get_cache_subdirectory
 
 _REFRESH_CYCLE_DAYS = 90
 
@@ -79,7 +79,7 @@ def refresh_ip_to_region_codes(
             changes[ip_address] = {"old": old_region, "new": new_region}
             ip_to_region[ip_address] = new_region
 
-    logs_directory = get_logs_directory(cache_directory=cache_directory)
+    logs_directory = get_cache_subdirectory(cache_directory=cache_directory, name="logs")
     log_file_path = logs_directory / f"ip_refresh_{today.isoformat()}.yaml"
     log_data: dict = {
         "date": today.isoformat(),

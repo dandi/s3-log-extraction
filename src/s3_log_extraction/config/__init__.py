@@ -4,10 +4,10 @@ from ._config import (
     save_config,
     get_config,
     get_cache_directory,
+    get_cache_subdirectory,
     set_cache_directory,
     get_records_directory,
     get_ip_cache_directory,
-    get_logs_directory,
     get_summary_directory,
 )
 from ._globals import (
@@ -24,8 +24,8 @@ __all__ = [
     "save_config",
     "get_config",
     "get_cache_directory",
+    "get_cache_subdirectory",
     "get_ip_cache_directory",
-    "get_logs_directory",
     "get_records_directory",
     "get_summary_directory",
     "set_cache_directory",
