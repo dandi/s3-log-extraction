@@ -1,4 +1,3 @@
-import ipaddress
 import itertools
 import math
 import os
@@ -10,7 +9,7 @@ import yaml
 
 from ._globals import _KNOWN_SERVICES
 from ._ip_cache import load_ip_cache
-from ._ip_utils import _get_cidr_address_ranges_and_subregions, _read_ips_from_file
+from ._ip_utils import _get_cidr_address_ranges_and_subregions, _ip_in_cidr, _read_ips_from_file
 from ..config import get_extraction_directory, get_ip_cache_directory
 
 
@@ -126,7 +125,7 @@ def _get_region_code_from_ip_address(
                 (
                     (cidr_address, subregion)
                     for cidr_address, subregion in cidr_addresses_and_subregions
-                    if ipaddress.ip_address(address=ip_address) in ipaddress.ip_network(address=cidr_address)
+                    if _ip_in_cidr(ip_address=ip_address, cidr_address=cidr_address)
                 ),
                 None,
             )
