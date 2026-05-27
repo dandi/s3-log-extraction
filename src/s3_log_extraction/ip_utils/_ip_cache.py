@@ -8,7 +8,7 @@ from ..config import get_ip_cache_directory
 
 def load_ip_cache(
     *,
-    cache_type: typing.Literal["ip_to_region", "ip_not_in_services", "region_codes_to_coordinates"],
+    cache_type: typing.Literal["ip_to_region", "region_codes_to_coordinates"],
     cache_directory: str | pathlib.Path | None = None,
 ) -> dict[str, str]:
     """Load the IP cache from the cache directory."""
