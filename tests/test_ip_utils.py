@@ -8,7 +8,6 @@ import pytest
 import yaml
 
 import s3_log_extraction
-import s3_log_extraction.ip_utils._refresh_ip_to_region_codes as _refresh_module
 
 
 def test_ip_utils(tmpdir: py.path.local, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -40,13 +39,13 @@ def test_refresh_ip_to_region_codes(tmpdir: py.path.local, monkeypatch: pytest.M
     test_ips_dir = test_cache / "ips"
     test_ips_dir.mkdir(parents=True)
 
-    # Seed the cache with known IPs and regions (alphabetically: a, b, c, ..., z + more)
+    # Seed the cache with known IPs and regions using RFC 5737 TEST-NET-1 documentation addresses (bogons)
     initial_ip_to_region = {
-        "10.0.0.1": "US/California",
-        "10.0.0.2": "US/New York",
-        "10.0.0.3": "US/Texas",
-        "10.0.0.4": "UK/England",
-        "10.0.0.5": "DE/Bavaria",
+        "192.0.2.1": "US/California",
+        "192.0.2.2": "US/New York",
+        "192.0.2.3": "US/Texas",
+        "192.0.2.4": "UK/England",
+        "192.0.2.5": "DE/Bavaria",
     }
     ip_to_region_file = test_ips_dir / "ip_to_region.yaml"
     ip_to_region_file.write_text(yaml.dump(initial_ip_to_region))
@@ -63,8 +62,8 @@ def test_refresh_ip_to_region_codes(tmpdir: py.path.local, monkeypatch: pytest.M
 
     # With 5 IPs and partition_size = ceil(5/90) = 1, partition_index = 0 picks sorted_ips[0:1]
     sorted_ips = sorted(initial_ip_to_region.keys())
-    # partition_size = ceil(5/90) = 1; partition 0 -> sorted_ips[0:1] = ["10.0.0.1"]
-    expected_refreshed_ip = sorted_ips[0]  # "10.0.0.1"
+    # partition_size = ceil(5/90) = 1; partition 0 -> sorted_ips[0:1] = ["192.0.2.1"]
+    expected_refreshed_ip = sorted_ips[0]  # "192.0.2.1"
     new_region_for_refreshed_ip = "US/Oregon"
 
     def mock_get_region_code(ip_address: str, ipinfo_handler: object) -> str:
@@ -72,7 +71,10 @@ def test_refresh_ip_to_region_codes(tmpdir: py.path.local, monkeypatch: pytest.M
             return new_region_for_refreshed_ip
         return initial_ip_to_region[ip_address]  # pragma: no cover
 
-    with unittest.mock.patch.object(_refresh_module, "_get_region_code_from_ip_address", mock_get_region_code):
+    with unittest.mock.patch(
+        "s3_log_extraction.ip_utils._refresh_ip_to_region_codes._get_region_code_from_ip_address",
+        mock_get_region_code,
+    ):
         with unittest.mock.patch("ipinfo.getHandler"):
             s3_log_extraction.ip_utils.refresh_ip_to_region_codes(
                 cache_directory=test_cache,
@@ -108,7 +110,7 @@ def test_refresh_ip_to_region_codes_no_changes(tmpdir: py.path.local, monkeypatc
     test_ips_dir = test_cache / "ips"
     test_ips_dir.mkdir(parents=True)
 
-    initial_ip_to_region = {"10.0.0.1": "US/California"}
+    initial_ip_to_region = {"192.0.2.1": "US/California"}
     ip_to_region_file = test_ips_dir / "ip_to_region.yaml"
     ip_to_region_file.write_text(yaml.dump(initial_ip_to_region))
 
@@ -121,8 +123,9 @@ def test_refresh_ip_to_region_codes_no_changes(tmpdir: py.path.local, monkeypatc
     def mock_get_region_code_unchanged(ip_address: str, ipinfo_handler: object) -> str:
         return initial_ip_to_region[ip_address]
 
-    with unittest.mock.patch.object(
-        _refresh_module, "_get_region_code_from_ip_address", mock_get_region_code_unchanged
+    with unittest.mock.patch(
+        "s3_log_extraction.ip_utils._refresh_ip_to_region_codes._get_region_code_from_ip_address",
+        mock_get_region_code_unchanged,
     ):
         with unittest.mock.patch("ipinfo.getHandler"):
             s3_log_extraction.ip_utils.refresh_ip_to_region_codes(
