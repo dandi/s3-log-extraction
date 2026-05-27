@@ -12,7 +12,7 @@ from ..extractors import (
     S3LogAccessExtractor,
     stop_extraction,
 )
-from ..ip_utils import update_ip_to_region_codes, update_region_code_coordinates
+from ..ip_utils import refresh_ip_to_region_codes, update_ip_to_region_codes, update_region_code_coordinates
 from ..summarize import (
     generate_all_dataset_totals,
     generate_archive_summaries,
@@ -286,6 +286,39 @@ def _update_ip_regions_cli(
 ) -> None:
     update_ip_to_region_codes(
         batch_limit=batch_limit,
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        use_encryption=use_encryption,
+    )
+
+
+# s3logextraction update ip refresh
+@_update_ip_cli.command(name="refresh")
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Use a non-default cache directory for this command. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
+    type=rich_click.BOOL,
+    default=True,
+)
+def _refresh_ip_regions_cli(cache_directory: str | None = None, use_encryption: bool = True) -> None:
+    """
+    Refresh a subset of the ip_to_region cache by re-querying IPInfo and log any changes.
+
+    Selects IPs deterministically based on today's date using a 90-day cycle over the
+    alphabetically sorted cache. Run once per day to refresh the entire cache every 90 days.
+    """
+    refresh_ip_to_region_codes(
         cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
         use_encryption=use_encryption,
     )
