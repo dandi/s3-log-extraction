@@ -57,7 +57,9 @@ def update_ip_to_region_codes(
     ):
         all_ips.update(_read_ips_from_file(file_path=full_ips_file, use_encryption=use_encryption))
 
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption)
+    ip_to_region = load_ip_cache(
+        cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
+    )
     ip_not_in_services = load_ip_cache(
         cache_type="ip_not_in_services", cache_directory=cache_directory, use_encryption=use_encryption
     )

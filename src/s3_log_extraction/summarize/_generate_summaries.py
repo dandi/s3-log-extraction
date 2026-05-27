@@ -139,7 +139,9 @@ def generate_summaries(
     extraction_directory = cache_dir / "extraction"
     extraction_directory.mkdir(exist_ok=True)
     summary_directory = get_summary_directory(cache_directory=cache_directory)
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption)
+    ip_to_region = load_ip_cache(
+        cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
+    )
 
     datasets = [item for item in extraction_directory.iterdir() if item.is_dir()]
     all_archive_unique_ips: set[str] = set()
@@ -164,7 +166,9 @@ def generate_summaries(
             use_encryption=use_encryption,
         )
 
-        all_archive_unique_ips.update(_collect_unique_ips(asset_directories=asset_directories, use_encryption=use_encryption))
+        all_archive_unique_ips.update(
+            _collect_unique_ips(asset_directories=asset_directories, use_encryption=use_encryption)
+        )
     if all_archive_unique_ips:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)

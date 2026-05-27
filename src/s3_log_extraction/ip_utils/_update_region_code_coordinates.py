@@ -63,7 +63,9 @@ def update_region_code_coordinates(
     )
     region_codes_to_coordinates.update(previous_region_codes_to_coordinates)
 
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption)
+    ip_to_region = load_ip_cache(
+        cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
+    )
     region_codes_to_update = set(ip_to_region.values()) - set(region_codes_to_coordinates.keys())
     opencage_failures = []
     for country_and_region_code in tqdm.tqdm(
