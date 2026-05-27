@@ -70,7 +70,7 @@ def update_ip_to_region_codes(
         ips_to_update = ips_to_update[: batch_limit * batch_size]
 
     for ip_batch in tqdm.tqdm(
-        iterable=itertools.batched(iterable=ips_to_update, n=batch_size) if ips_to_update else [],
+        iterable=itertools.batched(iterable=ips_to_update, n=batch_size),
         total=number_of_batches,
         desc="Fetching IP regions in batches",
         unit="batches",
