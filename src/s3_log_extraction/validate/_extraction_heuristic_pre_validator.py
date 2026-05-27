@@ -1,4 +1,5 @@
 import hashlib
+import os
 import pathlib
 import subprocess
 
@@ -29,7 +30,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
-        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+        self.DROGON_IP_REGEX = _get_drogon_ip_regex()
 
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
@@ -58,3 +59,25 @@ class ExtractionHeuristicPreValidator(BaseValidator):
                 f"stderr: {result.stderr}\n"
             )
             raise RuntimeError(message)
+
+
+def _get_drogon_ip_regex() -> str:
+    encrypt_ip_regex = os.environ.get("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "true").lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+    if encrypt_ip_regex:
+        return decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED).decode("utf-8")
+
+    drogon_ip_regex = os.environ.get("S3_LOG_EXTRACTION_DROGON_IP_REGEX")
+    if drogon_ip_regex is None:
+        message = (
+            "Environment variable `S3_LOG_EXTRACTION_DROGON_IP_REGEX` is required when "
+            "`S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX` is disabled."
+        )
+        raise EnvironmentError(message)
+
+    return drogon_ip_regex

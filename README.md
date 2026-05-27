@@ -113,6 +113,19 @@ export IPINFO_API_KEY="your_token_here"
 export OPENCAGE_API_KEY="your_token_here"
 ```
 
+The extraction heuristic validator encrypts internal IP regex patterns by default. To preserve this security default, set:
+
+```bash
+export S3_LOG_EXTRACTION_PASSWORD="your_encryption_password"
+```
+
+On trusted internal processing servers where you want to skip decryption overhead, you can disable encrypted regex handling and provide the plaintext regex directly:
+
+```bash
+export S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX="false"
+export S3_LOG_EXTRACTION_DROGON_IP_REGEX="<plaintext regex>"
+```
+
 To update the region codes and their coordinates:
 
 ```bash
