@@ -103,7 +103,6 @@ def update_ip_to_region_codes(
             )
 
 
-
 def _get_region_code_from_ip_address(
     ip_address: str,
     ipinfo_handler: "ipinfo.Handler",
