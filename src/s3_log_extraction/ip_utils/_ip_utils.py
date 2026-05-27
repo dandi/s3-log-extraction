@@ -1,4 +1,28 @@
 import functools
+import ipaddress
+import pathlib
+import warnings
+
+
+def _read_ips_from_file(file_path: pathlib.Path) -> list[str]:
+    """Read and return stripped, non-empty IP address strings from a ``full_ips.txt`` file."""
+    return [stripped for line in file_path.read_text().splitlines() if (stripped := line.strip())]
+
+
+def _ip_in_cidr(ip_address: str, cidr_address: str) -> bool:
+    """Return True if ``ip_address`` falls within ``cidr_address``, False otherwise.
+
+    Uses ``strict=False`` to accept CIDRs that have host bits set, and returns
+    ``False`` for any entry that is not a valid CIDR string.
+    """
+    try:
+        return ipaddress.ip_address(address=ip_address) in ipaddress.ip_network(address=cidr_address, strict=False)
+    except ValueError as exception:
+        warnings.warn(
+            message=(f"Skipping invalid CIDR entry {cidr_address!r} while checking IP {ip_address!r}: {exception}"),
+            stacklevel=2,
+        )
+        return False
 
 
 @functools.lru_cache
