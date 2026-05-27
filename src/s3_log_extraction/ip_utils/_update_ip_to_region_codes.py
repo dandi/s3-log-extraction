@@ -54,7 +54,7 @@ def update_ip_to_region_codes(
         unit=" files",
         smoothing=0,
     ):
-        all_ips.update(line.strip() for line in full_ips_file.read_text().splitlines() if line.strip())
+        all_ips.update(stripped for line in full_ips_file.read_text().splitlines() if (stripped := line.strip()))
 
     ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
     ip_not_in_services = load_ip_cache(cache_type="ip_not_in_services", cache_directory=cache_directory)
