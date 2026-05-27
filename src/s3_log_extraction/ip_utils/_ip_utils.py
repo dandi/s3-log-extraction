@@ -6,6 +6,7 @@ def _read_ips_from_file(file_path: pathlib.Path) -> list[str]:
     """Read and return stripped, non-empty IP address strings from a ``full_ips.txt`` file."""
     return [stripped for line in file_path.read_text().splitlines() if (stripped := line.strip())]
 
+
 @functools.lru_cache
 def _request_cidr_range(service_name: str) -> dict:
     """Cache (in-memory) the requests to external services."""
