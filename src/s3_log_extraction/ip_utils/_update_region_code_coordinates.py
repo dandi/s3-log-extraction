@@ -12,7 +12,7 @@ from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 def update_region_code_coordinates(
     cache_directory: str | pathlib.Path | None = None,
-    encrypt_ips: bool = True,
+    encrypt: bool = True,
 ) -> None:
     """
     Update the `region_codes_to_coordinates.yaml` file in the cache directory.
@@ -22,7 +22,7 @@ def update_region_code_coordinates(
     cache_directory : str | pathlib.Path | None
         Path to the cache directory.
         If `None`, the default cache directory will be used.
-    encrypt_ips : bool
+    encrypt : bool
         If ``True`` (default), IP cache files are decrypted when reading and encrypted when writing.
         If ``False``, IP cache files are read and written as plaintext.
     """
@@ -59,11 +59,11 @@ def update_region_code_coordinates(
 
     region_codes_to_coordinates: dict[str, dict[str, float]] = _DEFAULT_REGION_CODES_TO_COORDINATES
     previous_region_codes_to_coordinates = load_ip_cache(
-        cache_type="region_codes_to_coordinates", cache_directory=cache_directory, encrypt_ips=encrypt_ips
+        cache_type="region_codes_to_coordinates", cache_directory=cache_directory, encrypt=encrypt
     )
     region_codes_to_coordinates.update(previous_region_codes_to_coordinates)
 
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, encrypt_ips=encrypt_ips)
+    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, encrypt=encrypt)
     region_codes_to_update = set(ip_to_region.values()) - set(region_codes_to_coordinates.keys())
     opencage_failures = []
     for country_and_region_code in tqdm.tqdm(
@@ -96,7 +96,7 @@ def update_region_code_coordinates(
         data=region_codes_to_coordinates_ordered,
         cache_type="region_codes_to_coordinates",
         cache_directory=cache_directory,
-        encrypt_ips=encrypt_ips,
+        encrypt=encrypt,
     )
     with service_coordinates_file_path.open(mode="w") as file_stream:
         yaml.dump(data=service_coordinates, stream=file_stream)

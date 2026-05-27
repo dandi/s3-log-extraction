@@ -107,14 +107,9 @@ def s3logextraction_cli():
     default=None,
 )
 @rich_click.option(
-    "--no-encrypt-ips",
-    "encrypt_ips",
-    help=(
-        "Disable encryption of IP addresses in extraction output files. "
-        "By default, IPs are encrypted on disk for privacy and security."
-    ),
-    is_flag=True,
-    flag_value=False,
+    "--encrypt/--no-encrypt",
+    "encrypt",
+    help="Encrypt IP addresses in extraction output files. Enabled by default.",
     default=True,
 )
 def _extract_cli(
@@ -125,7 +120,7 @@ def _extract_cli(
     mode: typing.Literal["remote"] | None = None,
     manifest_file_path: str | None = None,
     inventory_directory: str | None = None,
-    encrypt_ips: bool = True,
+    encrypt: bool = True,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -139,7 +134,7 @@ def _extract_cli(
 
     match mode:
         case "remote":
-            extractor = RemoteS3LogAccessExtractor(cache_directory=cache_path, encrypt_ips=encrypt_ips)
+            extractor = RemoteS3LogAccessExtractor(cache_directory=cache_path, encrypt=encrypt)
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -148,7 +143,7 @@ def _extract_cli(
                 inventory_directory=inventory_directory,
             )
         case _:
-            extractor = S3LogAccessExtractor(cache_directory=cache_path, encrypt_ips=encrypt_ips)
+            extractor = S3LogAccessExtractor(cache_directory=cache_path, encrypt=encrypt)
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
@@ -279,23 +274,18 @@ def _update_ip_cli() -> None:
     default=None,
 )
 @rich_click.option(
-    "--no-encrypt-ips",
-    "encrypt_ips",
-    help=(
-        "Disable decryption of IP addresses when reading from cache files. "
-        "By default, IPs are decrypted when read (matches the default encryption used during extraction)."
-    ),
-    is_flag=True,
-    flag_value=False,
+    "--encrypt/--no-encrypt",
+    "encrypt",
+    help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
     default=True,
 )
 def _update_ip_regions_cli(
-    batch_limit: int | None = None, cache_directory: str | None = None, encrypt_ips: bool = True
+    batch_limit: int | None = None, cache_directory: str | None = None, encrypt: bool = True
 ) -> None:
     update_ip_to_region_codes(
         batch_limit=batch_limit,
         cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
-        encrypt_ips=encrypt_ips,
+        encrypt=encrypt,
     )
 
 
@@ -313,20 +303,15 @@ def _update_ip_regions_cli(
     default=None,
 )
 @rich_click.option(
-    "--no-encrypt-ips",
-    "encrypt_ips",
-    help=(
-        "Disable decryption of IP addresses when reading from cache files. "
-        "By default, IPs are decrypted when read (matches the default encryption used during extraction)."
-    ),
-    is_flag=True,
-    flag_value=False,
+    "--encrypt/--no-encrypt",
+    "encrypt",
+    help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
     default=True,
 )
-def _update_ip_coordinates_cli(cache_directory: str | None = None, encrypt_ips: bool = True) -> None:
+def _update_ip_coordinates_cli(cache_directory: str | None = None, encrypt: bool = True) -> None:
     update_region_code_coordinates(
         cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
-        encrypt_ips=encrypt_ips,
+        encrypt=encrypt,
     )
 
 
@@ -380,14 +365,9 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, encrypt_ips: 
     default=None,
 )
 @rich_click.option(
-    "--no-encrypt-ips",
-    "encrypt_ips",
-    help=(
-        "Disable decryption of IP addresses when reading from cache files. "
-        "By default, IPs are decrypted when read (matches the default encryption used during extraction)."
-    ),
-    is_flag=True,
-    flag_value=False,
+    "--encrypt/--no-encrypt",
+    "encrypt",
+    help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
     default=True,
 )
 def _update_summaries_cli(
@@ -396,7 +376,7 @@ def _update_summaries_cli(
     skip: str | None = None,
     workers: int = -2,
     cache_directory: str | None = None,
-    encrypt_ips: bool = True,
+    encrypt: bool = True,
 ) -> None:
     """Generate condensed summaries of activity."""
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
@@ -404,7 +384,7 @@ def _update_summaries_cli(
         case "archive":
             generate_archive_summaries(cache_directory=cache_path)
         case _:
-            generate_summaries(cache_directory=cache_path, encrypt_ips=encrypt_ips)
+            generate_summaries(cache_directory=cache_path, encrypt=encrypt)
 
 
 # s3logextraction update totals

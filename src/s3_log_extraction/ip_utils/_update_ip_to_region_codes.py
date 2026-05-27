@@ -16,7 +16,7 @@ def update_ip_to_region_codes(
     batch_size: int = 1_000,
     batch_limit: int | None = None,
     cache_directory: str | pathlib.Path | None = None,
-    encrypt_ips: bool = True,
+    encrypt: bool = True,
 ) -> str | None:
     """
     Update the ``ip_to_region.yaml`` file in the cache directory.
@@ -33,7 +33,7 @@ def update_ip_to_region_codes(
     cache_directory : str | pathlib.Path | None
         Path to the cache directory.
         If `None`, the default cache directory will be used.
-    encrypt_ips : bool
+    encrypt : bool
         If ``True`` (default), IP data files are decrypted when reading and encrypted when writing.
         If ``False``, IP data files are read and written as plaintext.
     """
@@ -55,11 +55,11 @@ def update_ip_to_region_codes(
         unit=" files",
         smoothing=0,
     ):
-        all_ips.update(_read_ips_from_file(file_path=full_ips_file, encrypt_ips=encrypt_ips))
+        all_ips.update(_read_ips_from_file(file_path=full_ips_file, encrypt=encrypt))
 
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, encrypt_ips=encrypt_ips)
+    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, encrypt=encrypt)
     ip_not_in_services = load_ip_cache(
-        cache_type="ip_not_in_services", cache_directory=cache_directory, encrypt_ips=encrypt_ips
+        cache_type="ip_not_in_services", cache_directory=cache_directory, encrypt=encrypt
     )
     ips_to_update = list(all_ips - set(ip_to_region.keys()))
 
@@ -108,14 +108,14 @@ def update_ip_to_region_codes(
                 data=ip_to_region,
                 cache_type="ip_to_region",
                 cache_directory=cache_directory,
-                encrypt_ips=encrypt_ips,
+                encrypt=encrypt,
             )
 
     _write_ip_cache(
         data=ip_not_in_services,
         cache_type="ip_not_in_services",
         cache_directory=cache_directory,
-        encrypt_ips=encrypt_ips,
+        encrypt=encrypt,
     )
 
 

@@ -10,7 +10,7 @@ def load_ip_cache(
     *,
     cache_type: typing.Literal["ip_to_region", "ip_not_in_services", "region_codes_to_coordinates"],
     cache_directory: str | pathlib.Path | None = None,
-    encrypt_ips: bool = True,
+    encrypt: bool = True,
 ) -> dict[str, str]:
     """Load the IP cache from the cache directory.
 
@@ -20,7 +20,7 @@ def load_ip_cache(
         The type of IP cache to load.
     cache_directory : path-like, optional
         The cache directory to use. If ``None``, the default cache directory is used.
-    encrypt_ips : bool, optional
+    encrypt : bool, optional
         If ``True`` (default), the cache file content is decrypted before parsing.
         If ``False``, the file content is read as plaintext YAML.
     """
@@ -31,7 +31,7 @@ def load_ip_cache(
         cache_file_path.touch()
         return {}
 
-    if encrypt_ips:
+    if encrypt:
         from ..utils.encryption import decrypt_bytes
 
         raw_bytes = cache_file_path.read_bytes()
@@ -51,7 +51,7 @@ def _write_ip_cache(
     data: dict,
     cache_type: typing.Literal["ip_to_region", "ip_not_in_services", "region_codes_to_coordinates"],
     cache_directory: str | pathlib.Path | None = None,
-    encrypt_ips: bool = True,
+    encrypt: bool = True,
 ) -> None:
     """Write data to an IP cache file, optionally encrypting the content.
 
@@ -63,7 +63,7 @@ def _write_ip_cache(
         The type of IP cache to write.
     cache_directory : path-like, optional
         The cache directory to use. If ``None``, the default cache directory is used.
-    encrypt_ips : bool, optional
+    encrypt : bool, optional
         If ``True`` (default), the content is encrypted before writing.
         If ``False``, the content is written as plaintext YAML.
     """
@@ -71,7 +71,7 @@ def _write_ip_cache(
     cache_file_path = ip_cache_directory / f"{cache_type}.yaml"
 
     text = yaml.dump(data=data)
-    if encrypt_ips:
+    if encrypt:
         from ..utils.encryption import encrypt_bytes
 
         cache_file_path.write_bytes(encrypt_bytes(text.encode(encoding="utf-8")))

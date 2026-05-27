@@ -49,7 +49,7 @@ def test_update_ip_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     (extraction_dir / "full_ips.txt").write_text(test_ip)
 
     try:
-        s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, encrypt_ips=False)
+        s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, encrypt=False)
     except Exception as exc:
         if _is_auth_error(exc):
             pytest.fail(
@@ -99,7 +99,7 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
     ip_to_region_file.write_text(yaml.dump({"4.4.4.4": region_code}))
 
     try:
-        s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, encrypt_ips=False)
+        s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, encrypt=False)
     except Exception as exc:
         if _is_auth_error(exc):
             pytest.fail(

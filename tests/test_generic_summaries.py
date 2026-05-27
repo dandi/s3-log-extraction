@@ -21,7 +21,7 @@ def test_generic_summaries(tmpdir: py.path.local):
     test_summary_dir = test_dir / "summaries"
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
 
-    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, encrypt_ips=False)
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, encrypt=False)
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
     s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
     s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
