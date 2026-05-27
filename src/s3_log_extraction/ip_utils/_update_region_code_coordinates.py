@@ -6,7 +6,7 @@ import tqdm
 import yaml
 
 from ._globals import _DEFAULT_REGION_CODES_TO_COORDINATES, _KNOWN_SERVICES
-from ._ip_cache import _write_ip_cache, get_ip_cache_directory, load_ip_cache
+from ._ip_cache import write_ip_cache, get_ip_cache_directory, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
 
 
@@ -94,7 +94,7 @@ def update_region_code_coordinates(
         key: region_codes_to_coordinates[key] for key in natsort.natsorted(seq=region_codes_to_coordinates.keys())
     }
 
-    _write_ip_cache(
+    write_ip_cache(
         data=region_codes_to_coordinates_ordered,
         cache_type="region_codes_to_coordinates",
         cache_directory=cache_directory,

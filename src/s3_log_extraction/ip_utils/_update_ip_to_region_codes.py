@@ -7,7 +7,7 @@ import random
 import tqdm
 
 from ._globals import _KNOWN_SERVICES
-from ._ip_cache import _write_ip_cache, load_ip_cache
+from ._ip_cache import write_ip_cache, load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions, _ip_in_cidr, _read_ips_from_file
 from ..config import get_cache_directory
 
@@ -106,14 +106,14 @@ def update_ip_to_region_codes(
                 continue
             ip_to_region[ip_address] = region_code
 
-            _write_ip_cache(
+            write_ip_cache(
                 data=ip_to_region,
                 cache_type="ip_to_region",
                 cache_directory=cache_directory,
                 use_encryption=use_encryption,
             )
 
-    _write_ip_cache(
+    write_ip_cache(
         data=ip_not_in_services,
         cache_type="ip_not_in_services",
         cache_directory=cache_directory,

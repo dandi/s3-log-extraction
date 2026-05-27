@@ -4,6 +4,7 @@ import typing
 import yaml
 
 from ..config import get_ip_cache_directory
+from ..utils.encryption import read_text_from_file, write_text_to_file
 
 
 def load_ip_cache(
@@ -31,22 +32,12 @@ def load_ip_cache(
         cache_file_path.touch()
         return {}
 
-    if use_encryption:
-        from ..utils.encryption import decrypt_bytes
-
-        raw_bytes = cache_file_path.read_bytes()
-        if not raw_bytes.strip():
-            return {}
-        content = decrypt_bytes(raw_bytes).decode(encoding="utf-8")
-    else:
-        with cache_file_path.open(mode="r") as file_stream:
-            content = file_stream.read()
-
+    content = read_text_from_file(file_path=cache_file_path, use_encryption=use_encryption)
     data = yaml.safe_load(stream=content) or {}
     return data
 
 
-def _write_ip_cache(
+def write_ip_cache(
     *,
     data: dict,
     cache_type: typing.Literal["ip_to_region", "ip_not_in_services", "region_codes_to_coordinates"],
@@ -71,10 +62,4 @@ def _write_ip_cache(
     cache_file_path = ip_cache_directory / f"{cache_type}.yaml"
 
     text = yaml.dump(data=data)
-    if use_encryption:
-        from ..utils.encryption import encrypt_bytes
-
-        cache_file_path.write_bytes(encrypt_bytes(text.encode(encoding="utf-8")))
-    else:
-        with cache_file_path.open(mode="w") as file_stream:
-            file_stream.write(text)
+    write_text_to_file(file_path=cache_file_path, text=text, use_encryption=use_encryption)

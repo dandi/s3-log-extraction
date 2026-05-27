@@ -1,5 +1,5 @@
 from . import encryption, inventory, parallel
-from .encryption import decrypt_bytes, encrypt_bytes, get_key
+from .encryption import decrypt_bytes, encrypt_bytes, get_key, read_text_from_file, write_text_to_file
 from .inventory import (
     ExtractionCompletionStats,
     LogBucketStats,
@@ -22,4 +22,6 @@ __all__ = [
     "inventory",
     "LogBucketStats",
     "parallel",
+    "read_text_from_file",
+    "write_text_to_file",
 ]
