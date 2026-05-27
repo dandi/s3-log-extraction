@@ -10,7 +10,7 @@ import yaml
 
 from ._globals import _KNOWN_SERVICES
 from ._ip_cache import load_ip_cache
-from ._ip_utils import _get_cidr_address_ranges_and_subregions
+from ._ip_utils import _get_cidr_address_ranges_and_subregions, _read_ips_from_file
 from ..config import get_extraction_directory, get_ip_cache_directory
 
 
@@ -54,7 +54,7 @@ def update_ip_to_region_codes(
         unit=" files",
         smoothing=0,
     ):
-        all_ips.update(stripped for line in full_ips_file.read_text().splitlines() if (stripped := line.strip()))
+        all_ips.update(_read_ips_from_file(file_path=full_ips_file))
 
     ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
     ip_not_in_services = load_ip_cache(cache_type="ip_not_in_services", cache_directory=cache_directory)

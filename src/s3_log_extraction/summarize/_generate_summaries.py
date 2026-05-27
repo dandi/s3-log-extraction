@@ -7,6 +7,7 @@ import tqdm
 
 from ..config import get_extraction_directory, get_summary_directory
 from ..ip_utils import load_ip_cache
+from ..ip_utils._ip_utils import _read_ips_from_file
 
 
 def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
@@ -57,7 +58,7 @@ def _collect_unique_ips(asset_directories: list[pathlib.Path]) -> set[str]:
         full_ips_file_path = asset_directory / "full_ips.txt"
         if not full_ips_file_path.exists():
             continue
-        unique_ips.update(ip.strip() for ip in full_ips_file_path.read_text().splitlines())
+        unique_ips.update(_read_ips_from_file(file_path=full_ips_file_path))
     return unique_ips
 
 
@@ -296,7 +297,7 @@ def _summarize_dataset_by_region(
         if not full_ips_file_path.exists():
             continue
 
-        full_ips = [ip.strip() for ip in full_ips_file_path.read_text().splitlines()]
+        full_ips = _read_ips_from_file(file_path=full_ips_file_path)
         regions = [ip_to_region.get(ip, "unknown") for ip in full_ips]
         all_regions.extend(regions)
 
