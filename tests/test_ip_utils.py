@@ -25,6 +25,6 @@ def test_ip_utils(tmpdir: py.path.local, monkeypatch: pytest.MonkeyPatch) -> Non
     shutil.copytree(src=expected_ips_dir, dst=test_ips_dir, dirs_exist_ok=True)
 
     # Test updating IPs to region codes and coordinates
-    s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=test_cache)
-    s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=test_cache)
+    s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=test_cache, use_encryption=False)
+    s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=test_cache, use_encryption=False)
     s3_log_extraction.testing.assert_filetree_matches(test_dir=test_ips_dir, expected_dir=expected_ips_dir)

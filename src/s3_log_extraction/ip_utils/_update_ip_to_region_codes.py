@@ -7,18 +7,18 @@ import typing
 import warnings
 
 import tqdm
-import yaml
 
 from ._globals import _KNOWN_SERVICES
-from ._ip_cache import load_ip_cache
+from ._ip_cache import load_ip_cache, write_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions, _ip_in_cidr, _read_ips_from_file
-from ..config import get_cache_directory, get_ip_cache_directory
+from ..config import get_cache_directory
 
 
 def update_ip_to_region_codes(
     batch_size: int = 1_000,
     batch_limit: int | None = None,
     cache_directory: str | pathlib.Path | None = None,
+    use_encryption: bool = True,
 ) -> None:
     """
     Update the ``ip_to_region.yaml`` file in the cache directory.
@@ -35,6 +35,9 @@ def update_ip_to_region_codes(
     cache_directory : str | pathlib.Path | None
         Path to the cache directory.
         If `None`, the default cache directory will be used.
+    use_encryption : bool
+        If ``True`` (default), IP data files are decrypted when reading and encrypted when writing.
+        If ``False``, IP data files are read and written as plaintext.
     """
     import ipinfo
 
@@ -43,9 +46,6 @@ def update_ip_to_region_codes(
         message = "The environment variable 'IPINFO_API_KEY' must be set to import `s3_log_extraction`!"
         raise ValueError(message)  # pragma: no cover
     ipinfo_handler = ipinfo.getHandler(access_token=ipinfo_api_key)
-
-    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
-    ip_to_region_file_path = ip_cache_directory / "ip_to_region.yaml"
 
     cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
     extraction_directory = cache_dir / "extraction"
@@ -57,9 +57,11 @@ def update_ip_to_region_codes(
         unit=" files",
         smoothing=0,
     ):
-        all_ips.update(_read_ips_from_file(file_path=full_ips_file))
+        all_ips.update(_read_ips_from_file(file_path=full_ips_file, use_encryption=use_encryption))
 
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
+    ip_to_region = load_ip_cache(
+        cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
+    )
     ip_to_determined_region = {ip: region for ip, region in ip_to_region.items() if region != "undetermined"}
     ips_to_update = list(all_ips - set(ip_to_determined_region.keys()))
 
@@ -93,8 +95,12 @@ def update_ip_to_region_codes(
             region_code = _get_region_code_from_ip_address(ip_address=ip_address, ipinfo_handler=ipinfo_handler)
             ip_to_region[ip_address] = region_code
 
-            with ip_to_region_file_path.open(mode="w") as file_stream:
-                yaml.dump(data=ip_to_region, stream=file_stream)
+            write_ip_cache(
+                data=ip_to_region,
+                cache_type="ip_to_region",
+                cache_directory=cache_directory,
+                use_encryption=use_encryption,
+            )
 
 
 def _get_region_code_from_ip_address(
@@ -153,3 +159,5 @@ def _get_region_code_from_ip_address(
             stacklevel=2,
         )
         return "undetermined"
+
+    return "unknown"

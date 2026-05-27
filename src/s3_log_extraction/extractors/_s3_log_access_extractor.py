@@ -12,7 +12,7 @@ import natsort
 import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ._utils import _deploy_subprocess
+from ._utils import _deploy_subprocess, _merge_dir_to_extraction, _merge_file_into_extraction
 from ..config import get_cache_directory, get_records_directory
 from ..utils import _handle_max_workers
 
@@ -34,8 +34,9 @@ class S3LogAccessExtractor:
       - updatable
     """
 
-    def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
+    def __init__(self, *, cache_directory: pathlib.Path | None = None, use_encryption: bool = True) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
+        self.use_encryption = use_encryption
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
@@ -160,10 +161,11 @@ class S3LogAccessExtractor:
                         relative_file_path = pathlib.Path(*relative_parts)
                         destination_file_path = self.extraction_directory / relative_file_path
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
-
-                        content = file_path.read_bytes()
-                        with destination_file_path.open(mode="ab") as file_stream:
-                            file_stream.write(content)
+                        _merge_file_into_extraction(
+                            source_file_path=file_path,
+                            destination_file_path=destination_file_path,
+                            use_encryption=self.use_encryption,
+                        )
                         file_path.unlink()
 
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
@@ -183,6 +185,9 @@ class S3LogAccessExtractor:
         if parallel_mode is True:
             extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
+        elif self.use_encryption:
+            # For single-worker mode with encryption: use a per-call temp dir so we can use_encryption on merge
+            extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         file_path = pathlib.Path(file_path)
         if log_root is not None:
@@ -198,6 +203,14 @@ class S3LogAccessExtractor:
             file_stream.write(content)
 
         self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
+
+        if not parallel_mode and self.use_encryption and extraction_directory is not None:
+            _merge_dir_to_extraction(
+                source_dir=extraction_directory,
+                extraction_directory=self.extraction_directory,
+                use_encryption=self.use_encryption,
+            )
+            shutil.rmtree(path=extraction_directory, ignore_errors=True)
 
         # Record final success and cleanup
         self.file_processing_end_record.add(record_key)

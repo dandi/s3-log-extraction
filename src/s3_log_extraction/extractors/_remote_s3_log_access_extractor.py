@@ -17,7 +17,7 @@ import tqdm
 import yaml
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ._utils import _deploy_subprocess, _handle_aws_credentials
+from ._utils import _deploy_subprocess, _handle_aws_credentials, _merge_dir_to_extraction, _merge_file_into_extraction
 from ..config import get_cache_directory, get_records_directory
 from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
 
@@ -47,8 +47,9 @@ class RemoteS3LogAccessExtractor:
       - updatable
     """
 
-    def __init__(self, cache_directory: pathlib.Path | None = None) -> None:
+    def __init__(self, cache_directory: pathlib.Path | None = None, use_encryption: bool = True) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
+        self.use_encryption = use_encryption
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
@@ -217,10 +218,11 @@ class RemoteS3LogAccessExtractor:
                         relative_file_path = pathlib.Path(*relative_parts)
                         destination_file_path = self.extraction_directory / relative_file_path
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
-
-                        content = file_path.read_bytes()
-                        with destination_file_path.open(mode="ab") as file_stream:
-                            file_stream.write(content)
+                        _merge_file_into_extraction(
+                            source_file_path=file_path,
+                            destination_file_path=destination_file_path,
+                            use_encryption=self.use_encryption,
+                        )
                         file_path.unlink()
                     shutil.rmtree(path=self.temporary_directory)
                     self.temporary_directory.mkdir()
@@ -430,6 +432,9 @@ class RemoteS3LogAccessExtractor:
         if parallel_mode is True:
             extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
+        elif self.use_encryption:
+            # For single-worker mode with encryption: use a per-call temp dir so we can use_encryption on merge
+            extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         record_key = s3_url.split("/")[-1]
 
@@ -442,6 +447,14 @@ class RemoteS3LogAccessExtractor:
             temporary_file_path.write_bytes(data=file_stream.read())
 
         self._run_extraction(file_path=temporary_file_path, extraction_directory=extraction_directory)
+
+        if not parallel_mode and self.use_encryption and extraction_directory is not None:
+            _merge_dir_to_extraction(
+                source_dir=extraction_directory,
+                extraction_directory=self.extraction_directory,
+                use_encryption=self.use_encryption,
+            )
+            shutil.rmtree(path=extraction_directory, ignore_errors=True)
 
         # Record final success and cleanup
         with self.s3_url_processing_end_record_file_path.open(mode="a") as file_stream:
