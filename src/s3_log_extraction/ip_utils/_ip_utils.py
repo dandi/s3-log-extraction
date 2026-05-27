@@ -1,6 +1,7 @@
 import functools
 import ipaddress
 import pathlib
+import warnings
 
 
 def _read_ips_from_file(file_path: pathlib.Path) -> list[str]:
@@ -16,7 +17,13 @@ def _ip_in_cidr(ip_address: str, cidr_address: str) -> bool:
     """
     try:
         return ipaddress.ip_address(address=ip_address) in ipaddress.ip_network(address=cidr_address, strict=False)
-    except ValueError:
+    except ValueError as exception:
+        warnings.warn(
+            message=(
+                f"Skipping invalid CIDR entry {cidr_address!r} while checking IP {ip_address!r}: {exception}"
+            ),
+            stacklevel=2,
+        )
         return False
 
 
