@@ -35,9 +35,9 @@ class S3LogAccessExtractor:
       - updatable
     """
 
-    def __init__(self, *, cache_directory: pathlib.Path | None = None, encrypt: bool = True) -> None:
+    def __init__(self, *, cache_directory: pathlib.Path | None = None, use_encryption: bool = True) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
-        self.encrypt = encrypt
+        self.use_encryption = use_encryption
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
@@ -163,17 +163,17 @@ class S3LogAccessExtractor:
                         destination_file_path = self.extraction_directory / relative_file_path
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-                        if self.encrypt and file_path.name == "full_ips.txt":
-                            new_ips = _read_ips_from_file(file_path=file_path, encrypt=False)
+                        if self.use_encryption and file_path.name == "full_ips.txt":
+                            new_ips = _read_ips_from_file(file_path=file_path, use_encryption=False)
                             existing_ips = (
-                                _read_ips_from_file(file_path=destination_file_path, encrypt=True)
+                                _read_ips_from_file(file_path=destination_file_path, use_encryption=True)
                                 if destination_file_path.exists()
                                 else []
                             )
                             _write_ips_to_file(
                                 file_path=destination_file_path,
                                 ips=[*existing_ips, *new_ips],
-                                encrypt=True,
+                                use_encryption=True,
                             )
                         else:
                             content = file_path.read_bytes()
@@ -198,8 +198,8 @@ class S3LogAccessExtractor:
         if parallel_mode is True:
             extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
-        elif self.encrypt:
-            # For single-worker mode with encryption: use a per-call temp dir so we can encrypt on merge
+        elif self.use_encryption:
+            # For single-worker mode with encryption: use a per-call temp dir so we can use_encryption on merge
             extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         file_path = pathlib.Path(file_path)
@@ -217,7 +217,7 @@ class S3LogAccessExtractor:
 
         self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
 
-        if not parallel_mode and self.encrypt and extraction_directory is not None:
+        if not parallel_mode and self.use_encryption and extraction_directory is not None:
             self._merge_dir_to_extraction(source_dir=extraction_directory)
             shutil.rmtree(path=extraction_directory, ignore_errors=True)
 
@@ -234,16 +234,16 @@ class S3LogAccessExtractor:
             destination_file_path.parent.mkdir(parents=True, exist_ok=True)
 
             if file_path.name == "full_ips.txt":
-                new_ips = _read_ips_from_file(file_path=file_path, encrypt=False)
+                new_ips = _read_ips_from_file(file_path=file_path, use_encryption=False)
                 existing_ips = (
-                    _read_ips_from_file(file_path=destination_file_path, encrypt=True)
+                    _read_ips_from_file(file_path=destination_file_path, use_encryption=True)
                     if destination_file_path.exists()
                     else []
                 )
                 _write_ips_to_file(
                     file_path=destination_file_path,
                     ips=[*existing_ips, *new_ips],
-                    encrypt=True,
+                    use_encryption=True,
                 )
             else:
                 content = file_path.read_bytes()

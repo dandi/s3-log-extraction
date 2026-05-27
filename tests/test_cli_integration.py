@@ -41,7 +41,7 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
             str(workers),
             "--cache",
             str(output_directory),
-            "--no-encrypt",
+            "--no-encryption",
         ],
     )
     assert result.exit_code == 0, f"Extraction failed: {result.output}"
@@ -95,7 +95,7 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     assert result.exit_code == 0, f"Failed to set cache: {result.output}"
 
     # Generate summaries via CLI
-    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "summaries", "--no-encrypt"])
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "summaries", "--no-encryption"])
     assert result.exit_code == 0, f"Failed to generate summaries: {result.output}"
 
     # Generate dataset totals via CLI
