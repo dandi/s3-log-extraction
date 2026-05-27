@@ -160,3 +160,5 @@ def _get_region_code_from_ip_address(
             stacklevel=2,
         )
         return "undetermined"
+
+    return "unknown"
