@@ -4,7 +4,7 @@
 
 ### 📝 Documentation
 
-Rewrote this changelog to use the AGENTS.md section layout. ([#246](https://github.com/dandi/s3-log-extraction/pull/246))
+- Rewrote this changelog to use the AGENTS.md section layout. ([#246](https://github.com/dandi/s3-log-extraction/pull/246))
 
 
 ## v1.9.12
