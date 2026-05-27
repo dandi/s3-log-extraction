@@ -14,7 +14,7 @@ def test_extraction(tmpdir: py.path.local) -> None:
     output_directory.mkdir(exist_ok=True)
     expected_output_directory = base_directory / "expected_output"
 
-    extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory)
+    extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory, encrypt_ips=False)
     extractor.extract_directory(directory=test_logs_directory, workers=1)
 
     relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
@@ -43,7 +43,7 @@ def test_extraction_parallel(tmpdir: py.path.local) -> None:
     output_directory.mkdir(exist_ok=True)
     expected_output_directory = base_directory / "expected_output"
 
-    extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory)
+    extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory, encrypt_ips=False)
     extractor.extract_directory(directory=test_logs_directory, workers=2)
 
     relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}

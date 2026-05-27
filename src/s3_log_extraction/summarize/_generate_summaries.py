@@ -39,7 +39,7 @@ def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     return round(count / modulo) * modulo
 
 
-def _collect_unique_ips(asset_directories: list[pathlib.Path]) -> set[str]:
+def _collect_unique_ips(asset_directories: list[pathlib.Path], encrypt_ips: bool = True) -> set[str]:
     """
     Collect all unique IP addresses across the given asset directories.
 
@@ -47,6 +47,9 @@ def _collect_unique_ips(asset_directories: list[pathlib.Path]) -> set[str]:
     ----------
     asset_directories : list of pathlib.Path
         Paths to per-asset extraction directories containing ``full_ips.txt`` files.
+    encrypt_ips : bool
+        If ``True`` (default), ``full_ips.txt`` files are decrypted before reading.
+        If ``False``, files are read as plaintext.
 
     Returns
     -------
@@ -58,7 +61,7 @@ def _collect_unique_ips(asset_directories: list[pathlib.Path]) -> set[str]:
         full_ips_file_path = asset_directory / "full_ips.txt"
         if not full_ips_file_path.exists():
             continue
-        unique_ips.update(_read_ips_from_file(file_path=full_ips_file_path))
+        unique_ips.update(_read_ips_from_file(file_path=full_ips_file_path, encrypt_ips=encrypt_ips))
     return unique_ips
 
 
@@ -68,6 +71,7 @@ def _summarize_dataset_requester_count(
     summary_file_path: pathlib.Path,
     modulo: int = 20,
     minimum: int = 50,
+    encrypt_ips: bool = True,
 ) -> None:
     """
     Compute and save the privacy-rounded unique requester count for a dataset.
@@ -87,8 +91,11 @@ def _summarize_dataset_requester_count(
     minimum : int, optional
         Minimum disclosure threshold.  Counts below this are reported as ``"<{minimum}"``.
         Default is ``50``.
+    encrypt_ips : bool
+        If ``True`` (default), ``full_ips.txt`` files are decrypted before reading.
+        If ``False``, files are read as plaintext.
     """
-    unique_ips = _collect_unique_ips(asset_directories=asset_directories)
+    unique_ips = _collect_unique_ips(asset_directories=asset_directories, encrypt_ips=encrypt_ips)
 
     if not unique_ips:
         return
@@ -98,7 +105,9 @@ def _summarize_dataset_requester_count(
     summary_file_path.write_text(str(rounded_count))
 
 
-def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | None = None) -> None:
+def generate_summaries(
+    level: int = 0, cache_directory: str | pathlib.Path | None = None, encrypt_ips: bool = True
+) -> None:
     """
     Generate summaries for each dataset in the extraction directory.
 
@@ -115,6 +124,9 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
         Please raise an issue to request this feature: https://github.com/dandi/s3-log-extraction/issues/new
     cache_directory : str | pathlib.Path | None
         Path to the cache directory.
+    encrypt_ips : bool
+        If ``True`` (default), ``full_ips.txt`` and IP cache files are decrypted when read.
+        If ``False``, files are read as plaintext.
     """
     if level != 0:
         message = (
@@ -127,7 +139,7 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
     extraction_directory = cache_dir / "extraction"
     extraction_directory.mkdir(exist_ok=True)
     summary_directory = get_summary_directory(cache_directory=cache_directory)
-    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
+    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory, encrypt_ips=encrypt_ips)
 
     datasets = [item for item in extraction_directory.iterdir() if item.is_dir()]
     all_archive_unique_ips: set[str] = set()
@@ -149,9 +161,10 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
             asset_directories=asset_directories,
             summary_directory=summary_directory,
             ip_to_region=ip_to_region,
+            encrypt_ips=encrypt_ips,
         )
 
-        all_archive_unique_ips.update(_collect_unique_ips(asset_directories=asset_directories))
+        all_archive_unique_ips.update(_collect_unique_ips(asset_directories=asset_directories, encrypt_ips=encrypt_ips))
     if all_archive_unique_ips:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
@@ -165,6 +178,7 @@ def _summarize_dataset(
     asset_directories: list[pathlib.Path],
     summary_directory: pathlib.Path,
     ip_to_region: dict[str, str],
+    encrypt_ips: bool = True,
 ) -> None:
     _summarize_dataset_by_day(
         asset_directories=asset_directories,
@@ -178,10 +192,12 @@ def _summarize_dataset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
         ip_to_region=ip_to_region,
+        encrypt_ips=encrypt_ips,
     )
     _summarize_dataset_requester_count(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
+        encrypt_ips=encrypt_ips,
     )
 
 
@@ -286,7 +302,11 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
 
 
 def _summarize_dataset_by_region(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, ip_to_region: dict[str, str]
+    *,
+    asset_directories: list[pathlib.Path],
+    summary_file_path: pathlib.Path,
+    ip_to_region: dict[str, str],
+    encrypt_ips: bool = True,
 ) -> None:
     all_regions = []
     all_bytes_sent = []
@@ -299,7 +319,7 @@ def _summarize_dataset_by_region(
         if not full_ips_file_path.exists():
             continue
 
-        full_ips = _read_ips_from_file(file_path=full_ips_file_path)
+        full_ips = _read_ips_from_file(file_path=full_ips_file_path, encrypt_ips=encrypt_ips)
         regions = [ip_to_region.get(ip, "unknown") for ip in full_ips]
         all_regions.extend(regions)
 

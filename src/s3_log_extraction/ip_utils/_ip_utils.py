@@ -4,9 +4,47 @@ import pathlib
 import warnings
 
 
-def _read_ips_from_file(file_path: pathlib.Path) -> list[str]:
-    """Read and return stripped, non-empty IP address strings from a ``full_ips.txt`` file."""
-    return [stripped for line in file_path.read_text().splitlines() if (stripped := line.strip())]
+def _read_ips_from_file(file_path: pathlib.Path, encrypt_ips: bool = True) -> list[str]:
+    """Read and return stripped, non-empty IP address strings from a ``full_ips.txt`` file.
+
+    Parameters
+    ----------
+    file_path : pathlib.Path
+        Path to the ``full_ips.txt`` file.
+    encrypt_ips : bool, optional
+        If ``True`` (default), the file content is decrypted before parsing.
+        If ``False``, the file content is read as plaintext.
+    """
+    if encrypt_ips:
+        from ..utils.encryption import decrypt_bytes
+
+        raw_bytes = file_path.read_bytes()
+        text = decrypt_bytes(raw_bytes).decode(encoding="utf-8")
+    else:
+        text = file_path.read_text()
+    return [stripped for line in text.splitlines() if (stripped := line.strip())]
+
+
+def _write_ips_to_file(file_path: pathlib.Path, ips: list[str], encrypt_ips: bool = True) -> None:
+    """Write IP address strings to a ``full_ips.txt`` file, optionally encrypting the content.
+
+    Parameters
+    ----------
+    file_path : pathlib.Path
+        Path to the ``full_ips.txt`` file to write.
+    ips : list of str
+        IP address strings to write (one per line).
+    encrypt_ips : bool, optional
+        If ``True`` (default), the content is encrypted before writing.
+        If ``False``, the content is written as plaintext.
+    """
+    text = "\n".join(ips) + ("\n" if ips else "")
+    if encrypt_ips:
+        from ..utils.encryption import encrypt_bytes
+
+        file_path.write_bytes(encrypt_bytes(text.encode(encoding="utf-8")))
+    else:
+        file_path.write_text(text)
 
 
 def _ip_in_cidr(ip_address: str, cidr_address: str) -> bool:

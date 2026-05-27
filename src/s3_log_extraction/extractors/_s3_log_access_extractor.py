@@ -14,6 +14,7 @@ import tqdm
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess
 from ..config import get_cache_directory, get_records_directory
+from ..ip_utils._ip_utils import _read_ips_from_file, _write_ips_to_file
 from ..utils import _handle_max_workers
 
 
@@ -34,8 +35,9 @@ class S3LogAccessExtractor:
       - updatable
     """
 
-    def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
+    def __init__(self, *, cache_directory: pathlib.Path | None = None, encrypt_ips: bool = True) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
+        self.encrypt_ips = encrypt_ips
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
@@ -161,9 +163,22 @@ class S3LogAccessExtractor:
                         destination_file_path = self.extraction_directory / relative_file_path
                         destination_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-                        content = file_path.read_bytes()
-                        with destination_file_path.open(mode="ab") as file_stream:
-                            file_stream.write(content)
+                        if self.encrypt_ips and file_path.name == "full_ips.txt":
+                            new_ips = _read_ips_from_file(file_path=file_path, encrypt_ips=False)
+                            existing_ips = (
+                                _read_ips_from_file(file_path=destination_file_path, encrypt_ips=True)
+                                if destination_file_path.exists()
+                                else []
+                            )
+                            _write_ips_to_file(
+                                file_path=destination_file_path,
+                                ips=[*existing_ips, *new_ips],
+                                encrypt_ips=True,
+                            )
+                        else:
+                            content = file_path.read_bytes()
+                            with destination_file_path.open(mode="ab") as file_stream:
+                                file_stream.write(content)
                         file_path.unlink()
 
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
@@ -183,6 +198,9 @@ class S3LogAccessExtractor:
         if parallel_mode is True:
             extraction_directory = self.temporary_directory / str(os.getpid())
             extraction_directory.mkdir(exist_ok=True)
+        elif self.encrypt_ips:
+            # For single-worker mode with encryption: use a per-call temp dir so we can encrypt on merge
+            extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         file_path = pathlib.Path(file_path)
         if log_root is not None:
@@ -199,10 +217,38 @@ class S3LogAccessExtractor:
 
         self._run_extraction(file_path=file_path, extraction_directory=extraction_directory)
 
+        if not parallel_mode and self.encrypt_ips and extraction_directory is not None:
+            self._merge_dir_to_extraction(source_dir=extraction_directory)
+            shutil.rmtree(path=extraction_directory, ignore_errors=True)
+
         # Record final success and cleanup
         self.file_processing_end_record.add(record_key)
         with self.file_processing_end_record_file_path.open(mode="a") as file_stream:
             file_stream.write(content)
+
+    def _merge_dir_to_extraction(self, *, source_dir: pathlib.Path) -> None:
+        """Merge all `.txt` files from `source_dir` into `self.extraction_directory`, encrypting `full_ips.txt`."""
+        for file_path in source_dir.rglob(pattern="*.txt"):
+            relative_parts = file_path.relative_to(source_dir).parts
+            destination_file_path = self.extraction_directory / pathlib.Path(*relative_parts)
+            destination_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if file_path.name == "full_ips.txt":
+                new_ips = _read_ips_from_file(file_path=file_path, encrypt_ips=False)
+                existing_ips = (
+                    _read_ips_from_file(file_path=destination_file_path, encrypt_ips=True)
+                    if destination_file_path.exists()
+                    else []
+                )
+                _write_ips_to_file(
+                    file_path=destination_file_path,
+                    ips=[*existing_ips, *new_ips],
+                    encrypt_ips=True,
+                )
+            else:
+                content = file_path.read_bytes()
+                with destination_file_path.open(mode="ab") as file_stream:
+                    file_stream.write(content)
 
     def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
         if extraction_directory is not None:
