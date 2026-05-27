@@ -68,16 +68,30 @@ def get_cache_directory() -> pathlib.Path:
     return directory
 
 
-def _establish_cache_subdirectory(
+def get_cache_subdirectory(
     *,
     cache_directory: str | pathlib.Path | None = None,
-    name: typing.Literal["records", "ips", "summaries"],
-) -> None:
+    name: str,
+) -> pathlib.Path:
     """
-    I prefer to have each of the subdirectories below hard-established for API and docstring exposure.
+    Get a named subdirectory of the cache directory, creating it if it does not exist.
 
-    This makes it easier to navigate the codebase via auto-completion and IDEs.
-    As opposed to only having one function like this and returning a structure such as a dictionary.
+    The individual ``get_*_directory`` helpers below are thin wrappers around this function,
+    kept for API and docstring exposure and to make it easier to navigate the codebase via
+    auto-completion and IDEs.
+
+    Parameters
+    ----------
+    cache_directory : path-like, optional
+        The directory to use as the cache directory.
+        If not provided, the default cache directory is used.
+    name : str
+        The name of the subdirectory to create within the cache directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The named subdirectory of the cache directory.
     """
     cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
 
@@ -105,7 +119,7 @@ def get_records_directory(cache_directory: str | pathlib.Path | None = None) -> 
     pathlib.Path
         The main output directory for S3 log extraction.
     """
-    return _establish_cache_subdirectory(cache_directory=cache_directory, name="records")
+    return get_cache_subdirectory(cache_directory=cache_directory, name="records")
 
 
 def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
@@ -127,7 +141,7 @@ def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) ->
     pathlib.Path
         The IP cache directory for S3 log extraction.
     """
-    return _establish_cache_subdirectory(cache_directory=cache_directory, name="ips")
+    return get_cache_subdirectory(cache_directory=cache_directory, name="ips")
 
 
 def get_summary_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
@@ -145,4 +159,4 @@ def get_summary_directory(cache_directory: str | pathlib.Path | None = None) -> 
     pathlib.Path
         The summary directory for S3 log extraction.
     """
-    return _establish_cache_subdirectory(cache_directory=cache_directory, name="summaries")
+    return get_cache_subdirectory(cache_directory=cache_directory, name="summaries")

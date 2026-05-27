@@ -6,6 +6,10 @@
 
 - Rewrote this changelog to use the AGENTS.md section layout. ([#246](https://github.com/dandi/s3-log-extraction/pull/246))
 
+### 🚀 Enhancement
+
+- Added `s3logextraction update ip refresh` CLI command and `refresh_ip_to_region_codes` API. Re-checks a partition of the existing `ip_to_region` cache against IPInfo each run, recording any changes in a log file under `[cache_directory]/logs/`. The partition size is `ceil(cache_size / 90)`, selected deterministically by today's date so that the entire cache is refreshed over a 90-day cycle.
+
 
 ## v1.9.12
 
