@@ -298,8 +298,7 @@ def test_completion_cli(
     [
         pytest.param(["stop"], "stop_extraction", id="stop"),
         pytest.param(["reset", "extraction"], "reset_extraction", id="reset_extraction"),
-        pytest.param(["update", "ip", "indexes"], "index_ips", id="update_ip_indexes"),
-        pytest.param(["update", "ip", "regions"], "update_index_to_region_codes", id="update_ip_regions"),
+        pytest.param(["update", "ip", "regions"], "update_ip_to_region_codes", id="update_ip_regions"),
         pytest.param(["update", "ip", "coordinates"], "update_region_code_coordinates", id="update_ip_coordinates"),
         pytest.param(["update", "summaries"], "generate_summaries", id="update_summaries"),
         pytest.param(["update", "totals"], "generate_all_dataset_totals", id="update_totals"),

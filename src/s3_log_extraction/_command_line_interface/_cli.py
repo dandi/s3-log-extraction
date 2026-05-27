@@ -12,7 +12,7 @@ from ..extractors import (
     S3LogAccessExtractor,
     stop_extraction,
 )
-from ..ip_utils import index_ips, update_index_to_region_codes, update_region_code_coordinates
+from ..ip_utils import update_ip_to_region_codes, update_region_code_coordinates
 from ..summarize import (
     generate_all_dataset_totals,
     generate_archive_summaries,
@@ -243,23 +243,6 @@ def _update_ip_cli() -> None:
     pass
 
 
-# s3logextraction update ip indexes
-@_update_ip_cli.command(name="indexes")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
-def _update_ip_indexes_cli(cache_directory: str | None = None) -> None:
-    index_ips(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
-
-
 # s3logextraction update ip regions
 @_update_ip_cli.command(name="regions")
 @rich_click.option(
@@ -284,7 +267,7 @@ def _update_ip_indexes_cli(cache_directory: str | None = None) -> None:
     default=None,
 )
 def _update_ip_regions_cli(batch_limit: int | None = None, cache_directory: str | None = None) -> None:
-    update_index_to_region_codes(
+    update_ip_to_region_codes(
         batch_limit=batch_limit,
         cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
     )

@@ -25,9 +25,9 @@ def _is_auth_error(exc: Exception) -> bool:
 
 @pytest.mark.remote
 @pytest.mark.ai_generated
-def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
+def test_update_ip_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     """
-    Test that update_index_to_region_codes resolves a real public IP via the IPInfo API.
+    Test that update_ip_to_region_codes resolves a real public IP via the IPInfo API.
 
     Uses ``4.4.4.4`` (Level3/Lumen Technologies), a major US-ISP address that is
     outside GitHub, AWS, GCP, and VPN CIDR ranges, to exercise the live IPInfo
@@ -39,20 +39,17 @@ def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
         Pytest-provided temporary directory for test isolation.
     """
     test_ip = "4.4.4.4"
-    test_index = 12345
 
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", "")
     assert ipinfo_api_key.strip(), "IPINFO_API_KEY environment variable must be set to a non-empty value"
 
-    ip_cache_dir = tmp_path / "ips"
-    ip_cache_dir.mkdir()
-
-    # Write the indexed IP file in plain (unencrypted) YAML format
-    indexed_ips_file = ip_cache_dir / "indexed_ips.yaml"
-    indexed_ips_file.write_text(yaml.dump({test_index: test_ip}))
+    # Write the full_ips.txt in an extraction directory
+    extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
+    extraction_dir.mkdir(parents=True)
+    (extraction_dir / "full_ips.txt").write_text(test_ip)
 
     try:
-        s3_log_extraction.ip_utils.update_index_to_region_codes(cache_directory=tmp_path, encrypt=False)
+        s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path)
     except Exception as exc:
         if _is_auth_error(exc):
             pytest.fail(
@@ -62,12 +59,13 @@ def test_update_index_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
             )
         raise
 
-    index_to_region_file = ip_cache_dir / "index_to_region.yaml"
-    assert index_to_region_file.exists(), "index_to_region.yaml was not created"
+    ip_cache_dir = tmp_path / "ips"
+    ip_to_region_file = ip_cache_dir / "ip_to_region.yaml"
+    assert ip_to_region_file.exists(), "ip_to_region.yaml was not created"
 
-    index_to_region = yaml.safe_load(index_to_region_file.read_text()) or {}
-    assert test_index in index_to_region, f"Expected index {test_index} to be resolved, got: {index_to_region}"
-    region = index_to_region[test_index]
+    ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
+    assert test_ip in ip_to_region, f"Expected IP {test_ip} to be resolved, got: {ip_to_region}"
+    region = ip_to_region[test_ip]
     assert isinstance(region, str) and len(region) > 0, f"Expected a non-empty region string, got: {region!r}"
 
 
@@ -96,9 +94,9 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
     ip_cache_dir = tmp_path / "ips"
     ip_cache_dir.mkdir()
 
-    # Write index_to_region.yaml with a region that requires OpenCage lookup
-    index_to_region_file = ip_cache_dir / "index_to_region.yaml"
-    index_to_region_file.write_text(yaml.dump({12345: region_code}))
+    # Write ip_to_region.yaml with a region that requires OpenCage lookup
+    ip_to_region_file = ip_cache_dir / "ip_to_region.yaml"
+    ip_to_region_file.write_text(yaml.dump({"4.4.4.4": region_code}))
 
     try:
         s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path)

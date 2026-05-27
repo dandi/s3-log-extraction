@@ -38,12 +38,12 @@ def update_region_code_coordinates(
 
     ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
 
-    index_to_region_codes_file_path = ip_cache_directory / "index_to_region.yaml"
-    if not index_to_region_codes_file_path.exists():
+    ip_to_region_codes_file_path = ip_cache_directory / "ip_to_region.yaml"
+    if not ip_to_region_codes_file_path.exists():
         message = (
-            f"\nCannot update region codes to coordinates because the indexed regions file does not exist: "
-            f"{index_to_region_codes_file_path}\n\n"
-            f"Please run `s3logextraction update ip regions` first to create the indexed regions file.\n"
+            f"\nCannot update region codes to coordinates because the IP to region file does not exist: "
+            f"{ip_to_region_codes_file_path}\n\n"
+            f"Please run `s3logextraction update ip regions` first to create the IP to region file.\n"
         )
         raise FileNotFoundError(message)
 
@@ -59,7 +59,7 @@ def update_region_code_coordinates(
     )
     region_codes_to_coordinates.update(previous_region_codes_to_coordinates)
 
-    indexed_region_codes = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
+    indexed_region_codes = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
     region_codes_to_update = set(indexed_region_codes.values()) - set(region_codes_to_coordinates.keys())
     opencage_failures = []
     for country_and_region_code in tqdm.tqdm(

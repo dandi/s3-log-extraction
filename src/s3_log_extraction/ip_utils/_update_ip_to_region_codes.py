@@ -9,19 +9,18 @@ import tqdm
 import yaml
 
 from ._globals import _KNOWN_SERVICES
-from ._ip_cache import load_index_to_ip, load_ip_cache
+from ._ip_cache import load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
-from ..config import get_ip_cache_directory
+from ..config import get_extraction_directory, get_ip_cache_directory
 
 
-def update_index_to_region_codes(
+def update_ip_to_region_codes(
     batch_size: int = 1_000,
     batch_limit: int | None = None,
     cache_directory: str | pathlib.Path | None = None,
-    encrypt: bool = True,
 ) -> str | None:
     """
-    Update the `indexed_region_codes.yaml` file in the cache directory.
+    Update the ``ip_to_region.yaml`` file in the cache directory.
 
     Parameters
     ----------
@@ -35,9 +34,6 @@ def update_index_to_region_codes(
     cache_directory : str | pathlib.Path | None
         Path to the cache directory.
         If `None`, the default cache directory will be used.
-    encrypt : bool
-        Whether the index to IP cache file is encrypted.
-        Default and recommended mode is `True`; the use of `False` is mainly for testing purposes.
     """
     import ipinfo
 
@@ -48,24 +44,28 @@ def update_index_to_region_codes(
     ipinfo_handler = ipinfo.getHandler(access_token=ipinfo_api_key)
 
     ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
-    indexed_regions_file_path = ip_cache_directory / "index_to_region.yaml"
+    ip_to_region_file_path = ip_cache_directory / "ip_to_region.yaml"
 
-    index_to_ip = load_index_to_ip(cache_directory=cache_directory, encrypt=encrypt)
-    index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
-    index_not_in_services = load_ip_cache(cache_type="index_not_in_services", cache_directory=cache_directory)
-    indexes_to_update = list(set(index_to_ip.keys()) - set(index_to_region.keys()))
+    extraction_directory = get_extraction_directory(cache_directory=cache_directory)
+    all_ips: set[str] = set()
+    for full_ips_file in extraction_directory.rglob(pattern="full_ips.txt"):
+        all_ips.update(line.strip() for line in full_ips_file.read_text().splitlines() if line.strip())
 
-    # If a batch limit is set, shuffle the indexes to ensure repeated runs update different IPs
+    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
+    ip_not_in_services = load_ip_cache(cache_type="ip_not_in_services", cache_directory=cache_directory)
+    ips_to_update = list(all_ips - set(ip_to_region.keys()))
+
+    # If a batch limit is set, shuffle the IPs to ensure repeated runs update different IPs
     if batch_limit is not None:
-        random.shuffle(indexes_to_update)
+        random.shuffle(ips_to_update)
 
-    number_of_batches = math.ceil(len(indexes_to_update) / batch_size)
+    number_of_batches = math.ceil(len(ips_to_update) / batch_size) if ips_to_update else 0
     if batch_limit is not None:
         number_of_batches = min(number_of_batches, batch_limit)
-        indexes_to_update = indexes_to_update[: batch_limit * batch_size]
+        ips_to_update = ips_to_update[: batch_limit * batch_size]
 
-    for ip_index_batch in tqdm.tqdm(
-        iterable=itertools.batched(iterable=indexes_to_update, n=batch_size),
+    for ip_batch in tqdm.tqdm(
+        iterable=itertools.batched(iterable=ips_to_update, n=batch_size) if ips_to_update else [],
         total=number_of_batches,
         desc="Fetching IP regions in batches",
         unit="batches",
@@ -73,8 +73,8 @@ def update_index_to_region_codes(
         position=0,
         leave=False,
     ):
-        for ip_index in tqdm.tqdm(
-            iterable=ip_index_batch,
+        for ip_address in tqdm.tqdm(
+            iterable=ip_batch,
             total=batch_size,
             desc="Fetching IP regions",
             unit=" IP addresses",
@@ -82,13 +82,10 @@ def update_index_to_region_codes(
             position=1,
             leave=False,
         ):
-            ip_address = index_to_ip[ip_index]
-
-            region_code = _get_region_code_from_ip_index(
-                ip_index=ip_index,
+            region_code = _get_region_code_from_ip_address(
                 ip_address=ip_address,
                 ipinfo_handler=ipinfo_handler,
-                index_not_in_services=index_not_in_services,
+                ip_not_in_services=ip_not_in_services,
             )
 
             if region_code is None:
@@ -97,18 +94,18 @@ def update_index_to_region_codes(
             # API limit reached; do not cache and wait for it to reset
             if region_code == "unknown":
                 continue
-            index_to_region[ip_index] = region_code
+            ip_to_region[ip_address] = region_code
 
-            with indexed_regions_file_path.open(mode="w") as file_stream:
-                yaml.dump(data=index_to_region, stream=file_stream)
+            with ip_to_region_file_path.open(mode="w") as file_stream:
+                yaml.dump(data=ip_to_region, stream=file_stream)
 
-    index_not_in_services_file_path = ip_cache_directory / "index_not_in_services.yaml"
-    with index_not_in_services_file_path.open(mode="w") as file_stream:
-        yaml.dump(data=index_not_in_services, stream=file_stream)
+    ip_not_in_services_file_path = ip_cache_directory / "ip_not_in_services.yaml"
+    with ip_not_in_services_file_path.open(mode="w") as file_stream:
+        yaml.dump(data=ip_not_in_services, stream=file_stream)
 
 
-def _get_region_code_from_ip_index(
-    ip_index: int, ip_address: str, ipinfo_handler: "ipinfo.Handler", index_not_in_services: dict[int, bool]
+def _get_region_code_from_ip_address(
+    ip_address: str, ipinfo_handler: "ipinfo.Handler", ip_not_in_services: dict[str, bool]
 ) -> str | None:
     import ipinfo
 
@@ -116,7 +113,7 @@ def _get_region_code_from_ip_index(
     # Azure not yet easily doable; keep an eye on
     # https://learn.microsoft.com/en-us/answers/questions/1410071/up-to-date-azure-public-api-to-get-azure-ip-ranges
     # maybe it will change in the future
-    if ip_index not in index_not_in_services:
+    if ip_address not in ip_not_in_services:
         for service_name in _KNOWN_SERVICES:
             cidr_addresses_and_subregions = _get_cidr_address_ranges_and_subregions(service_name=service_name)
 
@@ -135,11 +132,11 @@ def _get_region_code_from_ip_index(
                 if subregion is not None:
                     region_service_string += f"/{subregion}"
 
-                index_not_in_services[ip_index] = False
+                ip_not_in_services[ip_address] = False
                 return region_service_string
 
-        # TODO: make `index_not_in_services` a `set`
-        index_not_in_services[ip_index] = True
+        # TODO: make `ip_not_in_services` a `set`
+        ip_not_in_services[ip_address] = True
 
     # TODO: add batching support to ipinfo requests
     # Lines cannot be covered without testing on a real IP

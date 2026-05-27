@@ -38,27 +38,27 @@ def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     return round(count / modulo) * modulo
 
 
-def _collect_unique_ip_indexes(asset_directories: list[pathlib.Path]) -> set[str]:
+def _collect_unique_ips(asset_directories: list[pathlib.Path]) -> set[str]:
     """
-    Collect all unique IP indexes across the given asset directories.
+    Collect all unique IP addresses across the given asset directories.
 
     Parameters
     ----------
     asset_directories : list of pathlib.Path
-        Paths to per-asset extraction directories containing ``indexed_ips.txt`` files.
+        Paths to per-asset extraction directories containing ``full_ips.txt`` files.
 
     Returns
     -------
     set of str
-        The set of unique IP index strings found across all ``indexed_ips.txt`` files.
+        The set of unique IP addresses found across all ``full_ips.txt`` files.
     """
-    unique_ip_indexes: set[str] = set()
+    unique_ips: set[str] = set()
     for asset_directory in asset_directories:
-        indexed_ips_file_path = asset_directory / "indexed_ips.txt"
-        if not indexed_ips_file_path.exists():
+        full_ips_file_path = asset_directory / "full_ips.txt"
+        if not full_ips_file_path.exists():
             continue
-        unique_ip_indexes.update(ip.strip() for ip in indexed_ips_file_path.read_text().splitlines())
-    return unique_ip_indexes
+        unique_ips.update(ip.strip() for ip in full_ips_file_path.read_text().splitlines())
+    return unique_ips
 
 
 def _summarize_dataset_requester_count(
@@ -71,14 +71,14 @@ def _summarize_dataset_requester_count(
     """
     Compute and save the privacy-rounded unique requester count for a dataset.
 
-    Reads all ``indexed_ips.txt`` files from the given asset directories, counts the
-    number of unique IP indexes across the entire dataset, rounds the result via
+    Reads all ``full_ips.txt`` files from the given asset directories, counts the
+    number of unique IP addresses across the entire dataset, rounds the result via
     :func:`_round_requester_count`, and writes the value to ``summary_file_path``.
 
     Parameters
     ----------
     asset_directories : list of pathlib.Path
-        Paths to the per-asset extraction directories containing ``indexed_ips.txt`` files.
+        Paths to the per-asset extraction directories containing ``full_ips.txt`` files.
     summary_file_path : pathlib.Path
         Destination file where the rounded count (as a string) will be written.
     modulo : int, optional
@@ -87,12 +87,12 @@ def _summarize_dataset_requester_count(
         Minimum disclosure threshold.  Counts below this are reported as ``"<{minimum}"``.
         Default is ``50``.
     """
-    unique_ip_indexes = _collect_unique_ip_indexes(asset_directories=asset_directories)
+    unique_ips = _collect_unique_ips(asset_directories=asset_directories)
 
-    if not unique_ip_indexes:
+    if not unique_ips:
         return
 
-    rounded_count = _round_requester_count(count=len(unique_ip_indexes), modulo=modulo, minimum=minimum)
+    rounded_count = _round_requester_count(count=len(unique_ips), modulo=modulo, minimum=minimum)
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     summary_file_path.write_text(str(rounded_count))
 
@@ -124,10 +124,10 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
 
     extraction_directory = get_extraction_directory(cache_directory=cache_directory)
     summary_directory = get_summary_directory(cache_directory=cache_directory)
-    index_to_region = load_ip_cache(cache_type="index_to_region", cache_directory=cache_directory)
+    ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
 
     datasets = [item for item in extraction_directory.iterdir() if item.is_dir()]
-    all_archive_unique_ip_indexes: set[str] = set()
+    all_archive_unique_ips: set[str] = set()
     for dataset in tqdm.tqdm(
         iterable=datasets,
         total=len(datasets),
@@ -145,14 +145,14 @@ def generate_summaries(level: int = 0, cache_directory: str | pathlib.Path | Non
             dataset_id=dataset_id,
             asset_directories=asset_directories,
             summary_directory=summary_directory,
-            index_to_region=index_to_region,
+            ip_to_region=ip_to_region,
         )
 
-        all_archive_unique_ip_indexes.update(_collect_unique_ip_indexes(asset_directories=asset_directories))
-    if all_archive_unique_ip_indexes:
+        all_archive_unique_ips.update(_collect_unique_ips(asset_directories=asset_directories))
+    if all_archive_unique_ips:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
-        rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ip_indexes), modulo=20, minimum=50)
+        rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ips), modulo=20, minimum=50)
         (archive_directory / "requester_count.tsv").write_text(str(rounded_archive_count))
 
 
@@ -161,7 +161,7 @@ def _summarize_dataset(
     dataset_id: str,
     asset_directories: list[pathlib.Path],
     summary_directory: pathlib.Path,
-    index_to_region: dict[int, str],
+    ip_to_region: dict[str, str],
 ) -> None:
     _summarize_dataset_by_day(
         asset_directories=asset_directories,
@@ -174,7 +174,7 @@ def _summarize_dataset(
     _summarize_dataset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
-        index_to_region=index_to_region,
+        ip_to_region=ip_to_region,
     )
     _summarize_dataset_requester_count(
         asset_directories=asset_directories,
@@ -283,7 +283,7 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
 
 
 def _summarize_dataset_by_region(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, index_to_region: dict[int, str]
+    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, ip_to_region: dict[str, str]
 ) -> None:
     all_regions = []
     all_bytes_sent = []
@@ -291,13 +291,13 @@ def _summarize_dataset_by_region(
     for asset_directory in asset_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
-        indexed_ips_file_path = asset_directory / "indexed_ips.txt"
+        full_ips_file_path = asset_directory / "full_ips.txt"
 
-        if not indexed_ips_file_path.exists():
+        if not full_ips_file_path.exists():
             continue
 
-        indexed_ips = [ip_index.strip() for ip_index in indexed_ips_file_path.read_text().splitlines()]
-        regions = [index_to_region.get(ip_index.strip(), "unknown") for ip_index in indexed_ips]
+        full_ips = [ip.strip() for ip in full_ips_file_path.read_text().splitlines()]
+        regions = [ip_to_region.get(ip, "unknown") for ip in full_ips]
         all_regions.extend(regions)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"

@@ -39,15 +39,11 @@ def _run_cli_extraction_test(tmpdir: py.path.local, workers: int) -> None:
     assert result.exit_code == 0, f"Extraction failed: {result.output}"
 
     # Verify output files match expected structure
-    relative_output_files = {
-        file.relative_to(output_directory)
-        for file in output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem
-    }
+    relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
     relative_expected_files = {
         file.relative_to(expected_output_directory)
         for file in expected_output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem and "summaries" not in file.parts
+        if "summaries" not in file.parts
     }
     assert relative_output_files == relative_expected_files
 
@@ -89,10 +85,6 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     # Set cache directory via CLI
     result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["config", "cache", "set", str(test_dir)])
     assert result.exit_code == 0, f"Failed to set cache: {result.output}"
-
-    # Update IP indexes via CLI
-    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "ip", "indexes"])
-    assert result.exit_code == 0, f"Failed to update IP indexes: {result.output}"
 
     # Generate summaries via CLI
     result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["update", "summaries"])

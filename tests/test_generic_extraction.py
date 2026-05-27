@@ -17,15 +17,11 @@ def test_extraction(tmpdir: py.path.local) -> None:
     extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory)
     extractor.extract_directory(directory=test_logs_directory, workers=1)
 
-    relative_output_files = {
-        file.relative_to(output_directory)
-        for file in output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem
-    }
+    relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
     relative_expected_files = {
         file.relative_to(expected_output_directory)
         for file in expected_output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem
+        if "summaries" not in file.parts
     }
     assert relative_output_files == relative_expected_files
 
@@ -50,15 +46,11 @@ def test_extraction_parallel(tmpdir: py.path.local) -> None:
     extractor = s3_log_extraction.extractors.S3LogAccessExtractor(cache_directory=output_directory)
     extractor.extract_directory(directory=test_logs_directory, workers=2)
 
-    relative_output_files = {
-        file.relative_to(output_directory)
-        for file in output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem
-    }
+    relative_output_files = {file.relative_to(output_directory) for file in output_directory.rglob(pattern="*.txt")}
     relative_expected_files = {
         file.relative_to(expected_output_directory)
         for file in expected_output_directory.rglob(pattern="*.txt")
-        if "indexed_ips" not in file.stem
+        if "summaries" not in file.parts
     }
     assert relative_output_files == relative_expected_files
 
