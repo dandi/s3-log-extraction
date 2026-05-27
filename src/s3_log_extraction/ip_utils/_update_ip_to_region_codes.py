@@ -48,7 +48,12 @@ def update_ip_to_region_codes(
 
     extraction_directory = get_extraction_directory(cache_directory=cache_directory)
     all_ips: set[str] = set()
-    for full_ips_file in extraction_directory.rglob(pattern="full_ips.txt"):
+    for full_ips_file in tqdm.tqdm(
+        iterable=extraction_directory.rglob(pattern="full_ips.txt"),
+        desc="Reading IP files",
+        unit=" files",
+        smoothing=0,
+    ):
         all_ips.update(line.strip() for line in full_ips_file.read_text().splitlines() if line.strip())
 
     ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
