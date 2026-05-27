@@ -107,9 +107,10 @@ def s3logextraction_cli():
     default=None,
 )
 @rich_click.option(
-    "--encryption/--no-encryption",
+    "--encryption",
     "use_encryption",
     help="Encrypt IP addresses in extraction output files. Enabled by default.",
+    type=rich_click.BOOL,
     default=True,
 )
 def _extract_cli(
@@ -274,9 +275,10 @@ def _update_ip_cli() -> None:
     default=None,
 )
 @rich_click.option(
-    "--encryption/--no-encryption",
+    "--encryption",
     "use_encryption",
     help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
+    type=rich_click.BOOL,
     default=True,
 )
 def _update_ip_regions_cli(
@@ -303,9 +305,10 @@ def _update_ip_regions_cli(
     default=None,
 )
 @rich_click.option(
-    "--encryption/--no-encryption",
+    "--encryption",
     "use_encryption",
     help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
+    type=rich_click.BOOL,
     default=True,
 )
 def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryption: bool = True) -> None:
@@ -365,9 +368,10 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     default=None,
 )
 @rich_click.option(
-    "--encryption/--no-encryption",
+    "--encryption",
     "use_encryption",
     help="Encrypt/decrypt IP addresses in cache files. Enabled by default.",
+    type=rich_click.BOOL,
     default=True,
 )
 def _update_summaries_cli(
