@@ -64,7 +64,7 @@ def update_ip_to_region_codes(
     if batch_limit is not None:
         random.shuffle(ips_to_update)
 
-    number_of_batches = math.ceil(len(ips_to_update) / batch_size) if ips_to_update else 0
+    number_of_batches = math.ceil(len(ips_to_update) / batch_size)
     if batch_limit is not None:
         number_of_batches = min(number_of_batches, batch_limit)
         ips_to_update = ips_to_update[: batch_limit * batch_size]
