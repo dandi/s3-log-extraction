@@ -10,7 +10,7 @@ import yaml
 from ._globals import _KNOWN_SERVICES
 from ._ip_cache import load_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions, _ip_in_cidr, _read_ips_from_file
-from ..config import get_extraction_directory, get_ip_cache_directory
+from ..config import get_cache_directory, get_ip_cache_directory
 
 
 def update_ip_to_region_codes(
@@ -45,7 +45,9 @@ def update_ip_to_region_codes(
     ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
     ip_to_region_file_path = ip_cache_directory / "ip_to_region.yaml"
 
-    extraction_directory = get_extraction_directory(cache_directory=cache_directory)
+    cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
+    extraction_directory = cache_dir / "extraction"
+    extraction_directory.mkdir(exist_ok=True)
     all_ips: set[str] = set()
     for full_ips_file in tqdm.tqdm(
         iterable=extraction_directory.rglob(pattern="full_ips.txt"),

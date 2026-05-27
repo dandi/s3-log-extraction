@@ -5,7 +5,7 @@ import time
 import psutil
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ..config import get_extraction_directory
+from ..config import get_cache_directory
 
 
 def get_running_pids() -> list[str]:
@@ -38,7 +38,9 @@ def stop_extraction(cache_directory: str | pathlib.Path | None = None, max_timeo
     )
 
     print(f"Stopping the extraction process{pid_string}...")
-    extraction_directory = get_extraction_directory(cache_directory=cache_directory)
+    cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
+    extraction_directory = cache_dir / "extraction"
+    extraction_directory.mkdir(exist_ok=True)
     stop_file_path = extraction_directory / _STOP_EXTRACTION_FILE_NAME
     stop_file_path.touch()
 

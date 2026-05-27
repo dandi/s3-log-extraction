@@ -18,7 +18,7 @@ import yaml
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess, _handle_aws_credentials
-from ..config import get_cache_directory, get_extraction_directory, get_records_directory
+from ..config import get_cache_directory, get_records_directory
 from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
 
 _ExistingFilePath = typing.Annotated[pathlib.Path, beartype.vale.Is[lambda path: path.is_file()]]
@@ -49,7 +49,8 @@ class RemoteS3LogAccessExtractor:
 
     def __init__(self, cache_directory: pathlib.Path | None = None) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
-        self.extraction_directory = get_extraction_directory(cache_directory=self.cache_directory)
+        self.extraction_directory = self.cache_directory / "extraction"
+        self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_records_directory(cache_directory=self.cache_directory)
         self.temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
