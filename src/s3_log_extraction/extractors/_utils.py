@@ -2,6 +2,59 @@ import os
 import pathlib
 import subprocess
 
+from ..ip_utils._ip_utils import _read_ips_from_file, _write_ips_to_file
+
+
+def _merge_file_into_extraction(
+    *,
+    source_file_path: pathlib.Path,
+    destination_file_path: pathlib.Path,
+    use_encryption: bool,
+) -> None:
+    """Merge a single `.txt` file from `source_file_path` into `destination_file_path`.
+
+    For ``full_ips.txt`` files, the existing encrypted destination is decrypted, merged with the new
+    plaintext IPs, and re-encrypted. All other files are appended as raw bytes.
+    """
+    if use_encryption and source_file_path.name == "full_ips.txt":
+        new_ips = _read_ips_from_file(file_path=source_file_path, use_encryption=False)
+        existing_ips = (
+            _read_ips_from_file(file_path=destination_file_path, use_encryption=True)
+            if destination_file_path.exists()
+            else []
+        )
+        _write_ips_to_file(
+            file_path=destination_file_path,
+            ips=[*existing_ips, *new_ips],
+            use_encryption=True,
+        )
+    else:
+        content = source_file_path.read_bytes()
+        with destination_file_path.open(mode="ab") as file_stream:
+            file_stream.write(content)
+
+
+def _merge_dir_to_extraction(
+    *,
+    source_dir: pathlib.Path,
+    extraction_directory: pathlib.Path,
+    use_encryption: bool,
+) -> None:
+    """Merge all `.txt` files from `source_dir` into `extraction_directory`.
+
+    For ``full_ips.txt`` files, existing encrypted content is decrypted, merged with new plaintext
+    IPs, and re-encrypted. All other files are appended as raw bytes.
+    """
+    for file_path in source_dir.rglob(pattern="*.txt"):
+        relative_parts = file_path.relative_to(source_dir).parts
+        destination_file_path = extraction_directory / pathlib.Path(*relative_parts)
+        destination_file_path.parent.mkdir(parents=True, exist_ok=True)
+        _merge_file_into_extraction(
+            source_file_path=file_path,
+            destination_file_path=destination_file_path,
+            use_encryption=use_encryption,
+        )
+
 
 def _deploy_subprocess(
     *,
