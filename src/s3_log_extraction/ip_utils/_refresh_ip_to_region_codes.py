@@ -26,7 +26,8 @@ def refresh_ip_to_region_codes(
     command once per day ensures the entire cache is refreshed every 90 days.
 
     Any changes detected are recorded in a YAML log file written to
-    ``[cache_directory]/logs/ip_refresh_<date>.yaml``.
+    ``[cache_directory]/logs/ip_refresh_<date>.yaml``; no file is written when
+    the checked partition has no changes.
 
     Parameters
     ----------
@@ -79,18 +80,18 @@ def refresh_ip_to_region_codes(
             changes[ip_address] = {"old": old_region, "new": new_region}
             ip_to_region[ip_address] = new_region
 
-    logs_directory = get_cache_subdirectory(cache_directory=cache_directory, name="logs")
-    log_file_path = logs_directory / f"ip_refresh_{today.isoformat()}.yaml"
-    log_data: dict = {
-        "date": today.isoformat(),
-        "partition_index": partition_index,
-        "ips_checked": len(ips_to_refresh),
-        "changes": changes,
-    }
-    with log_file_path.open(mode="w") as file_stream:
-        yaml.dump(data=log_data, stream=file_stream)
-
     if changes:
+        logs_directory = get_cache_subdirectory(cache_directory=cache_directory, name="logs")
+        log_file_path = logs_directory / f"ip_refresh_{today.isoformat()}.yaml"
+        log_data: dict = {
+            "date": today.isoformat(),
+            "partition_index": partition_index,
+            "ips_checked": len(ips_to_refresh),
+            "changes": changes,
+        }
+        with log_file_path.open(mode="w") as file_stream:
+            yaml.dump(data=log_data, stream=file_stream)
+
         write_ip_cache(
             data=ip_to_region,
             cache_type="ip_to_region",

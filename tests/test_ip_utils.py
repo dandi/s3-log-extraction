@@ -105,7 +105,7 @@ def test_refresh_ip_to_region_codes(tmpdir: py.path.local, monkeypatch: pytest.M
 
 
 def test_refresh_ip_to_region_codes_no_changes(tmpdir: py.path.local, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that a log file is written even when no regions have changed."""
+    """Test that no log file is written when no regions have changed."""
     test_cache = pathlib.Path(tmpdir)
     test_ips_dir = test_cache / "ips"
     test_ips_dir.mkdir(parents=True)
@@ -138,12 +138,9 @@ def test_refresh_ip_to_region_codes_no_changes(tmpdir: py.path.local, monkeypatc
     updated_ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
     assert updated_ip_to_region == initial_ip_to_region
 
-    # Log file should still be written with empty changes
-    log_file = test_cache / "logs" / f"ip_refresh_{fixed_date.isoformat()}.yaml"
-    assert log_file.exists()
-    log_data = yaml.safe_load(log_file.read_text()) or {}
-    assert log_data["ips_checked"] == 1
-    assert log_data["changes"] == {}
+    # No log file should be written when there are no changes
+    logs_dir = test_cache / "logs"
+    assert not logs_dir.exists() or not any(logs_dir.iterdir())
 
 
 def test_refresh_ip_to_region_codes_empty_cache(tmpdir: py.path.local, monkeypatch: pytest.MonkeyPatch) -> None:
