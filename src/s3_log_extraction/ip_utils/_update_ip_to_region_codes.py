@@ -60,7 +60,8 @@ def update_ip_to_region_codes(
         all_ips.update(_read_ips_from_file(file_path=full_ips_file))
 
     ip_to_region = load_ip_cache(cache_type="ip_to_region", cache_directory=cache_directory)
-    ips_to_update = list(all_ips - set(ip_to_region.keys()))
+    ip_to_determined_region = {ip: region for ip, region in ip_to_region.items() if region != "undetermined"}
+    ips_to_update = list(all_ips - set(ip_to_determined_region.keys()))
 
     # If a batch limit is set, shuffle the IPs to ensure repeated runs update different IPs
     if batch_limit is not None:
