@@ -7,7 +7,7 @@ import random
 import tqdm
 
 from ._globals import _KNOWN_SERVICES
-from ._ip_cache import write_ip_cache, load_ip_cache
+from ._ip_cache import load_ip_cache, write_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions, _ip_in_cidr, _read_ips_from_file
 from ..config import get_cache_directory
 
