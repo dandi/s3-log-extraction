@@ -179,7 +179,7 @@ These can also be used to verify the current state of the extraction process, su
 
 The extraction heuristic pre-validator excludes known service IPs using a regex.
 
-Example custom bogon-only regex:
+Example custom regex:
 
 ```bash
 export S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX=false
