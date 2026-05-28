@@ -179,9 +179,6 @@ These can also be used to verify the current state of the extraction process, su
 
 The extraction heuristic pre-validator excludes known service IPs using a regex.
 
-- Default behavior (recommended): use the built-in encrypted regex.
-- Custom behavior: set `S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX=false` and provide your own regex via `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX`.
-
 Example custom bogon-only regex:
 
 ```bash
