@@ -62,10 +62,7 @@ remote = [
     "s3fs",
     "s5cmd",
 ]
-sharing = [
-    "polars",
-]
-all = ["s3_log_extraction[geolocation,remote,sharing]"]
+all = ["s3_log_extraction[geolocation,remote]"]
 
 [project.urls]
 Documentation = "https://github.com/dandi/s3-log-extraction/blob/master/README.md"
