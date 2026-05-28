@@ -1,1 +1,3 @@
-EXCLUDED_REGION_LABELS = frozenset(["VPN", "GitHub", "unknown", "undetermined", "missing", "bogon"])
+from ..ip_utils._globals import EXCLUDED_REGION_LABELS
+
+__all__ = ["EXCLUDED_REGION_LABELS"]
