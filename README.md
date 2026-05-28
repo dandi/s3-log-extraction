@@ -175,6 +175,17 @@ In lieu of attempting fully validated parsing of each and every line from the lo
 
 These can also be used to verify the current state of the extraction process, such as warning about corrupt records or incomplete cache files.
 
+#### Excluded IP regex configuration
+
+The extraction heuristic pre-validator uses an excluded-IP regex.
+By default, no IPs are excluded.
+
+Example custom regex:
+
+```bash
+export S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX='^(192\.0\.2\.1|198\.51\.100\.2)$'
+```
+
 ### Submission of line decoding errors
 
 Should you discover any lines in your S3 log files that cause failures in the codebase, please email them to the core maintainer (cody.c.baker.phd@gmail.com) before raising issues or submitting PRs contributing them as examples, to more easily correct any aspects that might require anonymization.

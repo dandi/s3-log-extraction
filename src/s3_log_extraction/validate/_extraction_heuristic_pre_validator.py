@@ -1,10 +1,9 @@
 import hashlib
+import os
 import pathlib
 import subprocess
 
 from ._base_validator import BaseValidator
-from .._regex import DROGON_IP_REGEX_ENCRYPTED
-from ..utils.encryption import decrypt_bytes
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):
@@ -29,7 +28,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
-        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+        self._excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX") or "^$"
 
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
@@ -48,7 +47,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             shell=True,
             capture_output=True,
             text=True,
-            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX},
+            env={"EXCLUDED_IP_REGEX": self._excluded_ip_regex},
         )
         if result.returncode != 0:
             message = (
