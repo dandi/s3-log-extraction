@@ -21,7 +21,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     tqdm_description = "Pre-validating extraction heuristic"
 
-    def _get_excluded_ip_regex(self) -> str:
+    def _get_excluded_ip_regex(self) -> None:
         encrypt_ip_regex = os.environ.get("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "true").lower() not in [
             "0",
             "false",
@@ -31,16 +31,19 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             if EXCLUDED_IP_REGEX_ENCRYPTED:
                 decrypted_regex = decrypt_bytes(encrypted_data=EXCLUDED_IP_REGEX_ENCRYPTED)
                 if isinstance(decrypted_regex, bytes):
-                    return decrypted_regex.decode(encoding="utf-8")
-                return decrypted_regex
-            return "^$"
+                    self._excluded_ip_regex = decrypted_regex.decode(encoding="utf-8")
+                else:
+                    self._excluded_ip_regex = decrypted_regex
+            else:
+                self._excluded_ip_regex = "^$"
+            return
 
         excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX")
         if excluded_ip_regex is None:
             message = "Set S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX when " "S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX is false."
             raise EnvironmentError(message)
 
-        return excluded_ip_regex
+        self._excluded_ip_regex = excluded_ip_regex
 
     def __hash__(self) -> int:
         with self._relative_awk_script_path.open("rb") as file_stream:
@@ -52,6 +55,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
+        self._excluded_ip_regex = ""
         self._get_excluded_ip_regex()
 
         # TODO: does this hold after bundling?
@@ -71,7 +75,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             shell=True,
             capture_output=True,
             text=True,
-            env={"EXCLUDED_IP_REGEX": self._get_excluded_ip_regex()},
+            env={"EXCLUDED_IP_REGEX": self._excluded_ip_regex},
         )
         if result.returncode != 0:
             message = (

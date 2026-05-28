@@ -18,7 +18,7 @@ def test_excluded_ip_regex_defaults_to_no_exclusions(monkeypatch: pytest.MonkeyP
 
     validator = ExtractionHeuristicPreValidator()
     assert EXCLUDED_IP_REGEX_ENCRYPTED == b""
-    assert validator._get_excluded_ip_regex() == "^$"
+    assert validator._excluded_ip_regex == "^$"
 
 
 @pytest.mark.ai_generated
@@ -28,7 +28,7 @@ def test_excluded_ip_regex_plaintext_override(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
 
     validator = ExtractionHeuristicPreValidator()
-    assert validator._get_excluded_ip_regex() == expected_regex
+    assert validator._excluded_ip_regex == expected_regex
 
 
 @pytest.mark.ai_generated
