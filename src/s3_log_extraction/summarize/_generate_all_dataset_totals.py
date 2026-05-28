@@ -66,4 +66,4 @@ def generate_all_dataset_totals(
 
     top_level_summary_file_path = summary_directory / "totals.json"
     with top_level_summary_file_path.open(mode="w") as io:
-        json.dump(obj=all_dataset_totals, fp=io, indent=2)
+        json.dump(obj=all_dataset_totals, fp=io, indent=2, sort_keys=True)
