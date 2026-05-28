@@ -91,16 +91,14 @@ def test_generate_all_dataset_totals_skips_archive(tmpdir: py.path.local):
     dataset_dir = summary_dir / "ds001161"
     dataset_dir.mkdir(parents=True)
     (dataset_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
-        "missing\t1194564\t4\t3\n"
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t1194564\t4\t3\n"
     )
 
     # Set up an archive summary that should be excluded
     archive_dir = summary_dir / "archive"
     archive_dir.mkdir(parents=True)
     (archive_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
-        "missing\t7481053\t7\t5\n"
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t7481053\t7\t5\n"
     )
 
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
