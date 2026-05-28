@@ -4,6 +4,7 @@ import pathlib
 import beartype
 import pandas
 
+from ._globals import EXCLUDED_REGION_LABELS
 from ..config import get_cache_subdirectory
 
 
@@ -29,7 +30,7 @@ def generate_archive_totals(
 
     unique_countries: set[str] = set()
     for region in summary["region"]:
-        if region in ["VPN", "GitHub", "unknown", "undetermined", "missing"]:
+        if region in EXCLUDED_REGION_LABELS:
             continue
 
         region_split = region.split("/")
