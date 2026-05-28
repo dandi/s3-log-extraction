@@ -43,10 +43,10 @@ def test_update_ip_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     ipinfo_api_key = os.environ.get("IPINFO_API_KEY", "")
     assert ipinfo_api_key.strip(), "IPINFO_API_KEY environment variable must be set to a non-empty value"
 
-    # Write the full_ips.txt in an extraction directory
+    # Write the ips.txt in an extraction directory
     extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
     extraction_dir.mkdir(parents=True)
-    (extraction_dir / "full_ips.txt").write_text(test_ip)
+    (extraction_dir / "ips.txt").write_text(test_ip)
 
     try:
         s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)

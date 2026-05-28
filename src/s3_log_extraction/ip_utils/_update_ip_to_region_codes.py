@@ -52,7 +52,7 @@ def update_ip_to_region_codes(
     extraction_directory.mkdir(exist_ok=True)
     all_ips: set[str] = set()
     for full_ips_file in tqdm.tqdm(
-        iterable=extraction_directory.rglob(pattern="full_ips.txt"),
+        iterable=extraction_directory.rglob(pattern="ips.txt"),
         desc="Reading IP files",
         unit=" files",
         smoothing=0,

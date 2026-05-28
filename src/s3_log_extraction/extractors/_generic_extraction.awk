@@ -64,7 +64,7 @@ END {
         subdirectory = EXTRACTION_DIRECTORY object_key
         timestamps_file_path = subdirectory "/timestamps.txt"
         bytes_sent_file_path = subdirectory "/bytes_sent.txt"
-        full_ips_file_path = subdirectory "/full_ips.txt"
+        full_ips_file_path = subdirectory "/ips.txt"
         download_file_path = subdirectory "/download.txt"
 
         for (i = 1; i <= data[object_key]["timestamps_count"]; i++) {
