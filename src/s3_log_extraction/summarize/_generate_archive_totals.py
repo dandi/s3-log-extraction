@@ -45,9 +45,14 @@ def generate_archive_totals(
     number_of_unique_countries = len(unique_countries)
 
     requester_count_file_path = archive_directory / "requester_count.tsv"
-    number_of_requesters: str | int = (
-        requester_count_file_path.read_text().strip() if requester_count_file_path.exists() else 0
-    )
+    if not requester_count_file_path.exists():
+        msg = (
+            f"Archive requester count file not found: {requester_count_file_path}. "
+            "Run archive summaries before archive totals."
+        )
+        raise FileNotFoundError(msg)
+
+    number_of_requesters: str | int = requester_count_file_path.read_text().strip()
     if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
         number_of_requesters = int(number_of_requesters)
 

@@ -109,6 +109,20 @@ def test_generate_all_dataset_totals_skips_archive(tmpdir: py.path.local):
 
 
 @pytest.mark.ai_generated
+def test_generate_archive_totals_raises_without_archive_requester_count(tmpdir: py.path.local) -> None:
+    """Archive totals should fail if archive requester count has not been generated."""
+    test_dir = pathlib.Path(tmpdir)
+    archive_dir = test_dir / "summaries" / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t7481053\t7\t5\n"
+    )
+
+    with pytest.raises(FileNotFoundError, match="Archive requester count file not found"):
+        s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
+
+
+@pytest.mark.ai_generated
 @pytest.mark.parametrize(
     ("count", "modulo", "minimum", "expected"),
     [
