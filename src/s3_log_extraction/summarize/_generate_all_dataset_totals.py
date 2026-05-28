@@ -3,8 +3,8 @@ import pathlib
 
 import pandas
 
-from ._globals import EXCLUDED_REGION_LABELS
 from ..config import get_cache_subdirectory
+from ..ip_utils._globals import EXCLUDED_REGION_LABELS
 
 
 def generate_all_dataset_totals(

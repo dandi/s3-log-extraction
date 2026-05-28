@@ -4,8 +4,8 @@ import pathlib
 import beartype
 import pandas
 
-from ._globals import EXCLUDED_REGION_LABELS
 from ..config import get_cache_subdirectory
+from ..ip_utils._globals import EXCLUDED_REGION_LABELS
 
 
 @beartype.beartype
