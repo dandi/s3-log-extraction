@@ -39,7 +39,7 @@ def generate_all_dataset_totals(
             if region in EXCLUDED_REGION_LABELS:
                 continue
 
-            country_code, region_name = region.split("/")
+            country_code, region_name = region.split("/", 1)
             if "AWS" in country_code:
                 country_code = region_name.split("-")[0].upper()
 
