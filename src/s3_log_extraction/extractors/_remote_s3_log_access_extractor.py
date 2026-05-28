@@ -10,7 +10,6 @@ import tempfile
 import warnings
 
 import tqdm
-import yaml
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess, _handle_aws_credentials, _merge_dir_to_extraction, _merge_file_into_extraction
@@ -57,23 +56,6 @@ class RemoteS3LogAccessExtractor:
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
-
-        self.processed_years: set[str] = set()
-        self.processed_years_record_file_path = self.records_directory / "processed_years.yaml"
-        if self.processed_years_record_file_path.exists():
-            with self.processed_years_record_file_path.open(mode="r") as file_stream:
-                loaded = yaml.safe_load(stream=file_stream)
-                self.processed_years = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
-
-        self.processed_months_per_year: dict[str, set[str]] = dict()
-        self.processed_months_per_year_record_file_path = self.records_directory / "processed_months_per_year.yaml"
-        if self.processed_months_per_year_record_file_path.exists():
-            with self.processed_months_per_year_record_file_path.open(mode="r") as file_stream:
-                loaded = yaml.safe_load(stream=file_stream) or {}
-                self.processed_months_per_year = {
-                    year: set(months.keys()) if isinstance(months, dict) else set(months or [])
-                    for year, months in loaded.items()
-                }
 
     def extract_s3_bucket(
         self,
@@ -212,13 +194,6 @@ class RemoteS3LogAccessExtractor:
     ) -> list[str]:
         self._get_end_record_and_check_consistency()
 
-        self.processed_dates: set[str] = set()
-        processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
-        if processed_dates_record_file_path.exists():
-            with processed_dates_record_file_path.open(mode="r") as file_stream:
-                loaded = yaml.safe_load(stream=file_stream)
-                self.processed_dates = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
-
         if inventory_directory is not None:
             unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_local_inventory(
                 inventory_directory=inventory_directory, s3_root=s3_root
@@ -294,9 +269,7 @@ class RemoteS3LogAccessExtractor:
             s3_root=s3_root,
         )
 
-        unprocessed_dates = list(set(inventory.keys()) - self.processed_dates)
-
-        s3_urls = [url for date in unprocessed_dates for url in inventory[date]]
+        s3_urls = [url for urls in inventory.values() for url in urls]
 
         unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
         return unprocessed_s3_urls
@@ -314,11 +287,9 @@ class RemoteS3LogAccessExtractor:
             command=f"s5cmd ls {s3_root}/", error_message=f"Failed to scan years of nested structure at {s3_root}."
         )
         years = {line.split(" ")[-1].rstrip("/\n") for line in years_result.splitlines()}
-        unprocessed_years = list(years - self.processed_years)
 
         dates_with_logs = []
-        unprocessed_months_per_year = dict()
-        for year in unprocessed_years:
+        for year in years:
             subdirectory = f"{s3_root}/{year}"
             months_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
@@ -327,9 +298,8 @@ class RemoteS3LogAccessExtractor:
                 continue
 
             months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
-            unprocessed_months_per_year[year] = list(months - self.processed_months_per_year.get(year, set()))
 
-            for month in unprocessed_months_per_year[year]:
+            for month in months:
                 subdirectory = f"{s3_root}/{year}/{month}"
                 days_result = _deploy_subprocess(
                     command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
@@ -340,9 +310,8 @@ class RemoteS3LogAccessExtractor:
                 dates = [f"{year}-{month}-{line.split(" ")[-1].rstrip("/\n")}" for line in days_result.splitlines()]
                 dates_with_logs.extend(dates)
 
-        new_dates = list(set(dates_with_logs) - self.processed_dates)
-        sorted_new_dates = sorted(list(new_dates))
-        unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
+        sorted_dates = sorted(set(dates_with_logs))
+        unprocessed_dates = sorted_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
         s3_urls = []
         for date in tqdm.tqdm(
