@@ -181,14 +181,15 @@ To report what percentage of log files have already been processed:
 s3logextraction completion --inventory /path/to/inventory
 ```
 
-### Scanning the remote bucket directly (not recommended for large buckets)
+### Without an S3 Inventory (not recommended)
 
-If no `--inventory` path is given, `s3logextraction` will list the bucket contents via live network calls using
-[s5cmd](https://github.com/peak/s5cmd).  This works for small buckets but becomes prohibitively slow for buckets
-containing millions of log files.
+If you do not have an S3 Inventory available, do **not** use `--mode remote` without `--inventory` — the live bucket
+scan will be extremely slow for large buckets.  Instead, use [s5cmd](https://github.com/peak/s5cmd) to manually
+download the unprocessed log files to a local directory and then run the local extraction on those files:
 
 ```bash
-s3logextraction extract s3://my-logs-bucket --mode remote
+s5cmd cp "s3://my-logs-bucket/*" /path/to/local/logs/
+s3logextraction extract /path/to/local/logs/
 ```
 
 
