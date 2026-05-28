@@ -181,7 +181,13 @@ The extraction heuristic pre-validator excludes known service IPs using a regex.
 
 - Default behavior (recommended): use the built-in encrypted regex.
 - Custom behavior: set `S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX=false` and provide your own regex via `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX`.
-- Legacy compatibility: `S3_LOG_EXTRACTION_DROGON_IP_REGEX` is still accepted when `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX` is not set.
+
+Example custom bogon-only regex:
+
+```bash
+export S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX=false
+export S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX='^(192\\.0\\.2\\.1|198\\.51\\.100\\.2)$'
+```
 
 ### Submission of line decoding errors
 

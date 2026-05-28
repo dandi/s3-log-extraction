@@ -4,8 +4,13 @@ import pathlib
 import subprocess
 
 from ._base_validator import BaseValidator
-from .._regex import EXCLUDED_IP_REGEX_ENCRYPTED
 from ..utils.encryption import decrypt_bytes
+
+EXCLUDED_IP_REGEX_ENCRYPTED = (
+    b"gAAAAABoLL5Cln6TyMSaPfd8Cu_EIDDnIg2I7R3i-eipDcKGr0DRHXfqIGoxO36CQhEyp4aPR0Ylxu8dF"
+    b"OKknTAICvDg7GV33y6dI8d1-C6GsBoSdihP2IYEMwUwasa_dYUEtuTRVz10B0TpZkocjuRPW-CfIPVDgF"
+    b"yVXF8AfFESS-yRiL5nueuYsoD6MlJHmHhX0PVRVef6"
+)
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):
@@ -30,9 +35,6 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             return decrypt_bytes(encrypted_data=EXCLUDED_IP_REGEX_ENCRYPTED)
 
         excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX")
-        if excluded_ip_regex is None:
-            excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_DROGON_IP_REGEX")
-
         if excluded_ip_regex is None:
             message = "Set S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX when " "S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX is false."
             raise EnvironmentError(message)
