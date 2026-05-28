@@ -6,7 +6,6 @@ import subprocess
 import pytest
 
 from s3_log_extraction.validate._extraction_heuristic_pre_validator import (
-    EXCLUDED_IP_REGEX_ENCRYPTED,
     ExtractionHeuristicPreValidator,
 )
 
@@ -16,7 +15,6 @@ def test_excluded_ip_regex_defaults_to_no_exclusions(monkeypatch: pytest.MonkeyP
     monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
 
     validator = ExtractionHeuristicPreValidator()
-    assert EXCLUDED_IP_REGEX_ENCRYPTED == b""
     assert validator._excluded_ip_regex == "^$"
 
 

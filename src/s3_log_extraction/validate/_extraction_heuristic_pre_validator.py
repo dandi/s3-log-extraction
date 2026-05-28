@@ -4,9 +4,6 @@ import pathlib
 import subprocess
 
 from ._base_validator import BaseValidator
-from ..utils.encryption import decrypt_bytes
-
-EXCLUDED_IP_REGEX_ENCRYPTED = b""
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):
@@ -25,14 +22,6 @@ class ExtractionHeuristicPreValidator(BaseValidator):
         excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX")
         if excluded_ip_regex is not None:
             self._excluded_ip_regex = excluded_ip_regex
-            return
-
-        if EXCLUDED_IP_REGEX_ENCRYPTED:
-            decrypted_regex = decrypt_bytes(encrypted_data=EXCLUDED_IP_REGEX_ENCRYPTED)
-            if isinstance(decrypted_regex, bytes):
-                self._excluded_ip_regex = decrypted_regex.decode(encoding="utf-8")
-            else:
-                self._excluded_ip_regex = decrypted_regex
             return
 
         self._excluded_ip_regex = "^$"
