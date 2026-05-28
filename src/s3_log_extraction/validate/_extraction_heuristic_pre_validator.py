@@ -18,14 +18,6 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     tqdm_description = "Pre-validating extraction heuristic"
 
-    def _get_excluded_ip_regex(self) -> None:
-        excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX")
-        if excluded_ip_regex is not None:
-            self._excluded_ip_regex = excluded_ip_regex
-            return
-
-        self._excluded_ip_regex = "^$"
-
     def __hash__(self) -> int:
         with self._relative_awk_script_path.open("rb") as file_stream:
             byte_content = file_stream.read()
@@ -36,8 +28,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
-        self._excluded_ip_regex = ""
-        self._get_excluded_ip_regex()
+        self._excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX") or "^$"
 
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
