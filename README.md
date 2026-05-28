@@ -177,7 +177,8 @@ These can also be used to verify the current state of the extraction process, su
 
 #### Excluded IP regex configuration
 
-The extraction heuristic pre-validator excludes known service IPs using a regex.
+The extraction heuristic pre-validator uses an excluded-IP regex.
+By default, no IPs are excluded.
 
 Example custom regex:
 

@@ -12,23 +12,13 @@ from s3_log_extraction.validate._extraction_heuristic_pre_validator import (
 
 
 @pytest.mark.ai_generated
-def test_excluded_ip_regex_defaults_to_encrypted(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_excluded_ip_regex_defaults_to_no_exclusions(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", raising=False)
     monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
 
-    expected_regex = "^203\\.0\\.113\\.1$"
-
-    def _decrypt_stub(*, encrypted_data: bytes) -> str:
-        assert encrypted_data == EXCLUDED_IP_REGEX_ENCRYPTED
-        return expected_regex
-
-    monkeypatch.setattr(
-        "s3_log_extraction.validate._extraction_heuristic_pre_validator.decrypt_bytes",
-        _decrypt_stub,
-    )
-
     validator = ExtractionHeuristicPreValidator()
-    assert validator._get_excluded_ip_regex() == expected_regex
+    assert EXCLUDED_IP_REGEX_ENCRYPTED == b""
+    assert validator._get_excluded_ip_regex() == "^$"
 
 
 @pytest.mark.ai_generated

@@ -6,11 +6,7 @@ import subprocess
 from ._base_validator import BaseValidator
 from ..utils.encryption import decrypt_bytes
 
-EXCLUDED_IP_REGEX_ENCRYPTED = (
-    b"gAAAAABoLL5Cln6TyMSaPfd8Cu_EIDDnIg2I7R3i-eipDcKGr0DRHXfqIGoxO36CQhEyp4aPR0Ylxu8dF"
-    b"OKknTAICvDg7GV33y6dI8d1-C6GsBoSdihP2IYEMwUwasa_dYUEtuTRVz10B0TpZkocjuRPW-CfIPVDgF"
-    b"yVXF8AfFESS-yRiL5nueuYsoD6MlJHmHhX0PVRVef6"
-)
+EXCLUDED_IP_REGEX_ENCRYPTED = b""
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):
@@ -32,7 +28,12 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             "no",
         ]
         if encrypt_ip_regex:
-            return decrypt_bytes(encrypted_data=EXCLUDED_IP_REGEX_ENCRYPTED)
+            if EXCLUDED_IP_REGEX_ENCRYPTED:
+                decrypted_regex = decrypt_bytes(encrypted_data=EXCLUDED_IP_REGEX_ENCRYPTED)
+                if isinstance(decrypted_regex, bytes):
+                    return decrypted_regex.decode(encoding="utf-8")
+                return decrypted_regex
+            return "^$"
 
         excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX")
         if excluded_ip_regex is None:
