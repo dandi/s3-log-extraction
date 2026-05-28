@@ -5,6 +5,7 @@ import beartype
 import pandas
 
 from ..config import get_cache_subdirectory
+from ..ip_utils._globals import EXCLUDED_REGION_LABELS
 
 
 @beartype.beartype
@@ -29,7 +30,7 @@ def generate_archive_totals(
 
     unique_countries: set[str] = set()
     for region in summary["region"]:
-        if region in ["VPN", "GitHub", "unknown"]:
+        if region in EXCLUDED_REGION_LABELS:
             continue
 
         region_split = region.split("/")
@@ -61,4 +62,4 @@ def generate_archive_totals(
 
     archive_totals_file_path = summary_directory / "archive_totals.json"
     with archive_totals_file_path.open(mode="w") as io:
-        json.dump(obj=archive_totals, fp=io, indent=2)
+        json.dump(obj=archive_totals, fp=io, indent=2, sort_keys=True)

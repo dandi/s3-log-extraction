@@ -82,6 +82,32 @@ def test_generic_summaries(tmpdir: py.path.local):
     ), f"\n\narchive_totals.json mismatch:\n  test:     {test_archive_totals}\n  expected: {expected_archive_totals}\n"
 
 
+def test_generate_all_dataset_totals_skips_archive(tmpdir: py.path.local):
+    """Verify that the 'archive' subdirectory is excluded from dataset totals."""
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    # Set up a real dataset summary
+    dataset_dir = summary_dir / "ds001161"
+    dataset_dir.mkdir(parents=True)
+    (dataset_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t1194564\t4\t3\n"
+    )
+
+    # Set up an archive summary that should be excluded
+    archive_dir = summary_dir / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t7481053\t7\t5\n"
+    )
+
+    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
+
+    totals = json.loads((summary_dir / "totals.json").read_text())
+    assert "ds001161" in totals, "'ds001161' should be present in totals.json"
+    assert "archive" not in totals, "'archive' should be excluded from totals.json"
+
+
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
     ("count", "modulo", "minimum", "expected"),
