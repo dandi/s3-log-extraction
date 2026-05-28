@@ -94,6 +94,15 @@ VN/Long An Povince:
 VPN:
   latitude: null
   longitude: null
+bogon:
+  latitude: null
+  longitude: null
+missing:
+  latitude: null
+  longitude: null
+undetermined:
+  latitude: null
+  longitude: null
 unknown:
   latitude: null
   longitude: null
