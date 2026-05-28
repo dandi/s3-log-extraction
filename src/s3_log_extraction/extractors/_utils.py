@@ -13,10 +13,10 @@ def _merge_file_into_extraction(
 ) -> None:
     """Merge a single `.txt` file from `source_file_path` into `destination_file_path`.
 
-    For ``full_ips.txt`` files, the existing encrypted destination is decrypted, merged with the new
+    For ``ips.txt`` files, the existing encrypted destination is decrypted, merged with the new
     plaintext IPs, and re-encrypted. All other files are appended as raw bytes.
     """
-    if use_encryption and source_file_path.name == "full_ips.txt":
+    if use_encryption and source_file_path.name == "ips.txt":
         new_ips = _read_ips_from_file(file_path=source_file_path, use_encryption=False)
         existing_ips = (
             _read_ips_from_file(file_path=destination_file_path, use_encryption=True)
@@ -42,7 +42,7 @@ def _merge_dir_to_extraction(
 ) -> None:
     """Merge all `.txt` files from `source_dir` into `extraction_directory`.
 
-    For ``full_ips.txt`` files, existing encrypted content is decrypted, merged with new plaintext
+    For ``ips.txt`` files, existing encrypted content is decrypted, merged with new plaintext
     IPs, and re-encrypted. All other files are appended as raw bytes.
     """
     for file_path in source_dir.rglob(pattern="*.txt"):

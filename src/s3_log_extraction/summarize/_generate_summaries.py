@@ -46,19 +46,19 @@ def _collect_unique_ips(asset_directories: list[pathlib.Path], use_encryption: b
     Parameters
     ----------
     asset_directories : list of pathlib.Path
-        Paths to per-asset extraction directories containing ``full_ips.txt`` files.
+        Paths to per-asset extraction directories containing ``ips.txt`` files.
     use_encryption : bool
-        If ``True`` (default), ``full_ips.txt`` files are decrypted before reading.
+        If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
 
     Returns
     -------
     set of str
-        The set of unique IP addresses found across all ``full_ips.txt`` files.
+        The set of unique IP addresses found across all ``ips.txt`` files.
     """
     unique_ips: set[str] = set()
     for asset_directory in asset_directories:
-        full_ips_file_path = asset_directory / "full_ips.txt"
+        full_ips_file_path = asset_directory / "ips.txt"
         if not full_ips_file_path.exists():
             continue
         unique_ips.update(_read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption))
@@ -76,14 +76,14 @@ def _summarize_dataset_requester_count(
     """
     Compute and save the privacy-rounded unique requester count for a dataset.
 
-    Reads all ``full_ips.txt`` files from the given asset directories, counts the
+    Reads all ``ips.txt`` files from the given asset directories, counts the
     number of unique IP addresses across the entire dataset, rounds the result via
     :func:`_round_requester_count`, and writes the value to ``summary_file_path``.
 
     Parameters
     ----------
     asset_directories : list of pathlib.Path
-        Paths to the per-asset extraction directories containing ``full_ips.txt`` files.
+        Paths to the per-asset extraction directories containing ``ips.txt`` files.
     summary_file_path : pathlib.Path
         Destination file where the rounded count (as a string) will be written.
     modulo : int, optional
@@ -92,7 +92,7 @@ def _summarize_dataset_requester_count(
         Minimum disclosure threshold.  Counts below this are reported as ``"<{minimum}"``.
         Default is ``50``.
     use_encryption : bool
-        If ``True`` (default), ``full_ips.txt`` files are decrypted before reading.
+        If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
     """
     unique_ips = _collect_unique_ips(asset_directories=asset_directories, use_encryption=use_encryption)
@@ -125,7 +125,7 @@ def generate_summaries(
     cache_directory : str | pathlib.Path | None
         Path to the cache directory.
     use_encryption : bool
-        If ``True`` (default), ``full_ips.txt`` and IP cache files are decrypted when read.
+        If ``True`` (default), ``ips.txt`` and IP cache files are decrypted when read.
         If ``False``, files are read as plaintext.
     """
     if level != 0:
@@ -318,7 +318,7 @@ def _summarize_dataset_by_region(
     for asset_directory in asset_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
-        full_ips_file_path = asset_directory / "full_ips.txt"
+        full_ips_file_path = asset_directory / "ips.txt"
 
         if not full_ips_file_path.exists():
             continue
