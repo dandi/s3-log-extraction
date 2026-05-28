@@ -37,4 +37,6 @@ _DEFAULT_REGION_CODES_TO_COORDINATES = {
     "GitHub": {"latitude": None, "longitude": None},
     "VPN": {"latitude": None, "longitude": None},
     "unknown": {"latitude": None, "longitude": None},
+    "undetermined": {"latitude": None, "longitude": None},
+    "missing": {"latitude": None, "longitude": None},
 }
