@@ -35,7 +35,7 @@ def generate_all_dataset_totals(
 
         unique_countries: set[str] = set()
         for region in summary["region"]:
-            if region in ["VPN", "GitHub", "unknown"]:
+            if region in ["VPN", "GitHub", "unknown", "undetermined", "missing"]:
                 continue
 
             country_code, region_name = region.split("/")
