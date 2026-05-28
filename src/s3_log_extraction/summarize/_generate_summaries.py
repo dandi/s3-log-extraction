@@ -324,7 +324,7 @@ def _summarize_dataset_by_region(
             continue
 
         full_ips = _read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption)
-        regions = [ip_to_region.get(ip, "unknown") for ip in full_ips]
+        regions = [ip_to_region.get(ip, "missing") for ip in full_ips]
         all_regions.extend(regions)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
