@@ -21,14 +21,15 @@ def generate_all_dataset_totals(
     """
     summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
 
-    # TODO: record progress over
-
     all_dataset_totals = {}
     for dandiset_id_folder_path in summary_directory.iterdir():
         if not dandiset_id_folder_path.is_dir():
-            continue  # TODO: use better structure for separating mapped activity from summaries
+            continue
+            
         datatset_id = dandiset_id_folder_path.name
-
+        if datatset_id == "archive":
+            continue
+        
         summary_file_path = summary_directory / datatset_id / "by_region.tsv"
         if not summary_file_path.exists():
             continue
