@@ -51,7 +51,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
-        self.EXCLUDED_IP_REGEX = self._get_excluded_ip_regex()
+        self._get_excluded_ip_regex()
 
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
@@ -70,7 +70,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             shell=True,
             capture_output=True,
             text=True,
-            env={"EXCLUDED_IP_REGEX": self.EXCLUDED_IP_REGEX},
+            env={"EXCLUDED_IP_REGEX": self._get_excluded_ip_regex()},
         )
         if result.returncode != 0:
             message = (
