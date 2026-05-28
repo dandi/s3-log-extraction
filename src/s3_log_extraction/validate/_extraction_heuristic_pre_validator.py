@@ -20,8 +20,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     tqdm_description = "Pre-validating extraction heuristic"
 
-    @staticmethod
-    def _get_excluded_ip_regex() -> str:
+    def _get_excluded_ip_regex(self) -> str:
         encrypt_ip_regex = os.environ.get("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "true").lower() not in [
             "0",
             "false",

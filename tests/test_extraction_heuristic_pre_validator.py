@@ -32,6 +32,12 @@ def _load_pre_validator_module():
     return importlib.import_module("s3_log_extraction.validate._extraction_heuristic_pre_validator")
 
 
+def _new_validator_instance(pre_validator_module):
+    return pre_validator_module.ExtractionHeuristicPreValidator.__new__(
+        pre_validator_module.ExtractionHeuristicPreValidator
+    )
+
+
 @pytest.mark.ai_generated
 def test_uses_encrypted_default_regex(monkeypatch: pytest.MonkeyPatch) -> None:
     pre_validator_module = _load_pre_validator_module()
@@ -40,8 +46,9 @@ def test_uses_encrypted_default_regex(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
     monkeypatch.delenv("S3_LOG_EXTRACTION_DROGON_IP_REGEX", raising=False)
     monkeypatch.setattr(pre_validator_module, "decrypt_bytes", lambda encrypted_data: "decrypted-regex")
+    validator = _new_validator_instance(pre_validator_module)
 
-    assert pre_validator_module.ExtractionHeuristicPreValidator._get_excluded_ip_regex() == "decrypted-regex"
+    assert validator._get_excluded_ip_regex() == "decrypted-regex"
 
 
 @pytest.mark.ai_generated
@@ -51,8 +58,9 @@ def test_uses_generic_plaintext_regex_override(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "false")
     monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", "^10\\.0\\.0\\.1$")
     monkeypatch.delenv("S3_LOG_EXTRACTION_DROGON_IP_REGEX", raising=False)
+    validator = _new_validator_instance(pre_validator_module)
 
-    assert pre_validator_module.ExtractionHeuristicPreValidator._get_excluded_ip_regex() == "^10\\.0\\.0\\.1$"
+    assert validator._get_excluded_ip_regex() == "^10\\.0\\.0\\.1$"
 
 
 @pytest.mark.ai_generated
@@ -62,8 +70,9 @@ def test_uses_legacy_plaintext_regex_override(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "false")
     monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
     monkeypatch.setenv("S3_LOG_EXTRACTION_DROGON_IP_REGEX", "^10\\.0\\.0\\.2$")
+    validator = _new_validator_instance(pre_validator_module)
 
-    assert pre_validator_module.ExtractionHeuristicPreValidator._get_excluded_ip_regex() == "^10\\.0\\.0\\.2$"
+    assert validator._get_excluded_ip_regex() == "^10\\.0\\.0\\.2$"
 
 
 @pytest.mark.ai_generated
@@ -73,9 +82,10 @@ def test_plaintext_override_requires_regex_env_var(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "false")
     monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
     monkeypatch.delenv("S3_LOG_EXTRACTION_DROGON_IP_REGEX", raising=False)
+    validator = _new_validator_instance(pre_validator_module)
 
     with pytest.raises(EnvironmentError, match="S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX"):
-        pre_validator_module.ExtractionHeuristicPreValidator._get_excluded_ip_regex()
+        validator._get_excluded_ip_regex()
 
 
 @pytest.mark.ai_generated
@@ -85,7 +95,7 @@ def test_validation_passes_excluded_ip_regex_env(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         pre_validator_module.ExtractionHeuristicPreValidator,
         "_get_excluded_ip_regex",
-        staticmethod(lambda: "^10\\.0\\.0\\.1$"),
+        lambda self: "^10\\.0\\.0\\.1$",
     )
 
     captured_env = {}
