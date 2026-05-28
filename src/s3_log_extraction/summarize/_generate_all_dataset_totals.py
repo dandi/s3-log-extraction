@@ -3,7 +3,7 @@ import pathlib
 
 import pandas
 
-from ..config import get_summary_directory
+from ..config import get_cache_subdirectory
 
 
 def generate_all_dataset_totals(
@@ -18,7 +18,7 @@ def generate_all_dataset_totals(
         The top-level cache directory from which the summary directory is derived.
         If not provided, the default cache directory is used.
     """
-    summary_directory = get_summary_directory(cache_directory=cache_directory)
+    summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
 
     # TODO: record progress over
 

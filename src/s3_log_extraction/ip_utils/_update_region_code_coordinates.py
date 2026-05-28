@@ -6,8 +6,9 @@ import tqdm
 import yaml
 
 from ._globals import _DEFAULT_REGION_CODES_TO_COORDINATES, _KNOWN_SERVICES
-from ._ip_cache import get_ip_cache_directory, load_ip_cache, write_ip_cache
+from ._ip_cache import load_ip_cache, write_ip_cache
 from ._ip_utils import _get_cidr_address_ranges_and_subregions
+from ..config import get_cache_subdirectory
 
 
 def update_region_code_coordinates(
@@ -40,7 +41,7 @@ def update_region_code_coordinates(
     ipinfo_client = ipinfo.getHandler(access_token=ipinfo_api_key)
     opencage_client = opencage.geocoder.OpenCageGeocode(key=opencage_api_key)
 
-    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
+    ip_cache_directory = get_cache_subdirectory(cache_directory=cache_directory, name="ips")
 
     ip_to_region_codes_file_path = ip_cache_directory / "ip_to_region.yaml"
     if not ip_to_region_codes_file_path.exists():

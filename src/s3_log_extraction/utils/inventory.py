@@ -347,10 +347,10 @@ def get_extraction_completion(
         A typed dict with processed count, inventory count, and completion
         percentage.
     """
-    from ..config import get_records_directory
+    from ..config import get_cache_subdirectory
 
     inventory_stats = get_log_bucket_stats(inventory_directory=inventory_directory)
-    records_directory = get_records_directory(cache_directory=cache_directory)
+    records_directory = get_cache_subdirectory(cache_directory=cache_directory, name="records")
     record_file_paths = [
         record_file_path
         for record_file_path in records_directory.iterdir()

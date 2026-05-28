@@ -3,7 +3,7 @@ import random
 
 import tqdm
 
-from ..config import get_records_directory
+from ..config import get_cache_subdirectory
 from ..utils import _read_s3_urls_from_local_inventory
 
 
@@ -24,7 +24,7 @@ class RemoteS3BucketValidator:
     tqdm_description = "Validating S3 log file existence"
 
     def __init__(self, *, cache_directory: pathlib.Path | None = None) -> None:
-        self.records_directory = get_records_directory(cache_directory=cache_directory)
+        self.records_directory = get_cache_subdirectory(cache_directory=cache_directory, name="records")
 
         record_file_name = f"{self.__class__.__name__}.txt"
         self.record_file_path = self.records_directory / record_file_name

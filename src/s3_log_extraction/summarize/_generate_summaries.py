@@ -5,7 +5,7 @@ import pathlib
 import pandas
 import tqdm
 
-from ..config import get_cache_directory, get_summary_directory
+from ..config import get_cache_directory, get_cache_subdirectory
 from ..ip_utils import load_ip_cache
 from ..ip_utils._ip_utils import _read_ips_from_file
 
@@ -138,7 +138,7 @@ def generate_summaries(
     cache_dir = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
     extraction_directory = cache_dir / "extraction"
     extraction_directory.mkdir(exist_ok=True)
-    summary_directory = get_summary_directory(cache_directory=cache_directory)
+    summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
     ip_to_region = load_ip_cache(
         cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
     )
