@@ -79,18 +79,6 @@ def s3logextraction_cli():
     default=None,
 )
 @rich_click.option(
-    "--manifest",
-    "manifest_file_path",
-    help=(
-        "A custom manifest file specifying the paths of log files to process from the S3 bucket that would not be "
-        "discovered by the natural nesting pattern. Typically used in cases where the storage pattern was swapped "
-        "from flat to nested at a particular point in time."
-    ),
-    required=False,
-    type=rich_click.Path(writable=False),
-    default=None,
-)
-@rich_click.option(
     "--inventory",
     "inventory_directory",
     help=(
@@ -119,7 +107,6 @@ def _extract_cli(
     workers: int = -2,
     cache_directory: str | None = None,
     mode: typing.Literal["remote"] | None = None,
-    manifest_file_path: str | None = None,
     inventory_directory: str | None = None,
     use_encryption: bool = True,
 ) -> None:
@@ -140,7 +127,6 @@ def _extract_cli(
                 s3_root=directory,
                 limit=limit,
                 workers=workers,
-                manifest_file_path=manifest_file_path,
                 inventory_directory=inventory_directory,
             )
         case _:

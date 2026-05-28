@@ -136,7 +136,64 @@ s3logextraction update totals --mode archive
 
 
 
-## How to Setup Logging
+## Remote S3 Bucket Extraction
+
+To extract logs from a remote S3 bucket, use the `--mode remote` flag.  For large buckets, we strongly recommend
+setting up [AWS S3 Inventory](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-inventory.html) and
+downloading the inventory locally before running the extraction.  Scanning the bucket directly via live network calls
+(the default when no `--inventory` path is given) can be extremely slow for buckets with millions of objects.
+
+### Using S3 Inventory (recommended)
+
+AWS S3 Inventory generates periodic snapshots of all objects in your bucket as gzip-compressed CSV files.  Once
+downloaded locally, the inventory lets `s3logextraction` enumerate all log files without making any live S3 listing
+calls, providing a significant performance improvement over direct bucket scanning.
+
+**Expected inventory directory layout:**
+
+```
+<inventory_directory>/
+├── <timestamp>/               # e.g. 2026-05-03T01-00Z/
+│   ├── manifest.json
+│   └── manifest.checksum
+├── data/
+│   └── <uuid>.csv.gz          # gzip-compressed CSV inventory files
+└── hive/
+    └── dt=<YYYY-MM-DD-HH-MM>/ # e.g. dt=2026-05-03-01-00/
+        └── symlink.txt        # references to data/*.csv.gz
+```
+
+Pass the path to the downloaded inventory directory via the `--inventory` option:
+
+```bash
+s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory
+```
+
+To check how many log files are in the inventory and the total size:
+
+```bash
+s3logextraction stats --inventory /path/to/inventory
+```
+
+To report what percentage of log files have already been processed:
+
+```bash
+s3logextraction completion --inventory /path/to/inventory
+```
+
+### Scanning the remote bucket directly (not recommended for large buckets)
+
+If no `--inventory` path is given, `s3logextraction` will list the bucket contents via live network calls using
+[s5cmd](https://github.com/peak/s5cmd).  This works for small buckets but becomes prohibitively slow for buckets
+containing millions of log files.
+
+```bash
+s3logextraction extract s3://my-logs-bucket --mode remote
+```
+
+
+
+
 
 If you're new to using AWS S3 buckets and haven't yet enabled the logging this project utilizes, you can follow these simple instructions to get started.
 
