@@ -183,7 +183,6 @@ By default, no IPs are excluded.
 Example custom regex:
 
 ```bash
-export S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX=false
 export S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX='^(192\.0\.2\.1|198\.51\.100\.2)$'
 ```
 

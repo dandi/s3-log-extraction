@@ -13,7 +13,6 @@ from s3_log_extraction.validate._extraction_heuristic_pre_validator import (
 
 @pytest.mark.ai_generated
 def test_excluded_ip_regex_defaults_to_no_exclusions(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", raising=False)
     monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
 
     validator = ExtractionHeuristicPreValidator()
@@ -24,7 +23,6 @@ def test_excluded_ip_regex_defaults_to_no_exclusions(monkeypatch: pytest.MonkeyP
 @pytest.mark.ai_generated
 def test_excluded_ip_regex_plaintext_override(monkeypatch: pytest.MonkeyPatch) -> None:
     expected_regex = "^192\\.0\\.2\\.1$"
-    monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "false")
     monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
 
     validator = ExtractionHeuristicPreValidator()
@@ -32,19 +30,18 @@ def test_excluded_ip_regex_plaintext_override(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.ai_generated
-def test_excluded_ip_regex_plaintext_requires_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "false")
-    monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
-    monkeypatch.setenv("S3_LOG_EXTRACTION_DROGON_IP_REGEX", "^198\\.51\\.100\\.2$")
+def test_excluded_ip_regex_env_var_takes_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
+    expected_regex = "^198\\.51\\.100\\.2$"
+    monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
+    monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "true")
 
-    with pytest.raises(EnvironmentError, match="S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX"):
-        ExtractionHeuristicPreValidator()
+    validator = ExtractionHeuristicPreValidator()
+    assert validator._excluded_ip_regex == expected_regex
 
 
 @pytest.mark.ai_generated
 def test_run_validation_passes_excluded_ip_regex_env(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     expected_regex = "^198\\.51\\.100\\.2$"
-    monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "false")
     monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
 
     captured_env: dict[str, str] = {}
