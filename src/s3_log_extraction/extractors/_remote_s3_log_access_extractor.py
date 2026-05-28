@@ -58,23 +58,6 @@ class RemoteS3LogAccessExtractor:
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
         self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
 
-        self.processed_years: set[str] = set()
-        self.processed_years_record_file_path = self.records_directory / "processed_years.yaml"
-        if self.processed_years_record_file_path.exists():
-            with self.processed_years_record_file_path.open(mode="r") as file_stream:
-                loaded = yaml.safe_load(stream=file_stream)
-                self.processed_years = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
-
-        self.processed_months_per_year: dict[str, set[str]] = dict()
-        self.processed_months_per_year_record_file_path = self.records_directory / "processed_months_per_year.yaml"
-        if self.processed_months_per_year_record_file_path.exists():
-            with self.processed_months_per_year_record_file_path.open(mode="r") as file_stream:
-                loaded = yaml.safe_load(stream=file_stream) or {}
-                self.processed_months_per_year = {
-                    year: set(months.keys()) if isinstance(months, dict) else set(months or [])
-                    for year, months in loaded.items()
-                }
-
     def extract_s3_bucket(
         self,
         *,
@@ -211,13 +194,6 @@ class RemoteS3LogAccessExtractor:
         inventory_directory: pathlib.Path | None = None,
     ) -> list[str]:
         self._get_end_record_and_check_consistency()
-
-        self.processed_dates: set[str] = set()
-        processed_dates_record_file_path = self.records_directory / "processed_dates.yaml"
-        if processed_dates_record_file_path.exists():
-            with processed_dates_record_file_path.open(mode="r") as file_stream:
-                loaded = yaml.safe_load(stream=file_stream)
-                self.processed_dates = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
 
         if inventory_directory is not None:
             unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_local_inventory(
