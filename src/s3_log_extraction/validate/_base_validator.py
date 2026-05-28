@@ -5,7 +5,7 @@ import random
 
 import tqdm
 
-from ..config import get_records_directory
+from ..config import get_cache_subdirectory
 
 
 class BaseValidator(abc.ABC):
@@ -19,7 +19,7 @@ class BaseValidator(abc.ABC):
         return checksum_int
 
     def __init__(self) -> None:
-        self.records_directory = get_records_directory()
+        self.records_directory = get_cache_subdirectory(name="records")
 
         record_file_name = f"{self.__class__.__name__}_{hex(hash(self))[2:]}.txt"
         self.record_file_path = self.records_directory / record_file_name

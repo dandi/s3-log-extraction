@@ -3,7 +3,7 @@ import typing
 
 import yaml
 
-from ..config import get_ip_cache_directory
+from ..config import get_cache_subdirectory
 from ..utils.encryption import read_text_from_file, write_text_to_file
 
 
@@ -25,7 +25,7 @@ def load_ip_cache(
         If ``True`` (default), the cache file content is decrypted before parsing.
         If ``False``, the file content is read as plaintext YAML.
     """
-    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
+    ip_cache_directory = get_cache_subdirectory(cache_directory=cache_directory, name="ips")
     cache_file_path = ip_cache_directory / f"{cache_type}.yaml"
 
     if not cache_file_path.exists():
@@ -58,7 +58,7 @@ def write_ip_cache(
         If ``True`` (default), the content is encrypted before writing.
         If ``False``, the content is written as plaintext YAML.
     """
-    ip_cache_directory = get_ip_cache_directory(cache_directory=cache_directory)
+    ip_cache_directory = get_cache_subdirectory(cache_directory=cache_directory, name="ips")
     cache_file_path = ip_cache_directory / f"{cache_type}.yaml"
 
     text = yaml.dump(data=data)

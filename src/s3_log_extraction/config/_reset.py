@@ -3,7 +3,7 @@ import itertools
 import pathlib
 import shutil
 
-from ._config import get_cache_directory, get_records_directory
+from ._config import get_cache_directory, get_cache_subdirectory
 
 
 def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
@@ -18,7 +18,7 @@ def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
     shutil.rmtree(path=extraction_directory)
     extraction_directory.mkdir(exist_ok=True)
 
-    records_directory = get_records_directory(cache_directory=cache_directory)
+    records_directory = get_cache_subdirectory(cache_directory=cache_directory, name="records")
     records = [
         record
         for record in itertools.chain(

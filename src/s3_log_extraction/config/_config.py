@@ -76,9 +76,6 @@ def get_cache_subdirectory(
     """
     Get a named subdirectory of the cache directory, creating it if it does not exist.
 
-    The individual ``get_*_directory`` helpers below are thin wrappers around this function,
-    kept for API and docstring exposure and to make it easier to navigate the codebase via
-    auto-completion and IDEs.
 
     Parameters
     ----------
@@ -99,64 +96,3 @@ def get_cache_subdirectory(
     cache_subdir.mkdir(exist_ok=True)
 
     return cache_subdir
-
-
-def get_records_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
-    """
-    Get the records subdirectory for S3 log extraction.
-
-    Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
-    repeat computations.
-
-    Parameters
-    ----------
-    cache_directory : path-like, optional
-        The directory to use as the cache directory.
-        If not provided, the default cache directory is used.
-
-    Returns
-    -------
-    pathlib.Path
-        The main output directory for S3 log extraction.
-    """
-    return get_cache_subdirectory(cache_directory=cache_directory, name="records")
-
-
-def get_ip_cache_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
-    """
-    Get the IP cache subdirectory for S3 log extraction.
-
-    Records are ways of tracking the progress of the extraction and validation processes so they do not needlessly
-    repeat computations.
-
-    Parameters
-    ----------
-    cache_directory : path-like, optional
-        The directory to use as the cache directory.
-        If not provided, the default cache directory is used.
-
-
-    Returns
-    -------
-    pathlib.Path
-        The IP cache directory for S3 log extraction.
-    """
-    return get_cache_subdirectory(cache_directory=cache_directory, name="ips")
-
-
-def get_summary_directory(cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
-    """
-    Get the summary subdirectory for S3 log extraction.
-
-    Parameters
-    ----------
-    cache_directory : path-like, optional
-        The directory to use as the cache directory.
-        If not provided, the default cache directory is used.
-
-    Returns
-    -------
-    pathlib.Path
-        The summary directory for S3 log extraction.
-    """
-    return get_cache_subdirectory(cache_directory=cache_directory, name="summaries")

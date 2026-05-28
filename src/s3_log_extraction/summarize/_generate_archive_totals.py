@@ -4,7 +4,7 @@ import pathlib
 import beartype
 import pandas
 
-from ..config import get_summary_directory
+from ..config import get_cache_subdirectory
 
 
 @beartype.beartype
@@ -20,7 +20,7 @@ def generate_archive_totals(
         The top-level cache directory from which the summary directory is derived.
         If not provided, the default cache directory is used.
     """
-    summary_directory = get_summary_directory(cache_directory=cache_directory)
+    summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
     archive_directory = summary_directory / "archive"
     archive_directory.mkdir(exist_ok=True)
 

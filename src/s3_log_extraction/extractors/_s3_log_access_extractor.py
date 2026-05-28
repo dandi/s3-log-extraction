@@ -13,7 +13,7 @@ import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess, _merge_dir_to_extraction, _merge_file_into_extraction
-from ..config import get_cache_directory, get_records_directory
+from ..config import get_cache_directory, get_cache_subdirectory
 from ..utils import _handle_max_workers
 
 
@@ -40,7 +40,7 @@ class S3LogAccessExtractor:
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
-        self.records_directory = get_records_directory(cache_directory=self.cache_directory)
+        self.records_directory = get_cache_subdirectory(cache_directory=self.cache_directory, name="records")
         self.temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
 
         class_name = self.__class__.__name__
