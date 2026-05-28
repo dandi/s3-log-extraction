@@ -62,4 +62,4 @@ def generate_archive_totals(
 
     archive_totals_file_path = summary_directory / "archive_totals.json"
     with archive_totals_file_path.open(mode="w") as io:
-        json.dump(obj=archive_totals, fp=io, indent=2)
+        json.dump(obj=archive_totals, fp=io, indent=2, sort_keys=True)

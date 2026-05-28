@@ -503,4 +503,4 @@ class RemoteS3LogAccessExtractor:
         parsed_file_path = file_path.parent / f"{file_path.stem}_parsed.json"
         parsed_file_path.unlink(missing_ok=True)
         with parsed_file_path.open(mode="w") as file_stream:
-            json.dump(obj=dict(manifest), fp=file_stream, indent=2)
+            json.dump(obj=dict(manifest), fp=file_stream, indent=2, sort_keys=True)
