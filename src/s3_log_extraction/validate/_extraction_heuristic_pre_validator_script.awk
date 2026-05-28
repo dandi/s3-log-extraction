@@ -1,11 +1,11 @@
 BEGIN {
     FS = "HTTP/1\\."
 
-    if (!("DROGON_IP_REGEX" in ENVIRON)) {
-        print "Environment variable DROGON_IP_REGEX is not set" > "/dev/stderr"
+    if (!("EXCLUDED_IP_REGEX" in ENVIRON)) {
+        print "Environment variable EXCLUDED_IP_REGEX is not set" > "/dev/stderr"
         exit 1
     }
-    DROGON_IP_REGEX = ENVIRON["DROGON_IP_REGEX"]
+    EXCLUDED_IP_REGEX = ENVIRON["EXCLUDED_IP_REGEX"]
 
     IP_REGEX = "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"
     STATUS_REGEX = "^[1-5][0-9]{2}$"
@@ -18,7 +18,7 @@ BEGIN {
     split($1, pre_uri_fields, " ")
 
     ip = pre_uri_fields[5]
-    if (ip ~ DROGON_IP_REGEX) {next}
+    if (ip ~ EXCLUDED_IP_REGEX) {next}
 
     request_type = pre_uri_fields[8]
     if (request_type != "REST.GET.OBJECT") {next}

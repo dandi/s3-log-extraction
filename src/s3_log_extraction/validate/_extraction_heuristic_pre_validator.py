@@ -1,9 +1,10 @@
 import hashlib
+import os
 import pathlib
 import subprocess
 
 from ._base_validator import BaseValidator
-from .._regex import DROGON_IP_REGEX_ENCRYPTED
+from .._regex import EXCLUDED_IP_REGEX_ENCRYPTED
 from ..utils.encryption import decrypt_bytes
 
 
@@ -19,6 +20,26 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     tqdm_description = "Pre-validating extraction heuristic"
 
+    @staticmethod
+    def _get_excluded_ip_regex() -> str:
+        encrypt_ip_regex = os.environ.get("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "true").lower() not in [
+            "0",
+            "false",
+            "no",
+        ]
+        if encrypt_ip_regex:
+            return decrypt_bytes(encrypted_data=EXCLUDED_IP_REGEX_ENCRYPTED)
+
+        excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX")
+        if excluded_ip_regex is None:
+            excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_DROGON_IP_REGEX")
+
+        if excluded_ip_regex is None:
+            message = "Set S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX when " "S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX is false."
+            raise EnvironmentError(message)
+
+        return excluded_ip_regex
+
     def __hash__(self) -> int:
         with self._relative_awk_script_path.open("rb") as file_stream:
             byte_content = file_stream.read()
@@ -29,7 +50,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
 
     # TODO: parallelize
     def __init__(self):
-        self.DROGON_IP_REGEX = decrypt_bytes(encrypted_data=DROGON_IP_REGEX_ENCRYPTED)
+        self.EXCLUDED_IP_REGEX = self._get_excluded_ip_regex()
 
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
@@ -48,7 +69,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             shell=True,
             capture_output=True,
             text=True,
-            env={"DROGON_IP_REGEX": self.DROGON_IP_REGEX},
+            env={"EXCLUDED_IP_REGEX": self.EXCLUDED_IP_REGEX},
         )
         if result.returncode != 0:
             message = (
