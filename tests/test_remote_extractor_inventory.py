@@ -49,13 +49,12 @@ def _make_extractor(tmp_path: pathlib.Path) -> RemoteS3LogAccessExtractor:
     Returns
     -------
     RemoteS3LogAccessExtractor
-        Extractor instance with ``processed_dates`` and
-        ``s3_url_processing_end_record`` initialised to empty sets.
+        Extractor instance with ``s3_url_processing_end_record`` initialised
+        to an empty set.
     """
     cache_directory = tmp_path / "cache"
     cache_directory.mkdir()
     extractor = RemoteS3LogAccessExtractor(cache_directory=cache_directory)
-    extractor.processed_dates = set()
     extractor.s3_url_processing_end_record = set()
     return extractor
 
@@ -143,8 +142,8 @@ def _build_inventory_directory(
 @pytest.mark.ai_generated
 def test_get_unprocessed_s3_urls_from_local_inventory_basic(tmp_path: pathlib.Path) -> None:
     """
-    All log-file keys from the inventory CSV are returned when no dates have
-    been processed yet and all keys are under s3_root.
+    All log-file keys from the inventory CSV are returned when all keys are
+    under s3_root.
     """
     extractor = _make_extractor(tmp_path)
     s3_root = "s3://my-bucket/logs"
@@ -163,29 +162,6 @@ def test_get_unprocessed_s3_urls_from_local_inventory_basic(tmp_path: pathlib.Pa
 
     expected = {f"s3://{source_bucket}/{k}" for k in keys}
     assert set(result) == expected
-
-
-@pytest.mark.ai_generated
-def test_get_unprocessed_s3_urls_from_local_inventory_skips_processed_dates(tmp_path: pathlib.Path) -> None:
-    """
-    Keys whose date is already in ``processed_dates`` are excluded from results.
-    """
-    extractor = _make_extractor(tmp_path)
-    extractor.processed_dates = {"2024-01-01"}
-    s3_root = "s3://my-bucket"
-    source_bucket = "my-bucket"
-    keys = [
-        "2024/01/01/2024-01-01-00-00-00-AAAA",
-        "2024/01/02/2024-01-02-00-00-00-BBBB",
-    ]
-    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
-
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
-    )
-
-    assert result == ["s3://my-bucket/2024/01/02/2024-01-02-00-00-00-BBBB"]
 
 
 @pytest.mark.ai_generated
@@ -315,7 +291,6 @@ def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp
         ),
     ):
         extractor.s3_url_processing_end_record = set()
-        extractor.processed_dates = set()
 
         extractor._get_unprocessed_s3_urls(
             s3_root="s3://my-bucket",
@@ -339,7 +314,6 @@ def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path
         unittest.mock.patch.object(extractor, "_get_end_record_and_check_consistency"),
     ):
         extractor.s3_url_processing_end_record = set()
-        extractor.processed_dates = set()
 
         extractor._get_unprocessed_s3_urls(
             s3_root="s3://my-bucket",
@@ -355,8 +329,6 @@ def test_get_unprocessed_s3_urls_from_remote_emits_performance_warning(tmp_path:
     Calling ``_get_unprocessed_s3_urls_from_remote`` without an inventory directory
     must emit a ``UserWarning`` recommending S3 Inventory for better performance.
     """
-    # _make_extractor already sets processed_dates and s3_url_processing_end_record to
-    # empty sets; processed_years and processed_months_per_year default to empty in __init__.
     extractor = _make_extractor(tmp_path)
 
     # Patch _deploy_subprocess so no real S3 network calls are made.
@@ -384,9 +356,8 @@ def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested(
       ``769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-00-00-00-BBBB``.
 
     When ``s3_root`` is set to the bucket root (outer level), the inventory
-    function must return *all* matching files with correctly extracted dates so
-    that previously-processed dates can be skipped and the end-record filter
-    works properly.
+    function must return *all* matching files and the end-record filter works
+    properly.
     """
     extractor = _make_extractor(tmp_path)
     source_bucket = "dandiarchive-logs"
@@ -416,45 +387,6 @@ def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested(
 
     expected = {f"s3://{source_bucket}/{k}" for k in all_keys}
     assert set(result) == expected
-
-
-@pytest.mark.ai_generated
-def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested_skips_processed_dates(
-    tmp_path: pathlib.Path,
-) -> None:
-    """
-    Processed dates are correctly filtered from both flat and nested log files.
-
-    When ``processed_dates`` contains a date that appears in flat *and* nested
-    log files, all files for that date must be excluded from the result,
-    regardless of how the date was stored (in the filename or in the path).
-    """
-    extractor = _make_extractor(tmp_path)
-    extractor.processed_dates = {"2020-01-01", "2026-01-05"}
-
-    source_bucket = "dandiarchive-logs"
-    s3_root = f"s3://{source_bucket}"
-
-    flat_keys = [
-        "2020-01-01-05-06-35-0000000000000001",  # processed → excluded
-        "2020-01-02-00-00-00-0000000000000002",  # NOT processed → included
-    ]
-    nested_keys = [
-        "769362853226/us-east-2/dandiarchive/2026/01/05/2026-01-05-00-00-00-AAAA",  # processed → excluded
-        "769362853226/us-east-2/dandiarchive/2026/01/06/2026-01-06-00-00-00-BBBB",  # NOT processed → included
-    ]
-    all_keys = flat_keys + nested_keys
-    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=all_keys)
-
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
-    )
-
-    assert set(result) == {
-        f"s3://{source_bucket}/2020-01-02-00-00-00-0000000000000002",
-        f"s3://{source_bucket}/769362853226/us-east-2/dandiarchive/2026/01/06/2026-01-06-00-00-00-BBBB",
-    }
 
 
 @pytest.mark.ai_generated

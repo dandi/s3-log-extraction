@@ -269,9 +269,7 @@ class RemoteS3LogAccessExtractor:
             s3_root=s3_root,
         )
 
-        unprocessed_dates = list(set(inventory.keys()) - self.processed_dates)
-
-        s3_urls = [url for date in unprocessed_dates for url in inventory[date]]
+        s3_urls = [url for urls in inventory.values() for url in urls]
 
         unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
         return unprocessed_s3_urls
@@ -289,11 +287,9 @@ class RemoteS3LogAccessExtractor:
             command=f"s5cmd ls {s3_root}/", error_message=f"Failed to scan years of nested structure at {s3_root}."
         )
         years = {line.split(" ")[-1].rstrip("/\n") for line in years_result.splitlines()}
-        unprocessed_years = list(years - self.processed_years)
 
         dates_with_logs = []
-        unprocessed_months_per_year = dict()
-        for year in unprocessed_years:
+        for year in years:
             subdirectory = f"{s3_root}/{year}"
             months_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
@@ -302,9 +298,8 @@ class RemoteS3LogAccessExtractor:
                 continue
 
             months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
-            unprocessed_months_per_year[year] = list(months - self.processed_months_per_year.get(year, set()))
 
-            for month in unprocessed_months_per_year[year]:
+            for month in months:
                 subdirectory = f"{s3_root}/{year}/{month}"
                 days_result = _deploy_subprocess(
                     command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
@@ -315,9 +310,8 @@ class RemoteS3LogAccessExtractor:
                 dates = [f"{year}-{month}-{line.split(" ")[-1].rstrip("/\n")}" for line in days_result.splitlines()]
                 dates_with_logs.extend(dates)
 
-        new_dates = list(set(dates_with_logs) - self.processed_dates)
-        sorted_new_dates = sorted(list(new_dates))
-        unprocessed_dates = sorted_new_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
+        sorted_dates = sorted(set(dates_with_logs))
+        unprocessed_dates = sorted_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
         s3_urls = []
         for date in tqdm.tqdm(
