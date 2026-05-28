@@ -1,18 +1,14 @@
 import collections
 import concurrent.futures
 import itertools
-import json
 import math
 import os
 import pathlib
 import random
 import shutil
 import tempfile
-import typing
 import warnings
 
-import beartype
-import beartype.vale
 import tqdm
 import yaml
 
@@ -21,16 +17,10 @@ from ._utils import _deploy_subprocess, _handle_aws_credentials, _merge_dir_to_e
 from ..config import get_cache_directory, get_cache_subdirectory
 from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
 
-_ExistingFilePath = typing.Annotated[pathlib.Path, beartype.vale.Is[lambda path: path.is_file()]]
-
 
 class RemoteS3LogAccessExtractor:
     """
     Extractor of basic access information contained in remotely stored raw S3 logs.
-
-    This remote access design assumes that the S3 logs are stored in a nested structure. If you still use the flat
-    storage pattern, or have a mix of the two structures, you should use the `manifest_file_path` argument
-    to `.extract_s3(...)`.
 
     This class is not a full parser of all fields but instead is optimized for targeting the most relevant
     information for reporting summaries of access.
@@ -92,7 +82,6 @@ class RemoteS3LogAccessExtractor:
         limit: int | None = None,
         workers: int = -2,
         batch_size: int = 5_000,
-        manifest_file_path: str | pathlib.Path | None = None,
         inventory_directory: str | pathlib.Path | None = None,
     ) -> None:
         """
@@ -112,11 +101,6 @@ class RemoteS3LogAccessExtractor:
         batch_size : int, optional
             Number of S3 URLs to dispatch per batch when using multiple
             workers.  Defaults to ``5_000``.
-        manifest_file_path : str or pathlib.Path or None, optional
-            Path to a local pre-parsed JSON manifest file listing log files
-            that would not be discoverable via the natural nested structure
-            (e.g. flat-layout legacy files).  Mutually exclusive with
-            ``inventory_directory``; only one may be provided at a time.
         inventory_directory : str or pathlib.Path or None, optional
             Path to a local pre-downloaded S3 inventory directory.  The
             directory must follow the standard AWS S3 Inventory layout::
@@ -133,22 +117,14 @@ class RemoteS3LogAccessExtractor:
 
             The most recent hive partition is used to determine which data
             files to parse.  Each ``data/*.csv.gz`` file is parsed according
-            to the schema in the corresponding ``manifest.json``.  Mutually
-            exclusive with ``manifest_file_path``; only one may be provided
-            at a time.
-
-        Raises
-        ------
-        ValueError
-            If both ``manifest_file_path`` and ``inventory_directory`` are
-            provided simultaneously.
+            to the schema in the corresponding ``manifest.json``.  When
+            omitted, log files are discovered by scanning the remote bucket
+            directly, which can be very slow for large buckets.
         """
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
 
-        unprocessed_s3_urls = self._get_unprocessed_s3_urls(
-            manifest_file_path=manifest_file_path, s3_root=s3_root, inventory_directory=inventory_directory
-        )
+        unprocessed_s3_urls = self._get_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
         tqdm_style_kwargs = {
@@ -231,14 +207,9 @@ class RemoteS3LogAccessExtractor:
 
     def _get_unprocessed_s3_urls(
         self,
-        manifest_file_path: pathlib.Path | None,
         s3_root: str,
         inventory_directory: pathlib.Path | None = None,
     ) -> list[str]:
-        if manifest_file_path is not None and inventory_directory is not None:
-            message = "Only one of 'manifest_file_path' or 'inventory_directory' may be provided at a time, not both."
-            raise ValueError(message)
-
         self._get_end_record_and_check_consistency()
 
         self.processed_dates: set[str] = set()
@@ -248,11 +219,7 @@ class RemoteS3LogAccessExtractor:
                 loaded = yaml.safe_load(stream=file_stream)
                 self.processed_dates = set(loaded.keys()) if isinstance(loaded, dict) else set(loaded or [])
 
-        if manifest_file_path is not None:
-            unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_manifest(
-                manifest_file_path=manifest_file_path, s3_root=s3_root
-            )
-        elif inventory_directory is not None:
+        if inventory_directory is not None:
             unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_local_inventory(
                 inventory_directory=inventory_directory, s3_root=s3_root
             )
@@ -288,20 +255,6 @@ class RemoteS3LogAccessExtractor:
                 "please call `s3logextraction reset extraction` to clean the extraction cache and records.\n\n"
             )
             raise ValueError(message)
-
-    def _get_unprocessed_s3_urls_from_manifest(self, manifest_file_path: pathlib.Path, s3_root: str) -> list[str]:
-        s3_base = "/".join(s3_root.split("/")[:3])
-
-        with manifest_file_path.open(mode="r") as file_stream:
-            manifest = json.load(fp=file_stream)
-
-        dates_from_manifest = [date for date in manifest.keys()]
-        unprocessed_dates = list(set(dates_from_manifest) - self.processed_dates)
-
-        s3_urls = [f"{s3_base}/{filename}" for date in unprocessed_dates for filename in manifest[date]]
-
-        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
-        return unprocessed_s3_urls
 
     def _get_unprocessed_s3_urls_from_local_inventory(
         self, inventory_directory: pathlib.Path, s3_root: str
@@ -474,33 +427,3 @@ class RemoteS3LogAccessExtractor:
             environment_variables=self._awk_env,
             error_message=f"Extraction failed on {file_path}.",
         )
-
-    @staticmethod
-    @beartype.beartype
-    def parse_manifest(*, file_path: _ExistingFilePath) -> None:
-        """
-        Read the manifest file and save it as a parsed JSON object, adjacent to the initial file.
-
-        The raw manifest file is the output of `s5cmd ls s3_root/* > manifest.txt`.
-        """
-        manifest = collections.defaultdict(list)
-        filenames = [line.split(" ")[-1].strip() for line in file_path.read_text().splitlines() if "DIR" not in line]
-        for filename in tqdm.tqdm(
-            iterable=filenames,
-            total=len(filenames),
-            desc="Parsing local manifest",
-            unit="files",
-            smoothing=0,
-            leave=False,
-        ):
-            filename_splits = filename.split("-")
-            year = filename_splits[0]
-            month = filename_splits[1]
-            day = filename_splits[2]
-            date = f"{year}-{month}-{day}"
-            manifest[date].append(filename)
-
-        parsed_file_path = file_path.parent / f"{file_path.stem}_parsed.json"
-        parsed_file_path.unlink(missing_ok=True)
-        with parsed_file_path.open(mode="w") as file_stream:
-            json.dump(obj=dict(manifest), fp=file_stream, indent=2, sort_keys=True)

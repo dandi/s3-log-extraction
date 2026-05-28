@@ -292,61 +292,6 @@ def test_get_unprocessed_s3_urls_from_local_inventory_uses_latest_partition(tmp_
 
 
 @pytest.mark.ai_generated
-def test_get_unprocessed_s3_urls_raises_when_both_manifest_and_inventory_provided(
-    tmp_path: pathlib.Path,
-) -> None:
-    """
-    Providing both ``manifest_file_path`` and ``inventory_directory`` simultaneously
-    must raise a ``ValueError`` because they are mutually exclusive sources.
-    """
-    extractor = _make_extractor(tmp_path)
-
-    manifest_file = tmp_path / "manifest.json"
-    manifest_file.write_text("{}")
-    inventory_dir = tmp_path / "inventory"
-    inventory_dir.mkdir()
-
-    with pytest.raises(ValueError, match="Only one of 'manifest_file_path' or 'inventory_directory'"):
-        extractor._get_unprocessed_s3_urls(
-            manifest_file_path=manifest_file,
-            s3_root="s3://my-bucket",
-            inventory_directory=inventory_dir,
-        )
-
-
-@pytest.mark.ai_generated
-def test_get_unprocessed_s3_urls_routes_to_manifest_when_manifest_provided(tmp_path: pathlib.Path) -> None:
-    """
-    When ``manifest_file_path`` is provided, only the manifest helper is called.
-    """
-    extractor = _make_extractor(tmp_path)
-
-    manifest_data = {"2024-01-01": ["logs/2024/01/01/2024-01-01-00-00-00-AAAA"]}
-    manifest_file = tmp_path / "manifest_parsed.json"
-    manifest_file.write_text(json.dumps(manifest_data))
-
-    with (
-        unittest.mock.patch.object(
-            extractor, "_get_unprocessed_s3_urls_from_manifest", wraps=extractor._get_unprocessed_s3_urls_from_manifest
-        ) as mock_manifest,
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_local_inventory") as mock_inventory,
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_remote") as mock_remote,
-        unittest.mock.patch.object(extractor, "_get_end_record_and_check_consistency"),
-    ):
-        extractor.s3_url_processing_end_record = set()
-        extractor.processed_dates = set()
-
-        extractor._get_unprocessed_s3_urls(
-            manifest_file_path=manifest_file,
-            s3_root="s3://my-bucket",
-        )
-
-    mock_manifest.assert_called_once()
-    mock_inventory.assert_not_called()
-    mock_remote.assert_not_called()
-
-
-@pytest.mark.ai_generated
 def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp_path: pathlib.Path) -> None:
     """
     When ``inventory_directory`` is provided, only the inventory helper is called.
@@ -357,7 +302,6 @@ def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp
     inventory_dir.mkdir()
 
     with (
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_manifest") as mock_manifest,
         unittest.mock.patch.object(
             extractor,
             "_get_unprocessed_s3_urls_from_local_inventory",
@@ -374,12 +318,10 @@ def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp
         extractor.processed_dates = set()
 
         extractor._get_unprocessed_s3_urls(
-            manifest_file_path=None,
             s3_root="s3://my-bucket",
             inventory_directory=inventory_dir,
         )
 
-    mock_manifest.assert_not_called()
     mock_inventory.assert_called_once()
     mock_remote.assert_not_called()
 
@@ -387,13 +329,11 @@ def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp
 @pytest.mark.ai_generated
 def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path: pathlib.Path) -> None:
     """
-    When neither ``manifest_file_path`` nor ``inventory_directory`` is given,
-    only the remote helper is called.
+    When ``inventory_directory`` is not given, only the remote helper is called.
     """
     extractor = _make_extractor(tmp_path)
 
     with (
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_manifest") as mock_manifest,
         unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_local_inventory") as mock_inventory,
         unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_remote", return_value=[]) as mock_remote,
         unittest.mock.patch.object(extractor, "_get_end_record_and_check_consistency"),
@@ -402,11 +342,9 @@ def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path
         extractor.processed_dates = set()
 
         extractor._get_unprocessed_s3_urls(
-            manifest_file_path=None,
             s3_root="s3://my-bucket",
         )
 
-    mock_manifest.assert_not_called()
     mock_inventory.assert_not_called()
     mock_remote.assert_called_once()
 
