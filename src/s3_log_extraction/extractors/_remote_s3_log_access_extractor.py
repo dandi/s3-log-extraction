@@ -10,7 +10,6 @@ import tempfile
 import warnings
 
 import tqdm
-import yaml
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import _deploy_subprocess, _handle_aws_credentials, _merge_dir_to_extraction, _merge_file_into_extraction
