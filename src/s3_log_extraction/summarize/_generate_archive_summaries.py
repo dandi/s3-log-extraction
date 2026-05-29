@@ -86,8 +86,8 @@ def generate_archive_summaries(
         for summary_file_path in summary_directory.rglob(pattern="requester_count.tsv")
         if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
     ]
-    total_requester_counts: int = sum(requester_counts)
-    archive_requester_count: str = "<50" if total_requester_counts < 50 else str(total_requester_counts)
+    total_requester_count: int = sum(requester_counts)
+    archive_requester_count: str = "<50" if total_requester_count < 50 else str(total_requester_count)
 
     archive_requester_count_file_path = archive_directory / "requester_count.tsv"
     archive_requester_count_file_path.write_text(archive_requester_count)
