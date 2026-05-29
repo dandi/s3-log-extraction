@@ -58,13 +58,6 @@ def s3logextraction_cli():
     default=-2,
 )
 @rich_click.option(
-    "--asset-types-in-order",
-    help=("Archive mode only: comma-separated list of known asset types used for output column ordering (no spaces)."),
-    required=False,
-    type=rich_click.STRING,
-    default=None,
-)
-@rich_click.option(
     "--cache",
     "cache_directory",
     help=(
@@ -381,6 +374,13 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     required=False,
     type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
+)
+@rich_click.option(
+    "--asset-types-in-order",
+    help=("Archive mode only: comma-separated list of known asset types used for output column ordering (no spaces)."),
+    required=False,
+    type=rich_click.STRING,
+    default=None,
 )
 @rich_click.option(
     "--cache",
