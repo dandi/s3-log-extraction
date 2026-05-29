@@ -6,9 +6,6 @@ import pandas
 
 from ..config import get_cache_subdirectory
 
-ASSET_TYPES_IN_ORDER = ("Neurophysiology", "Microscopy", "Video", "Miscellaneous")
-
-
 @beartype.beartype
 def generate_archive_summaries(
     cache_directory: str | pathlib.Path | None = None, asset_types_in_order: tuple[str, ...] | list[str] | None = None
@@ -26,7 +23,7 @@ def generate_archive_summaries(
         ``by_asset_type_per_week.tsv`` summary.
     """
     if asset_types_in_order is None:
-        asset_types_in_order = list(ASSET_TYPES_IN_ORDER)
+        asset_types_in_order = []
     else:
         asset_types_in_order = list(dict.fromkeys(asset_types_in_order))
 
