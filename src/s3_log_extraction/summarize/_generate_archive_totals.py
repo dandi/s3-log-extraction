@@ -6,6 +6,7 @@ import pandas
 
 from ..config import get_cache_subdirectory
 from ..ip_utils._globals import EXCLUDED_REGION_LABELS
+from ._generate_summaries import _round_requester_count
 
 
 @beartype.beartype
@@ -60,8 +61,12 @@ def generate_archive_totals(
         "total_bytes_sent": int(summary["bytes_sent"].sum()),
         "number_of_unique_regions": number_of_unique_regions,
         "number_of_unique_countries": number_of_unique_countries,
-        "total_number_of_requests": int(summary["number_of_requests"].sum()),
-        "total_number_of_downloads": int(summary["number_of_downloads"].sum()),
+        "total_number_of_requests": _round_requester_count(
+            count=int(summary["number_of_requests"].sum()), modulo=20, minimum=50
+        ),
+        "total_number_of_downloads": _round_requester_count(
+            count=int(summary["number_of_downloads"].sum()), modulo=20, minimum=50
+        ),
         "number_of_requesters": number_of_requesters,
     }
 

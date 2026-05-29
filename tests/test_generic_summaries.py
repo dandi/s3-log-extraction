@@ -123,6 +123,33 @@ def test_generate_archive_totals_raises_without_archive_requester_count(tmpdir: 
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("requests", "downloads", "expected_requests", "expected_downloads"),
+    [
+        (49, 51, "<50", 60),
+        (123, 176, 120, 180),
+    ],
+)
+def test_generate_archive_totals_thresholds_request_and_download_counts(
+    tmpdir: py.path.local, requests: int, downloads: int, expected_requests: str | int, expected_downloads: str | int
+) -> None:
+    test_dir = pathlib.Path(tmpdir)
+    archive_dir = test_dir / "summaries" / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
+        f"missing\t10\t{requests}\t{downloads}\n"
+    )
+    (archive_dir / "requester_count.tsv").write_text("100\n")
+
+    s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
+
+    archive_totals = json.loads((test_dir / "summaries" / "archive_totals.json").read_text())
+    assert archive_totals["total_number_of_requests"] == expected_requests
+    assert archive_totals["total_number_of_downloads"] == expected_downloads
+
+
+@pytest.mark.ai_generated
 def test_generate_archive_summaries_aggregates_requester_count(tmpdir: py.path.local) -> None:
     test_dir = pathlib.Path(tmpdir)
     summary_dir = test_dir / "summaries"
