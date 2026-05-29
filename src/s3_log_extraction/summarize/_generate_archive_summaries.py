@@ -84,8 +84,8 @@ def generate_archive_summaries(
     requester_counts = [
         value
         for summary_file_path in summary_directory.rglob(pattern="requester_count.tsv")
-        if summary_file_path.parent.name != "archive" and
-        if "<" not in (value := summary_file_path.read_text().strip())
+        if summary_file_path.parent.name != "archive"
+        and "<" not in (value := summary_file_path.read_text().strip())
     ]
     total_requester_counts = sum(requester_counts)
     archive_requester_count = "<50" if total_requester_counts < 50 else total_requester_counts
