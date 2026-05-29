@@ -72,3 +72,44 @@ def generate_archive_summaries(cache_directory: str | pathlib.Path | None = None
     aggregated_activity_by_region.to_csv(
         path_or_buf=archive_summary_by_region_file_path, mode="w", sep="\t", header=True, index=False
     )
+
+    # Requester count (aggregated from dataset requester_count.tsv files)
+    requester_counts = [
+        summary_file_path.read_text().strip()
+        for summary_file_path in summary_directory.rglob(pattern="requester_count.tsv")
+        if summary_file_path.parent.name != "archive"
+    ]
+    if requester_counts:
+        min_disclosure_thresholds = [
+            int(count.removeprefix("<")) for count in requester_counts if count.startswith("<")
+        ]
+        if min_disclosure_thresholds:
+            archive_requester_count = f"<{min(min_disclosure_thresholds)}"
+        else:
+            archive_requester_count = str(sum(int(count) for count in requester_counts))
+
+        archive_requester_count_file_path = archive_directory / "requester_count.tsv"
+        archive_requester_count_file_path.write_text(archive_requester_count)
+
+    # Optional by_asset_type_per_week aggregation
+    all_dataset_summaries_by_asset_type_per_week = [
+        pandas.read_table(filepath_or_buffer=summary_file_path)
+        for summary_file_path in summary_directory.rglob(pattern="by_asset_type_per_week.tsv")
+        if summary_file_path.parent.name != "archive"
+    ]
+    if all_dataset_summaries_by_asset_type_per_week:
+        all_summary_data = pandas.concat(objs=all_dataset_summaries_by_asset_type_per_week, ignore_index=True)
+        all_summary_data.fillna(value=0, inplace=True)
+
+        asset_type_columns = [column_name for column_name in all_summary_data.columns if column_name != "week_start"]
+        if asset_type_columns:
+            archive_summary = (
+                all_summary_data.groupby(by="week_start", as_index=False)[asset_type_columns]
+                .sum()
+                .reindex(columns=["week_start", *asset_type_columns])
+            )
+            archive_summary = archive_summary.astype(dtype={column_name: "int64" for column_name in asset_type_columns})
+            archive_summary.sort_values(by="week_start", key=natsort.natsort_keygen(), inplace=True)
+
+            archive_summary_file_path = archive_directory / "by_asset_type_per_week.tsv"
+            archive_summary.to_csv(path_or_buf=archive_summary_file_path, mode="w", sep="\t", header=True, index=False)

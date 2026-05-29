@@ -123,6 +123,83 @@ def test_generate_archive_totals_raises_without_archive_requester_count(tmpdir: 
 
 
 @pytest.mark.ai_generated
+def test_generate_archive_summaries_aggregates_requester_count(tmpdir: py.path.local) -> None:
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    ds001_dir = summary_dir / "ds001"
+    ds001_dir.mkdir(parents=True)
+    (ds001_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "2026-01-01\t10\t1\t1\n"
+    )
+    (ds001_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t10\t1\t1\n"
+    )
+    (ds001_dir / "requester_count.tsv").write_text("60\n")
+
+    ds002_dir = summary_dir / "ds002"
+    ds002_dir.mkdir(parents=True)
+    (ds002_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "2026-01-01\t40\t2\t1\n"
+    )
+    (ds002_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t40\t2\t1\n"
+    )
+    (ds002_dir / "requester_count.tsv").write_text("40\n")
+
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+
+    archive_requester_count_file_path = summary_dir / "archive" / "requester_count.tsv"
+    assert archive_requester_count_file_path.exists()
+    assert archive_requester_count_file_path.read_text().strip() == "100"
+
+
+@pytest.mark.ai_generated
+def test_generate_archive_summaries_aggregates_optional_by_asset_type_per_week(tmpdir: py.path.local) -> None:
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    ds001_dir = summary_dir / "ds001"
+    ds001_dir.mkdir(parents=True)
+    (ds001_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "2026-01-01\t10\t1\t1\n"
+    )
+    (ds001_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t10\t1\t1\n"
+    )
+    (ds001_dir / "requester_count.tsv").write_text("20\n")
+    (ds001_dir / "by_asset_type_per_week.tsv").write_text(
+        "week_start\tNeurophysiology\tMiscellaneous\n" "2025-12-29\t1\t2\n" "2026-01-05\t3\t4\n"
+    )
+
+    ds002_dir = summary_dir / "ds002"
+    ds002_dir.mkdir(parents=True)
+    (ds002_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "2026-01-01\t40\t2\t1\n"
+    )
+    (ds002_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" "missing\t40\t2\t1\n"
+    )
+    (ds002_dir / "requester_count.tsv").write_text("20\n")
+    (ds002_dir / "by_asset_type_per_week.tsv").write_text("week_start\tVideo\n" "2025-12-29\t5\n" "2026-01-05\t7\n")
+
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+
+    archive_file_path = summary_dir / "archive" / "by_asset_type_per_week.tsv"
+    assert archive_file_path.exists()
+    archive_summary = pandas.read_table(filepath_or_buffer=archive_file_path)
+    expected_summary = pandas.DataFrame(
+        data={
+            "week_start": ["2025-12-29", "2026-01-05"],
+            "Neurophysiology": [1, 3],
+            "Miscellaneous": [2, 4],
+            "Video": [5, 7],
+        }
+    )
+    pandas.testing.assert_frame_equal(left=archive_summary, right=expected_summary)
+
+
+@pytest.mark.ai_generated
 @pytest.mark.parametrize(
     ("count", "modulo", "minimum", "expected"),
     [
