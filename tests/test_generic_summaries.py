@@ -149,6 +149,67 @@ def test_generate_archive_totals_thresholds_request_and_download_counts(
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("requests", "downloads", "expected_requests", "expected_downloads"),
+    [
+        (49, 51, "<50", 60),
+        (123, 176, 120, 180),
+    ],
+)
+def test_generate_all_dataset_totals_thresholds_request_and_download_counts(
+    tmpdir: py.path.local, requests: int, downloads: int, expected_requests: str | int, expected_downloads: str | int
+) -> None:
+    test_dir = pathlib.Path(tmpdir)
+    dataset_dir = test_dir / "summaries" / "ds001"
+    dataset_dir.mkdir(parents=True)
+    (dataset_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" f"missing\t10\t{requests}\t{downloads}\n"
+    )
+    (dataset_dir / "requester_count.tsv").write_text("100\n")
+
+    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
+
+    totals = json.loads((test_dir / "summaries" / "totals.json").read_text())
+    assert totals["ds001"]["total_number_of_requests"] == expected_requests
+    assert totals["ds001"]["total_number_of_downloads"] == expected_downloads
+
+
+@pytest.mark.ai_generated
+def test_generate_archive_summaries_thresholds_request_and_download_columns(tmpdir: py.path.local) -> None:
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    ds001_dir = summary_dir / "ds001"
+    ds001_dir.mkdir(parents=True)
+    (ds001_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t1\t1\n"
+    )
+    (ds001_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t10\t1\t1\n"
+    )
+    (ds001_dir / "requester_count.tsv").write_text("60\n")
+
+    ds002_dir = summary_dir / "ds002"
+    ds002_dir.mkdir(parents=True)
+    (ds002_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t40\t2\t1\n"
+    )
+    (ds002_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t40\t2\t1\n"
+    )
+    (ds002_dir / "requester_count.tsv").write_text("40\n")
+
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+
+    archive_by_day = pandas.read_table(filepath_or_buffer=summary_dir / "archive" / "by_day.tsv")
+    archive_by_region = pandas.read_table(filepath_or_buffer=summary_dir / "archive" / "by_region.tsv")
+    assert archive_by_day.loc[0, "number_of_requests"] == "<50"
+    assert archive_by_day.loc[0, "number_of_downloads"] == "<50"
+    assert archive_by_region.loc[0, "number_of_requests"] == "<50"
+    assert archive_by_region.loc[0, "number_of_downloads"] == "<50"
+
+
+@pytest.mark.ai_generated
 def test_generate_archive_summaries_aggregates_requester_count(tmpdir: py.path.local) -> None:
     test_dir = pathlib.Path(tmpdir)
     summary_dir = test_dir / "summaries"

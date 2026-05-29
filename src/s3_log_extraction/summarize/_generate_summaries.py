@@ -39,6 +39,16 @@ def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     return round(count / modulo) * modulo
 
 
+def _privacy_round_request_download_columns(
+    summary_table: pandas.DataFrame, *, modulo: int = 20, minimum: int = 50
+) -> pandas.DataFrame:
+    for column_name in ("number_of_requests", "number_of_downloads"):
+        summary_table[column_name] = summary_table[column_name].map(
+            lambda count: _round_requester_count(count=int(count), modulo=modulo, minimum=minimum)
+        )
+    return summary_table
+
+
 def _collect_unique_ips(asset_directories: list[pathlib.Path], use_encryption: bool = True) -> set[str]:
     """
     Collect all unique IP addresses across the given asset directories.
@@ -258,6 +268,7 @@ def _summarize_dataset_by_day(*, asset_directories: list[pathlib.Path], summary_
     )
     summary_table.sort_values(by="date", inplace=True)
     summary_table.index = range(len(summary_table))
+    summary_table = _privacy_round_request_download_columns(summary_table=summary_table)
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
@@ -302,6 +313,7 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
             "number_of_downloads": [number_of_downloads_by_asset[path] for path in all_asset_paths],
         }
     )
+    summary_table = _privacy_round_request_download_columns(summary_table=summary_table)
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
@@ -359,4 +371,5 @@ def _summarize_dataset_by_region(
             "number_of_downloads": [number_of_downloads_by_region[region] for region in all_regions_ordered],
         }
     )
+    summary_table = _privacy_round_request_download_columns(summary_table=summary_table)
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)

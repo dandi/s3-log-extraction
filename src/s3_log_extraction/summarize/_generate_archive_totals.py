@@ -28,6 +28,8 @@ def generate_archive_totals(
 
     summary_file_path = archive_directory / "by_region.tsv"
     summary = pandas.read_table(filepath_or_buffer=summary_file_path)
+    for column_name in ("number_of_requests", "number_of_downloads"):
+        summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
 
     unique_countries: set[str] = set()
     for region in summary["region"]:

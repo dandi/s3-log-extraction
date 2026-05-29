@@ -4,6 +4,7 @@ import beartype
 import natsort
 import pandas
 
+from ._generate_summaries import _privacy_round_request_download_columns
 from ..config import get_cache_subdirectory
 
 
@@ -36,6 +37,9 @@ def generate_archive_summaries(
         for dataset_by_day_summary_file_path in summary_directory.rglob(pattern="by_day.tsv")
         if dataset_by_day_summary_file_path.parent.name != "archive"
     ]
+    for summary in all_dataset_summaries_by_day:
+        for column_name in ("number_of_requests", "number_of_downloads"):
+            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
     aggregated_dataset_summaries_by_day = pandas.concat(objs=all_dataset_summaries_by_day, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_day.groupby(by="date", as_index=False)[
@@ -49,6 +53,7 @@ def generate_archive_summaries(
     aggregated_activity_by_day = aggregated_activity_by_day.astype(
         dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
     )
+    aggregated_activity_by_day = _privacy_round_request_download_columns(summary_table=aggregated_activity_by_day)
 
     archive_summary_by_day_file_path = archive_directory / "by_day.tsv"
     aggregated_activity_by_day.to_csv(
@@ -61,6 +66,9 @@ def generate_archive_summaries(
         for dataset_by_region_summary_file_path in summary_directory.rglob(pattern="by_region.tsv")
         if dataset_by_region_summary_file_path.parent.name != "archive"
     ]
+    for summary in all_dataset_summaries_by_region:
+        for column_name in ("number_of_requests", "number_of_downloads"):
+            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
     aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)[
@@ -74,6 +82,7 @@ def generate_archive_summaries(
     aggregated_activity_by_region = aggregated_activity_by_region.astype(
         dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
     )
+    aggregated_activity_by_region = _privacy_round_request_download_columns(summary_table=aggregated_activity_by_region)
 
     archive_summary_by_region_file_path = archive_directory / "by_region.tsv"
     aggregated_activity_by_region.to_csv(
