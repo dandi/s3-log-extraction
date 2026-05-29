@@ -82,7 +82,7 @@ def generate_archive_summaries(
 
     # Requester count (aggregated from dataset requester_count.tsv files)
     requester_counts = [
-        value
+        int(value)
         for summary_file_path in summary_directory.rglob(pattern="requester_count.tsv")
         if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
     ]
