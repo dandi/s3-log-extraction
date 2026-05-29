@@ -377,7 +377,7 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
 )
 @rich_click.option(
     "--asset-types-in-order",
-    help=("Archive mode only: comma-separated list of known asset types used for output column ordering (no spaces)."),
+    help="Archive mode only: comma-separated list of known asset types used for output column ordering (no spaces).",
     required=False,
     type=rich_click.STRING,
     default=None,
