@@ -6,6 +6,7 @@ import pandas
 
 from ..config import get_cache_subdirectory
 
+
 @beartype.beartype
 def generate_archive_summaries(
     cache_directory: str | pathlib.Path | None = None, asset_types_in_order: tuple[str, ...] | list[str] | None = None
