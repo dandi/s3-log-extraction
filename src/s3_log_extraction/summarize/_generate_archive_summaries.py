@@ -6,6 +6,8 @@ import pandas
 
 from ..config import get_cache_subdirectory
 
+ASSET_TYPES_IN_ORDER = ("Neurophysiology", "Microscopy", "Video", "Miscellaneous")
+
 
 @beartype.beartype
 def generate_archive_summaries(cache_directory: str | pathlib.Path | None = None) -> None:
@@ -101,7 +103,14 @@ def generate_archive_summaries(cache_directory: str | pathlib.Path | None = None
         all_summary_data = pandas.concat(objs=all_dataset_summaries_by_asset_type_per_week, ignore_index=True)
         all_summary_data.fillna(value=0, inplace=True)
 
-        asset_type_columns = [column_name for column_name in all_summary_data.columns if column_name != "week_start"]
+        all_asset_type_columns = [
+            column_name for column_name in all_summary_data.columns if column_name != "week_start"
+        ]
+        known_asset_type_columns = [
+            column_name for column_name in ASSET_TYPES_IN_ORDER if column_name in all_asset_type_columns
+        ]
+        additional_asset_type_columns = sorted(set(all_asset_type_columns).difference(ASSET_TYPES_IN_ORDER))
+        asset_type_columns = [*known_asset_type_columns, *additional_asset_type_columns]
         if asset_type_columns:
             archive_summary = (
                 all_summary_data.groupby(by="week_start", as_index=False)[asset_type_columns]

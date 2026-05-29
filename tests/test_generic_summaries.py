@@ -192,8 +192,8 @@ def test_generate_archive_summaries_aggregates_optional_by_asset_type_per_week(t
         data={
             "week_start": ["2025-12-29", "2026-01-05"],
             "Neurophysiology": [1, 3],
-            "Miscellaneous": [2, 4],
             "Video": [5, 7],
+            "Miscellaneous": [2, 4],
         }
     )
     pandas.testing.assert_frame_equal(left=archive_summary, right=expected_summary)
