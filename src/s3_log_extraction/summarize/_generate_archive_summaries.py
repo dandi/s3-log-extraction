@@ -10,7 +10,9 @@ from ..config import get_cache_subdirectory
 
 @beartype.beartype
 def generate_archive_summaries(
-    cache_directory: str | pathlib.Path | None = None, asset_types_in_order: tuple[str, ...] | list[str] | None = None
+    cache_directory: str | pathlib.Path | None = None,
+    asset_types_in_order: tuple[str, ...] | list[str] | None = None,
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     """
     Generate summaries by day and region for the entire archive from the mapped S3 logs.
@@ -23,6 +25,9 @@ def generate_archive_summaries(
     asset_types_in_order : sequence[str], optional
         Preferred output column ordering for known asset types in the archive
         ``by_asset_type_per_week.tsv`` summary.
+    privacy_threshold_minimum : int
+        Minimum disclosure threshold for privacy-rounded request/download
+        summary values. Default is ``50``.
     """
     asset_types_in_order = list(dict.fromkeys(asset_types_in_order)) if asset_types_in_order is not None else []
 
@@ -53,7 +58,9 @@ def generate_archive_summaries(
     aggregated_activity_by_day = aggregated_activity_by_day.astype(
         dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
     )
-    aggregated_activity_by_day = _privacy_round_request_download_columns(summary_table=aggregated_activity_by_day)
+    aggregated_activity_by_day = _privacy_round_request_download_columns(
+        summary_table=aggregated_activity_by_day, minimum=privacy_threshold_minimum
+    )
 
     archive_summary_by_day_file_path = archive_directory / "by_day.tsv"
     aggregated_activity_by_day.to_csv(
@@ -82,7 +89,9 @@ def generate_archive_summaries(
     aggregated_activity_by_region = aggregated_activity_by_region.astype(
         dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
     )
-    aggregated_activity_by_region = _privacy_round_request_download_columns(summary_table=aggregated_activity_by_region)
+    aggregated_activity_by_region = _privacy_round_request_download_columns(
+        summary_table=aggregated_activity_by_region, minimum=privacy_threshold_minimum
+    )
 
     archive_summary_by_region_file_path = archive_directory / "by_region.tsv"
     aggregated_activity_by_region.to_csv(
@@ -96,7 +105,11 @@ def generate_archive_summaries(
         if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
     ]
     total_requester_count: int = sum(requester_counts)
-    archive_requester_count: str = "<50" if total_requester_count < 50 else str(total_requester_count)
+    archive_requester_count: str = (
+        f"<{privacy_threshold_minimum}"
+        if total_requester_count < privacy_threshold_minimum
+        else str(total_requester_count)
+    )
 
     archive_requester_count_file_path = archive_directory / "requester_count.tsv"
     archive_requester_count_file_path.write_text(archive_requester_count)

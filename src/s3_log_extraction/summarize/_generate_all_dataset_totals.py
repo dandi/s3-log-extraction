@@ -10,6 +10,7 @@ from ..ip_utils._globals import EXCLUDED_REGION_LABELS
 
 def generate_all_dataset_totals(
     cache_directory: str | pathlib.Path | None = None,
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     """
     Generate top-level totals of summarized access activity for all datasets.
@@ -19,6 +20,9 @@ def generate_all_dataset_totals(
     cache_directory : path-like, optional
         The top-level cache directory from which the summary directory is derived.
         If not provided, the default cache directory is used.
+    privacy_threshold_minimum : int
+        Minimum disclosure threshold for privacy-rounded request/download totals.
+        Default is ``50``.
     """
     summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
 
@@ -64,10 +68,10 @@ def generate_all_dataset_totals(
             "number_of_unique_regions": number_of_unique_regions,
             "number_of_unique_countries": number_of_unique_countries,
             "total_number_of_requests": _round_requester_count(
-                count=int(summary["number_of_requests"].sum()), modulo=20, minimum=50
+                count=int(summary["number_of_requests"].sum()), modulo=20, minimum=privacy_threshold_minimum
             ),
             "total_number_of_downloads": _round_requester_count(
-                count=int(summary["number_of_downloads"].sum()), modulo=20, minimum=50
+                count=int(summary["number_of_downloads"].sum()), modulo=20, minimum=privacy_threshold_minimum
             ),
             "number_of_requesters": number_of_requesters,
         }

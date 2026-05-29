@@ -124,14 +124,19 @@ def test_generate_archive_totals_raises_without_archive_requester_count(tmpdir: 
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("requests", "downloads", "expected_requests", "expected_downloads"),
+    ("requests", "downloads", "minimum_threshold", "expected_requests", "expected_downloads"),
     [
-        (49, 51, "<50", 60),
-        (123, 176, 120, 180),
+        (4, 14, 5, "<5", 20),
+        (33, 36, 5, 40, 40),
     ],
 )
 def test_generate_archive_totals_thresholds_request_and_download_counts(
-    tmpdir: py.path.local, requests: int, downloads: int, expected_requests: str | int, expected_downloads: str | int
+    tmpdir: py.path.local,
+    requests: int,
+    downloads: int,
+    minimum_threshold: int,
+    expected_requests: str | int,
+    expected_downloads: str | int,
 ) -> None:
     test_dir = pathlib.Path(tmpdir)
     archive_dir = test_dir / "summaries" / "archive"
@@ -141,7 +146,9 @@ def test_generate_archive_totals_thresholds_request_and_download_counts(
     )
     (archive_dir / "requester_count.tsv").write_text("100\n")
 
-    s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
+    s3_log_extraction.summarize.generate_archive_totals(
+        cache_directory=test_dir, privacy_threshold_minimum=minimum_threshold
+    )
 
     archive_totals = json.loads((test_dir / "summaries" / "archive_totals.json").read_text())
     assert archive_totals["total_number_of_requests"] == expected_requests
@@ -150,14 +157,19 @@ def test_generate_archive_totals_thresholds_request_and_download_counts(
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("requests", "downloads", "expected_requests", "expected_downloads"),
+    ("requests", "downloads", "minimum_threshold", "expected_requests", "expected_downloads"),
     [
-        (49, 51, "<50", 60),
-        (123, 176, 120, 180),
+        (4, 14, 5, "<5", 20),
+        (33, 36, 5, 40, 40),
     ],
 )
 def test_generate_all_dataset_totals_thresholds_request_and_download_counts(
-    tmpdir: py.path.local, requests: int, downloads: int, expected_requests: str | int, expected_downloads: str | int
+    tmpdir: py.path.local,
+    requests: int,
+    downloads: int,
+    minimum_threshold: int,
+    expected_requests: str | int,
+    expected_downloads: str | int,
 ) -> None:
     test_dir = pathlib.Path(tmpdir)
     dataset_dir = test_dir / "summaries" / "ds001"
@@ -167,7 +179,9 @@ def test_generate_all_dataset_totals_thresholds_request_and_download_counts(
     )
     (dataset_dir / "requester_count.tsv").write_text("100\n")
 
-    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
+    s3_log_extraction.summarize.generate_all_dataset_totals(
+        cache_directory=test_dir, privacy_threshold_minimum=minimum_threshold
+    )
 
     totals = json.loads((test_dir / "summaries" / "totals.json").read_text())
     assert totals["ds001"]["total_number_of_requests"] == expected_requests
@@ -199,14 +213,14 @@ def test_generate_archive_summaries_thresholds_request_and_download_columns(tmpd
     )
     (ds002_dir / "requester_count.tsv").write_text("40\n")
 
-    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir, privacy_threshold_minimum=4)
 
     archive_by_day = pandas.read_table(filepath_or_buffer=summary_dir / "archive" / "by_day.tsv")
     archive_by_region = pandas.read_table(filepath_or_buffer=summary_dir / "archive" / "by_region.tsv")
-    assert archive_by_day.loc[0, "number_of_requests"] == "<50"
-    assert archive_by_day.loc[0, "number_of_downloads"] == "<50"
-    assert archive_by_region.loc[0, "number_of_requests"] == "<50"
-    assert archive_by_region.loc[0, "number_of_downloads"] == "<50"
+    assert archive_by_day.loc[0, "number_of_requests"] == "<4"
+    assert archive_by_day.loc[0, "number_of_downloads"] == "<4"
+    assert archive_by_region.loc[0, "number_of_requests"] == "<4"
+    assert archive_by_region.loc[0, "number_of_downloads"] == "<4"
 
 
 @pytest.mark.ai_generated
