@@ -39,6 +39,16 @@ def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     return round(count / modulo) * modulo
 
 
+def _privacy_round_request_download_columns(
+    summary_table: pandas.DataFrame, *, modulo: int = 20, minimum: int = 50
+) -> pandas.DataFrame:
+    for column_name in ("number_of_requests", "number_of_downloads"):
+        summary_table[column_name] = summary_table[column_name].map(
+            lambda count: _round_requester_count(count=int(count), modulo=modulo, minimum=minimum)
+        )
+    return summary_table
+
+
 def _collect_unique_ips(asset_directories: list[pathlib.Path], use_encryption: bool = True) -> set[str]:
     """
     Collect all unique IP addresses across the given asset directories.
@@ -106,7 +116,10 @@ def _summarize_dataset_requester_count(
 
 
 def generate_summaries(
-    level: int = 0, cache_directory: str | pathlib.Path | None = None, use_encryption: bool = True
+    level: int = 0,
+    cache_directory: str | pathlib.Path | None = None,
+    use_encryption: bool = True,
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     """
     Generate summaries for each dataset in the extraction directory.
@@ -127,6 +140,9 @@ def generate_summaries(
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` and IP cache files are decrypted when read.
         If ``False``, files are read as plaintext.
+    privacy_threshold_minimum : int
+        Minimum disclosure threshold for privacy-rounded requester/request/download
+        values. Default is ``50``.
     """
     if level != 0:
         message = (
@@ -164,6 +180,7 @@ def generate_summaries(
             summary_directory=summary_directory,
             ip_to_region=ip_to_region,
             use_encryption=use_encryption,
+            privacy_threshold_minimum=privacy_threshold_minimum,
         )
 
         all_archive_unique_ips.update(
@@ -172,7 +189,9 @@ def generate_summaries(
     if all_archive_unique_ips:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
-        rounded_archive_count = _round_requester_count(count=len(all_archive_unique_ips), modulo=20, minimum=50)
+        rounded_archive_count = _round_requester_count(
+            count=len(all_archive_unique_ips), modulo=20, minimum=privacy_threshold_minimum
+        )
         (archive_directory / "requester_count.tsv").write_text(str(rounded_archive_count))
 
 
@@ -183,29 +202,36 @@ def _summarize_dataset(
     summary_directory: pathlib.Path,
     ip_to_region: dict[str, str],
     use_encryption: bool = True,
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     _summarize_dataset_by_day(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_day.tsv",
+        privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_asset.tsv",
+        privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
         ip_to_region=ip_to_region,
         use_encryption=use_encryption,
+        privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_requester_count(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
+        minimum=privacy_threshold_minimum,
         use_encryption=use_encryption,
     )
 
 
-def _summarize_dataset_by_day(*, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
+def _summarize_dataset_by_day(
+    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, privacy_threshold_minimum: int = 50
+) -> None:
     all_dates = []
     all_bytes_sent = []
     all_downloads = []
@@ -258,10 +284,15 @@ def _summarize_dataset_by_day(*, asset_directories: list[pathlib.Path], summary_
     )
     summary_table.sort_values(by="date", inplace=True)
     summary_table.index = range(len(summary_table))
+    summary_table = _privacy_round_request_download_columns(
+        summary_table=summary_table, minimum=privacy_threshold_minimum
+    )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
-def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path) -> None:
+def _summarize_dataset_by_asset(
+    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, privacy_threshold_minimum: int = 50
+) -> None:
     dataset_id = summary_file_path.parent.name
     extraction_base_path = summary_file_path.parent.parent.parent / "extraction" / dataset_id  # Assumes same cache dir
 
@@ -302,6 +333,9 @@ def _summarize_dataset_by_asset(*, asset_directories: list[pathlib.Path], summar
             "number_of_downloads": [number_of_downloads_by_asset[path] for path in all_asset_paths],
         }
     )
+    summary_table = _privacy_round_request_download_columns(
+        summary_table=summary_table, minimum=privacy_threshold_minimum
+    )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
@@ -311,6 +345,7 @@ def _summarize_dataset_by_region(
     summary_file_path: pathlib.Path,
     ip_to_region: dict[str, str],
     use_encryption: bool = True,
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     all_regions = []
     all_bytes_sent = []
@@ -358,5 +393,8 @@ def _summarize_dataset_by_region(
             "number_of_requests": [number_of_requests_by_region[region] for region in all_regions_ordered],
             "number_of_downloads": [number_of_downloads_by_region[region] for region in all_regions_ordered],
         }
+    )
+    summary_table = _privacy_round_request_download_columns(
+        summary_table=summary_table, minimum=privacy_threshold_minimum
     )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)

@@ -1,4 +1,4 @@
 asset_path	bytes_sent	number_of_requests	number_of_downloads
-participants.tsv	1409	1	1
-sub-Re19/ses-1/eeg/sub-Re19_ses-1_task-SmartickDataset_run-1_channels.tsv	384	1	0
-sub-Re19/ses-1/eeg/sub-Re19_ses-1_task-SmartickDataset_run-1_eeg.set	6284696	1	1
+participants.tsv	1409	<50	<50
+sub-Re19/ses-1/eeg/sub-Re19_ses-1_task-SmartickDataset_run-1_channels.tsv	384	<50	<50
+sub-Re19/ses-1/eeg/sub-Re19_ses-1_task-SmartickDataset_run-1_eeg.set	6284696	<50	<50
