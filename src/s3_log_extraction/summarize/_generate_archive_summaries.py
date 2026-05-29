@@ -23,10 +23,7 @@ def generate_archive_summaries(
         Preferred output column ordering for known asset types in the archive
         ``by_asset_type_per_week.tsv`` summary.
     """
-    if asset_types_in_order is None:
-        asset_types_in_order = []
-    else:
-        asset_types_in_order = list(dict.fromkeys(asset_types_in_order))
+    asset_types_in_order = list(dict.fromkeys(asset_types_in_order)) if asset_types_in_order is not None else []
 
     summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
     archive_directory = summary_directory / "archive"
