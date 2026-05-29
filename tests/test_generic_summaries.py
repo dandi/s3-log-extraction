@@ -137,8 +137,7 @@ def test_generate_archive_totals_thresholds_request_and_download_counts(
     archive_dir = test_dir / "summaries" / "archive"
     archive_dir.mkdir(parents=True)
     (archive_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
-        f"missing\t10\t{requests}\t{downloads}\n"
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" f"missing\t10\t{requests}\t{downloads}\n"
     )
     (archive_dir / "requester_count.tsv").write_text("100\n")
 

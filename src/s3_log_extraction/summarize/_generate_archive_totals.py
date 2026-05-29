@@ -4,9 +4,9 @@ import pathlib
 import beartype
 import pandas
 
+from ._generate_summaries import _round_requester_count
 from ..config import get_cache_subdirectory
 from ..ip_utils._globals import EXCLUDED_REGION_LABELS
-from ._generate_summaries import _round_requester_count
 
 
 @beartype.beartype
