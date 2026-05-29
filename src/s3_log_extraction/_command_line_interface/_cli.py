@@ -60,7 +60,7 @@ def s3logextraction_cli():
 @rich_click.option(
     "--asset-types-in-order",
     help=(
-        "Archive mode only: comma-separated list of known asset types used " "for output column ordering (no spaces)."
+        "Archive mode only: comma-separated list of known asset types used for output column ordering (no spaces)."
     ),
     required=False,
     type=rich_click.STRING,
