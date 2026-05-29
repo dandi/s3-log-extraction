@@ -10,7 +10,9 @@ ASSET_TYPES_IN_ORDER = ("Neurophysiology", "Microscopy", "Video", "Miscellaneous
 
 
 @beartype.beartype
-def generate_archive_summaries(cache_directory: str | pathlib.Path | None = None) -> None:
+def generate_archive_summaries(
+    cache_directory: str | pathlib.Path | None = None, asset_types_in_order: tuple[str, ...] | list[str] | None = None
+) -> None:
     """
     Generate summaries by day and region for the entire archive from the mapped S3 logs.
 
@@ -19,7 +21,15 @@ def generate_archive_summaries(cache_directory: str | pathlib.Path | None = None
     cache_directory : path-like, optional
         The top-level cache directory from which the summary directory is derived.
         If not provided, the default cache directory is used.
+    asset_types_in_order : sequence[str], optional
+        Preferred output column ordering for known asset types in the archive
+        ``by_asset_type_per_week.tsv`` summary.
     """
+    if asset_types_in_order is None:
+        asset_types_in_order = list(ASSET_TYPES_IN_ORDER)
+    else:
+        asset_types_in_order = list(dict.fromkeys(asset_types_in_order))
+
     summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
     archive_directory = summary_directory / "archive"
     archive_directory.mkdir(exist_ok=True)
@@ -107,9 +117,9 @@ def generate_archive_summaries(cache_directory: str | pathlib.Path | None = None
             column_name for column_name in all_summary_data.columns if column_name != "week_start"
         ]
         known_asset_type_columns = [
-            column_name for column_name in ASSET_TYPES_IN_ORDER if column_name in all_asset_type_columns
+            column_name for column_name in asset_types_in_order if column_name in all_asset_type_columns
         ]
-        additional_asset_type_columns = sorted(set(all_asset_type_columns).difference(ASSET_TYPES_IN_ORDER))
+        additional_asset_type_columns = sorted(set(all_asset_type_columns).difference(asset_types_in_order))
         asset_type_columns = [*known_asset_type_columns, *additional_asset_type_columns]
         if asset_type_columns:
             archive_summary = (

@@ -58,6 +58,15 @@ def s3logextraction_cli():
     default=-2,
 )
 @rich_click.option(
+    "--asset-types-in-order",
+    help=(
+        "Archive mode only: comma-separated list of known asset types used " "for output column ordering (no spaces)."
+    ),
+    required=False,
+    type=rich_click.STRING,
+    default=None,
+)
+@rich_click.option(
     "--cache",
     "cache_directory",
     help=(
@@ -398,6 +407,7 @@ def _update_summaries_cli(
     pick: str | None = None,
     skip: str | None = None,
     workers: int = -2,
+    asset_types_in_order: str | None = None,
     cache_directory: str | None = None,
     use_encryption: bool = True,
 ) -> None:
@@ -405,7 +415,11 @@ def _update_summaries_cli(
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
         case "archive":
-            generate_archive_summaries(cache_directory=cache_path)
+            parsed_asset_types_in_order = asset_types_in_order.split(",") if asset_types_in_order is not None else None
+            generate_archive_summaries(
+                cache_directory=cache_path,
+                asset_types_in_order=parsed_asset_types_in_order,
+            )
         case _:
             generate_summaries(cache_directory=cache_path, use_encryption=use_encryption)
 
