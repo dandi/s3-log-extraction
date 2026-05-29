@@ -332,10 +332,14 @@ def test_update_summaries_archive_forwards_cache_directory(
     """
     ``update summaries --mode archive`` passes ``cache_directory`` directly to ``generate_archive_summaries``.
     """
-    captured: dict[str, pathlib.Path] = {}
+    captured: dict[str, pathlib.Path | list[str] | None] = {}
 
-    def _stub_generate_archive_summaries(cache_directory: pathlib.Path | str | None = None) -> None:
+    def _stub_generate_archive_summaries(
+        cache_directory: pathlib.Path | str | None = None,
+        asset_types_in_order: tuple[str, ...] | list[str] | None = None,
+    ) -> None:
         captured["cache_directory"] = pathlib.Path(cache_directory) if cache_directory is not None else None
+        captured["asset_types_in_order"] = list(asset_types_in_order) if asset_types_in_order is not None else None
 
     monkeypatch.setattr(cli_module, "generate_archive_summaries", _stub_generate_archive_summaries)
 
@@ -343,11 +347,21 @@ def test_update_summaries_archive_forwards_cache_directory(
     runner = CliRunner()
     result = runner.invoke(
         s3logextraction_cli,
-        ["update", "summaries", "--mode", "archive", "--cache", str(cache_dir)],
+        [
+            "update",
+            "summaries",
+            "--mode",
+            "archive",
+            "--asset-types-in-order",
+            "Video,Neurophysiology,Miscellaneous",
+            "--cache",
+            str(cache_dir),
+        ],
     )
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     assert captured["cache_directory"] == cache_dir
+    assert captured["asset_types_in_order"] == ["Video", "Neurophysiology", "Miscellaneous"]
 
 
 @pytest.mark.ai_generated
