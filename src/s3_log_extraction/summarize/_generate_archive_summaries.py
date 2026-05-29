@@ -59,7 +59,7 @@ def generate_archive_summaries(
     all_dataset_summaries_by_region = [
         pandas.read_table(filepath_or_buffer=dataset_by_region_summary_file_path)
         for dataset_by_region_summary_file_path in summary_directory.rglob(pattern="by_region.tsv")
-        if dataset_by_region_summary_file_path.parent.name != "archive" 
+        if dataset_by_region_summary_file_path.parent.name != "archive"
     ]
     aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
@@ -103,7 +103,7 @@ def generate_archive_summaries(
         pandas.read_table(filepath_or_buffer=summary_file_path)
         for summary_file_path in summary_directory.rglob(pattern="by_asset_type_per_week.tsv")
         if summary_file_path.parent.name != "archive"
-    } - {'<50'}
+    } - {"<50"}
     if all_dataset_summaries_by_asset_type_per_week:
         all_summary_data = pandas.concat(objs=all_dataset_summaries_by_asset_type_per_week, ignore_index=True)
         all_summary_data.fillna(value=0, inplace=True)
