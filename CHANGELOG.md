@@ -2,6 +2,10 @@
 
 ## Upcoming
 
+
+
+## v1.10.2
+
 ### 📝 Documentation
 
 - Rewrote this changelog to use the AGENTS.md section layout. ([#246](https://github.com/dandi/s3-log-extraction/pull/246))
@@ -9,6 +13,7 @@
 ### 🚀 Enhancement
 
 - Added `s3logextraction update ip refresh` CLI command and `refresh_ip_to_region_codes` API. Re-checks a partition of the existing `ip_to_region` cache against IPInfo each run, recording any changes in a log file under `[cache_directory]/logs/`. The partition size is `ceil(cache_size / 90)`, selected deterministically by today's date so that the entire cache is refreshed over a 90-day cycle.
+
 
 
 ## v1.9.12
@@ -22,6 +27,7 @@
 - Swapped all runtime type checking from `pydantic` to `beartype`. ([#228](https://github.com/dandi/s3-log-extraction/pull/228))
 
 
+
 ## v1.9.2
 
 ### 🚀 Enhancement
@@ -33,11 +39,13 @@
 - Added `number_of_downloads` column to `by_day.tsv`, `by_asset.tsv`, and `by_region.tsv` summaries. This counts the number of complete downloads (HTTP status `200`) per grouping. Also added `total_number_of_downloads` to `totals.json` and `archive_totals.json`. ([#213](https://github.com/dandi/s3-log-extraction/pull/213))
 
 
+
 ## v1.4.0
 
 ### 🚀 Enhancement
 
 - Added Docker images built and published to GHCR (GitHub Container Registry). Available tags are `ghcr.io/dandi/s3-log-extraction:latest-minimal` for the minimal install from the latest PyPI release, `ghcr.io/dandi/s3-log-extraction:latest` for the full install from the latest PyPI release, and `ghcr.io/dandi/s3-log-extraction:dev` for the full install built from the `main` branch. ([#202](https://github.com/dandi/s3-log-extraction/pull/202))
+
 
 
 ## v1.3.9
@@ -47,6 +55,7 @@
 - Added `number_of_requests` column to `by_day.tsv`, `by_asset.tsv`, and `by_region.tsv` summaries. This counts the number of S3 log lines per grouping. Also added `total_number_of_requests` to `totals.json` and `archive_totals.json`. ([#201](https://github.com/dandi/s3-log-extraction/pull/201))
 
 
+
 ## v1.3.8
 
 ### 🚀 Enhancement
@@ -54,11 +63,13 @@
 - Added a new `download` field to the GAWK extraction step. The field is stored as plain text (`download.txt`) alongside the other extraction files. Its value is `1` when the raw log line has exactly a `200` HTTP status code and `0` otherwise. ([#198](https://github.com/dandi/s3-log-extraction/pull/198))
 
 
+
 ## v1.3.7
 
 ### 🚀 Enhancement
 
 - Added `inventory_s3_path` parameter to `RemoteS3LogAccessExtractor.extract_s3_bucket` and a new `--inventory` CLI option. When an S3 inventory path is provided, unprocessed log files are discovered from the weekly inventory snapshot instead of performing live ``s5cmd ls`` calls against the bucket. The inventory file must be a plain-text file stored in S3 containing one full S3 URL per line. ([#195](https://github.com/dandi/s3-log-extraction/pull/195))
+
 
 
 ## v1.3.0
@@ -80,6 +91,7 @@
 - Added tests for the CLI. ([#170](https://github.com/dandi/s3-log-extraction/pull/170))
 
 
+
 ## v1.2.0
 
 ### 🚀 Enhancement
@@ -93,6 +105,7 @@
 ### 🔩 Dependency Updates
 
 - Upgraded the CLI to use `rich_click` for better formatting. ([#143](https://github.com/dandi/s3-log-extraction/pull/143))
+
 
 
 ## v1.1.3
@@ -114,6 +127,7 @@
 - Fixed an issue related to duplication of access activity for assets that are duplicated, with multiple associated asset paths, within a Dandiset. Summary reports for DANDI prior to 7/27/2025 overcount due to this issue. ([#120](https://github.com/dandi/s3-log-extraction/pull/120))
 
 - Fixed `s3logextraction update summaries --mode dandi` when running without `skip` or `pick` options. ([#109](https://github.com/dandi/s3-log-extraction/pull/109))
+
 
 
 ## v1.0.0
