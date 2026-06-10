@@ -2,6 +2,9 @@
 
 ## Upcoming
 
+### 🐛 Bug Fix
+
+- Fixed the IPInfo quota-exceeded fallback so daily remote tests return `undetermined` instead of crashing on Python 3.14 when a warning is emitted. ([#N](https://github.com/dandi/s3-log-extraction/pull/N))
 
 
 ## v1.10.2
