@@ -154,7 +154,7 @@ def _get_region_code_from_ip_address(
         return region_string
     except ipinfo.exceptions.RequestQuotaExceededError:  # pragma: no cover
         warnings.warn(
-            "IPInfo API request quota exceeded. Returning 'undetermined' value.",
+            message="IPInfo API request quota exceeded. Returning 'undetermined' value.",
             category=RuntimeWarning,
             stacklevel=2,
         )
