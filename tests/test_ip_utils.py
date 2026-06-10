@@ -3,6 +3,7 @@ import pathlib
 import shutil
 import unittest.mock
 
+import ipinfo
 import py
 import pytest
 import yaml
@@ -157,3 +158,28 @@ def test_refresh_ip_to_region_codes_empty_cache(tmpdir: py.path.local, monkeypat
 
     logs_dir = test_cache / "logs"
     assert not logs_dir.exists() or not any(logs_dir.iterdir())
+
+
+@pytest.mark.ai_generated
+def test_update_ip_to_region_codes_handles_ipinfo_quota_exceeded(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """update_ip_to_region_codes stores ``undetermined`` when IPInfo quota is exhausted."""
+    extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
+    extraction_dir.mkdir(parents=True)
+    test_ip = "4.4.4.4"
+    (extraction_dir / "ips.txt").write_text(test_ip)
+
+    monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
+
+    mock_handler = unittest.mock.MagicMock()
+    mock_handler.getDetails.side_effect = ipinfo.exceptions.RequestQuotaExceededError()
+
+    with unittest.mock.patch("ipinfo.getHandler", return_value=mock_handler):
+        with pytest.warns(RuntimeWarning, match="IPInfo API request quota exceeded"):
+            s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
+
+    ip_to_region_file = tmp_path / "ips" / "ip_to_region.yaml"
+    ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
+    assert ip_to_region[test_ip] == "undetermined"
