@@ -1,22 +1,41 @@
 import base64
-import hashlib
 import os
 import pathlib
 
 import cryptography.fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+# Default salt used when `S3_LOG_EXTRACTION_SALT` is not set.
+# The key derivation must be deterministic so that data encrypted in one run can be decrypted in another,
+# which means the salt has to be stable rather than randomly generated per call.
+# It can be overridden with the `S3_LOG_EXTRACTION_SALT` environment variable for stronger separation.
+_DEFAULT_SALT = b"s3_log_extraction"
+
+# Number of PBKDF2 iterations; follows the OWASP recommendation for PBKDF2-HMAC-SHA256.
+_KDF_ITERATIONS = 600_000
 
 
 def get_key() -> bytes:
-    """Parse the full byte key for the given password."""
+    """Parse the full byte key for the given password.
+
+    The key is derived from the `S3_LOG_EXTRACTION_PASSWORD` environment variable using PBKDF2-HMAC-SHA256,
+    a deliberately expensive key derivation function that is resistant to brute-force attacks.
+    The salt may be customized via the `S3_LOG_EXTRACTION_SALT` environment variable.
+    """
     password = os.environ.get("S3_LOG_EXTRACTION_PASSWORD", None)
     if password is None:
         message = "Environment variable `S3_LOG_EXTRACTION_PASSWORD` is not set - unable to run encryption tools."
         raise EnvironmentError(message)
 
-    password_bytes = password.encode(encoding="utf-8")
-    hexcode = hashlib.sha256(password_bytes).digest()
+    salt = os.environ.get("S3_LOG_EXTRACTION_SALT", None)
+    salt_bytes = salt.encode(encoding="utf-8") if salt is not None else _DEFAULT_SALT
 
-    key = base64.urlsafe_b64encode(hexcode)
+    password_bytes = password.encode(encoding="utf-8")
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt_bytes, iterations=_KDF_ITERATIONS)
+    derived_key = kdf.derive(key_material=password_bytes)
+
+    key = base64.urlsafe_b64encode(derived_key)
     return key
 
 
