@@ -573,7 +573,9 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
     ip_stats = get_ip_stats(cache_directory=cache_path, use_encryption=use_encryption)
 
     rich_click.echo("")
-    rich_click.echo(f"IPs in cache    : {ip_stats['total']}")
+    rich_click.echo(f"Extracted IPs   : {ip_stats['extracted_ip_count']}")
+    rich_click.echo(f"Classified IPs  : {ip_stats['classified_ip_count']}")
+    rich_click.echo(f"Percent classif.: {ip_stats['percent_classified']:.2f}%")
 
     rows: list[tuple[str, IpCategoryCount]] = [
         ("Determined", ip_stats["determined"]),

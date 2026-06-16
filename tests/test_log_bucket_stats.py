@@ -402,14 +402,39 @@ def _write_plaintext_ip_cache(cache_dir: pathlib.Path, data: dict) -> None:
     (ips_dir / "ip_to_region.yaml").write_text(yaml.dump(data))
 
 
+def _write_plaintext_ips_txt(cache_dir: pathlib.Path, subpath: str, ips: list[str]) -> None:
+    """Write a plaintext (unencrypted) ips.txt file at cache_dir/subpath/ips.txt."""
+    target = cache_dir / subpath
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "ips.txt").write_text("\n".join(ips) + "\n")
+
+
 @pytest.mark.ai_generated
 def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
     """
     get_ip_stats correctly bins every classification category.
 
-    Writes a plaintext ip_to_region cache covering all seven categories
-    and asserts that counts and percentages are computed correctly.
+    Writes plaintext ips.txt and ip_to_region cache files covering all eight
+    categories and asserts that extracted/classified counts and per-category
+    percentages are computed correctly.
     """
+    all_ips = [
+        "1.1.1.1",
+        "2.2.2.2",
+        "3.3.3.3",
+        "4.4.4.4",
+        "5.5.5.5",
+        "6.6.6.6",
+        "7.7.7.7",
+        "8.8.8.8",
+        "9.9.9.9",
+        "10.10.10.10",
+        "11.11.11.11",
+        "12.12.12.12",  # extracted but not yet classified
+    ]
+    _write_plaintext_ips_txt(tmp_path, "dataset/asset1", all_ips[:6])
+    _write_plaintext_ips_txt(tmp_path, "dataset/asset2", all_ips[6:])
+
     ip_cache = {
         "1.1.1.1": "US/California",  # determined
         "2.2.2.2": "AU/New South Wales",  # determined
@@ -427,7 +452,10 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
 
     stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
 
-    assert stats["total"] == 11
+    assert stats["extracted_ip_count"] == 12
+    assert stats["classified_ip_count"] == 11
+    assert abs(stats["percent_classified"] - 11 / 12 * 100) < 0.01
+
     assert stats["determined"]["count"] == 2
     assert stats["missing"]["count"] == 1
     assert stats["unknown"]["count"] == 1
@@ -448,7 +476,9 @@ def test_get_ip_stats_empty_cache(tmp_path: pathlib.Path) -> None:
 
     stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
 
-    assert stats["total"] == 0
+    assert stats["extracted_ip_count"] == 0
+    assert stats["classified_ip_count"] == 0
+    assert stats["percent_classified"] == 0.0
     for key in ("determined", "missing", "unknown", "undetermined", "bogon", "vpn", "cloud_service", "github"):
         assert stats[key]["count"] == 0  # type: ignore[literal-required]
         assert stats[key]["percent"] == 0.0  # type: ignore[literal-required]
@@ -461,4 +491,5 @@ def test_get_ip_stats_missing_cache_file(tmp_path: pathlib.Path) -> None:
 
     stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
 
-    assert stats["total"] == 0
+    assert stats["extracted_ip_count"] == 0
+    assert stats["classified_ip_count"] == 0

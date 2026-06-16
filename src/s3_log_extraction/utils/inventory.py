@@ -6,6 +6,7 @@ import pathlib
 import typing
 
 from ..ip_utils._ip_cache import load_ip_cache
+from ..ip_utils._ip_utils import _read_ips_from_file
 
 
 class LogBucketStats(typing.TypedDict):
@@ -59,20 +60,26 @@ class IpCategoryCount(typing.TypedDict):
 
 
 class IpStats(typing.TypedDict):
-    """Statistics for IP address classification in the cache.
+    """Statistics comparing extracted IPs against the ip_to_region classification cache.
 
     Attributes
     ----------
-    total : int
-        Total number of IP addresses in the cache.
+    extracted_ip_count : int
+        Number of unique IP addresses found across all ``ips.txt`` files in the
+        extraction cache.
+    classified_ip_count : int
+        Number of IP addresses present in the ``ip_to_region.yaml`` cache.
+    percent_classified : float
+        ``classified_ip_count / extracted_ip_count * 100`` (or ``0.0`` when
+        ``extracted_ip_count`` is zero).
     determined : IpCategoryCount
         IPs mapped to a concrete geographic region (country/region string).
     missing : IpCategoryCount
-        IPs in the cache with no region resolved (stored as ``None``).
+        IPs in the ``ip_to_region`` cache with no region resolved (``None``).
     unknown : IpCategoryCount
         IPs where the lookup returned an unexpected error (``"unknown"``).
     undetermined : IpCategoryCount
-        IPs where the lookup could not complete due to API quota (``"undetermined"``).
+        IPs where the lookup hit API quota limits (``"undetermined"``).
     bogon : IpCategoryCount
         IPs flagged as bogon (private / reserved address space).
     vpn : IpCategoryCount
@@ -83,7 +90,9 @@ class IpStats(typing.TypedDict):
         IPs belonging to GitHub CIDR ranges.
     """
 
-    total: int
+    extracted_ip_count: int
+    classified_ip_count: int
+    percent_classified: float
     determined: IpCategoryCount
     missing: IpCategoryCount
     unknown: IpCategoryCount
@@ -98,13 +107,14 @@ def get_ip_stats(
     cache_directory: str | pathlib.Path | None = None,
     use_encryption: bool = True,
 ) -> IpStats:
-    """Return classification statistics for all IP addresses in the cache.
+    """Return IP address stats comparing extraction cache against the classification cache.
 
-    Loads the ``ip_to_region`` cache and bins every entry into one of the
-    following mutually-exclusive categories:
+    Counts unique IPs across all ``ips.txt`` files in the extraction cache and
+    compares that against the number of entries in ``ip_to_region.yaml``.  Also
+    bins every classified entry into one of these mutually-exclusive categories:
 
     * **determined** – a real geographic region string (e.g. ``"US/California"``).
-    * **missing** – the cache entry is ``None`` (no information could be resolved).
+    * **missing** – the cache entry is ``None`` (no region could be resolved).
     * **unknown** – the lookup returned an unexpected error (``"unknown"``).
     * **undetermined** – the lookup hit API quota limits (``"undetermined"``).
     * **bogon** – the IP is in private / reserved address space (``"bogon"``).
@@ -117,20 +127,33 @@ def get_ip_stats(
     cache_directory : path-like or None, optional
         Root of the cache tree.  When ``None`` the configured default is used.
     use_encryption : bool, optional
-        If ``True`` (default), the cache file is decrypted before parsing.
-        Pass ``False`` for plaintext cache files.
+        If ``True`` (default), ``ips.txt`` and cache files are decrypted before
+        reading.  Pass ``False`` for plaintext files.
 
     Returns
     -------
     IpStats
-        A typed dict with a ``total`` key and one :class:`IpCategoryCount` entry
-        per category.
+        A typed dict with extraction vs. classification counts and per-category
+        breakdowns.
     """
+    from ..config import get_cache_directory
+
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
+
+    # Count unique IPs across all ips.txt files in the extraction cache
+    extracted_ips: set[str] = set()
+    for ips_file in cache_path.rglob("ips.txt"):
+        extracted_ips.update(_read_ips_from_file(file_path=ips_file, use_encryption=use_encryption))
+    extracted_ip_count = len(extracted_ips)
+
+    # Load ip_to_region classification cache
     ip_to_region: dict[str, str | None] = load_ip_cache(  # type: ignore[assignment]
         cache_type="ip_to_region",
         cache_directory=cache_directory,
         use_encryption=use_encryption,
     )
+    classified_ip_count = len(ip_to_region)
+    percent_classified = (classified_ip_count / extracted_ip_count * 100) if extracted_ip_count > 0 else 0.0
 
     def _categorize(region: str | None) -> str:
         match region:
@@ -153,13 +176,13 @@ def get_ip_stats(
 
     counts = collections.Counter(_categorize(region) for region in ip_to_region.values())
 
-    total = len(ip_to_region)
-
     def _pct(n: int) -> float:
-        return (n / total * 100) if total > 0 else 0.0
+        return (n / classified_ip_count * 100) if classified_ip_count > 0 else 0.0
 
     return IpStats(
-        total=total,
+        extracted_ip_count=extracted_ip_count,
+        classified_ip_count=classified_ip_count,
+        percent_classified=percent_classified,
         determined=IpCategoryCount(count=counts["determined"], percent=_pct(counts["determined"])),
         missing=IpCategoryCount(count=counts["missing"], percent=_pct(counts["missing"])),
         unknown=IpCategoryCount(count=counts["unknown"], percent=_pct(counts["unknown"])),
