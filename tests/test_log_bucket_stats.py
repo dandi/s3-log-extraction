@@ -207,11 +207,18 @@ def test_stats_cli(
         rows=rows,
         file_schema=file_schema,
     )
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
 
     runner = CliRunner()
     result = runner.invoke(
         s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir)],
+        [
+            "stats",
+            "--inventory", str(inventory_dir),
+            "--cache", str(cache_dir),
+            "--encryption", "false",
+        ],
     )
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
