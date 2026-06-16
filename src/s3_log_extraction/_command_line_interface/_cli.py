@@ -20,7 +20,7 @@ from ..summarize import (
     generate_summaries,
 )
 from ..testing import generate_benchmark
-from ..utils import get_extraction_completion, get_ip_stats, get_log_bucket_stats
+from ..utils import IpCategoryCount, get_extraction_completion, get_ip_stats, get_log_bucket_stats
 from ..validate import (
     DownloadsLogicPreValidator,
     ExtractionHeuristicPreValidator,
@@ -573,17 +573,16 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
     rich_click.echo("")
     rich_click.echo(f"IPs in cache    : {ip_stats['total']}")
 
-    categories = [
-        ("determined", "Determined"),
-        ("missing", "Missing"),
-        ("unknown", "Unknown"),
-        ("bogon", "Bogon"),
-        ("vpn", "VPN"),
-        ("cloud_service", "Cloud service"),
-        ("github", "GitHub"),
+    rows: list[tuple[str, IpCategoryCount]] = [
+        ("Determined", ip_stats["determined"]),
+        ("Missing", ip_stats["missing"]),
+        ("Unknown", ip_stats["unknown"]),
+        ("Bogon", ip_stats["bogon"]),
+        ("VPN", ip_stats["vpn"]),
+        ("Cloud service", ip_stats["cloud_service"]),
+        ("GitHub", ip_stats["github"]),
     ]
-    for key, label in categories:
-        entry = ip_stats[key]  # type: ignore[literal-required]
+    for label, entry in rows:
         rich_click.echo(f"  {label:<14}: {entry['count']:>7}  ({entry['percent']:6.2f}%)")
 
 
