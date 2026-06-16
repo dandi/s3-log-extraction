@@ -541,7 +541,14 @@ def _validate_cli(
     type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
     default=None,
 )
-def _stats_cli(inventory_directory: str, cache_directory: str | None = None) -> None:
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Decrypt IP addresses in cache files. Enabled by default; pass --encryption=false for plaintext caches.",
+    type=rich_click.BOOL,
+    default=True,
+)
+def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use_encryption: bool = True) -> None:
     """
     Report log-file inventory stats and IP address classification stats.
 
@@ -561,7 +568,7 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None) -> 
         rich_click.echo("Total size (B)  : N/A (Size column not present in inventory)")
 
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
-    ip_stats = get_ip_stats(cache_directory=cache_path)
+    ip_stats = get_ip_stats(cache_directory=cache_path, use_encryption=use_encryption)
 
     rich_click.echo("")
     rich_click.echo(f"IPs in cache    : {ip_stats['total']}")

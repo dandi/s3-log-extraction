@@ -94,6 +94,7 @@ class IpStats(typing.TypedDict):
 
 def get_ip_stats(
     cache_directory: str | pathlib.Path | None = None,
+    use_encryption: bool = True,
 ) -> IpStats:
     """Return classification statistics for all IP addresses in the cache.
 
@@ -112,6 +113,9 @@ def get_ip_stats(
     ----------
     cache_directory : path-like or None, optional
         Root of the cache tree.  When ``None`` the configured default is used.
+    use_encryption : bool, optional
+        If ``True`` (default), the cache file is decrypted before parsing.
+        Pass ``False`` for plaintext cache files.
 
     Returns
     -------
@@ -122,7 +126,7 @@ def get_ip_stats(
     ip_to_region: dict[str, str | None] = load_ip_cache(  # type: ignore[assignment]
         cache_type="ip_to_region",
         cache_directory=cache_directory,
-        use_encryption=True,
+        use_encryption=use_encryption,
     )
 
     counts: dict[str, int] = {
