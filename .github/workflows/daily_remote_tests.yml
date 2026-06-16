@@ -32,5 +32,5 @@ jobs:
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: "CI Failure: s3-log-extraction Daily Remote Tests"
           to: cody.c.baker.phd@gmail.com  # Add more with comma separation (no spaces)
-          from: s3-log-extraction
+          from: S3 Log Extraction <s3-log-extraction@users.noreply.github.com>
           body: "The daily remote test workflow failed, please check status at https://github.com/dandi/s3-log-extraction/actions/workflows/daily_remote_tests.yml"
