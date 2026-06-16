@@ -1,6 +1,8 @@
 import base64
+import math
 import os
 import pathlib
+import string
 
 import cryptography.fernet
 from cryptography.hazmat.primitives import hashes
@@ -15,6 +17,66 @@ _DEFAULT_SALT = b"s3_log_extraction"
 # Number of PBKDF2 iterations; follows the OWASP recommendation for PBKDF2-HMAC-SHA256.
 _KDF_ITERATIONS = 600_000
 
+# Minimum password requirements. These are tuned to comfortably accept randomly generated high-entropy
+# secrets (such as `secrets.token_urlsafe`, `secrets.token_hex`, or UUIDs) while rejecting short or
+# low-variety human-chosen passwords. A password is the only secret protecting encrypted data at rest,
+# so it must not be brute-forceable.
+_MINIMUM_PASSWORD_LENGTH = 16
+_MINIMUM_DISTINCT_CHARACTERS = 8
+_MINIMUM_ENTROPY_BITS = 90.0
+
+
+def _estimate_entropy_bits(password: str) -> float:
+    """Estimate the entropy of a password in bits from its length and the character classes it uses."""
+    charset_size = 0
+    if any(character in string.ascii_lowercase for character in password):
+        charset_size += 26
+    if any(character in string.ascii_uppercase for character in password):
+        charset_size += 26
+    if any(character in string.digits for character in password):
+        charset_size += 10
+    if any(character in string.punctuation for character in password):
+        charset_size += len(string.punctuation)
+    if any(character not in string.printable for character in password):
+        charset_size += 100  # Conservative allowance for non-ASCII (e.g. unicode) characters.
+
+    if charset_size == 0:
+        return 0.0
+    return len(password) * math.log2(charset_size)
+
+
+def validate_password_strength(password: str) -> None:
+    """Raise a ``ValueError`` if the password is too weak to be used for encryption.
+
+    The checks are intentionally heuristic: they enforce a minimum length, a minimum number of distinct
+    characters, and a minimum estimated entropy. They are designed to block weak human-chosen passwords
+    while accepting randomly generated secrets. They cannot detect dictionary words embedded in an
+    otherwise long string, so a randomly generated secret is always recommended.
+    """
+    problems = []
+    if len(password) < _MINIMUM_PASSWORD_LENGTH:
+        problems.append(f"it must be at least {_MINIMUM_PASSWORD_LENGTH} characters long (got {len(password)})")
+    distinct_characters = len(set(password))
+    if distinct_characters < _MINIMUM_DISTINCT_CHARACTERS:
+        problems.append(
+            f"it must contain at least {_MINIMUM_DISTINCT_CHARACTERS} distinct characters (got {distinct_characters})"
+        )
+    entropy_bits = _estimate_entropy_bits(password)
+    if entropy_bits < _MINIMUM_ENTROPY_BITS:
+        problems.append(
+            f"its estimated entropy must be at least {_MINIMUM_ENTROPY_BITS:.0f} bits (got {entropy_bits:.0f})"
+        )
+
+    if problems:
+        joined_problems = "; ".join(problems)
+        message = (
+            "The value of the `S3_LOG_EXTRACTION_PASSWORD` environment variable is not strong enough: "
+            f"{joined_problems}. "
+            "Please use a randomly generated secret, for example the output of `python -c \"import secrets; "
+            'print(secrets.token_urlsafe(32))"`.'
+        )
+        raise ValueError(message)
+
 
 def get_key() -> bytes:
     """Parse the full byte key for the given password.
@@ -22,11 +84,14 @@ def get_key() -> bytes:
     The key is derived from the `S3_LOG_EXTRACTION_PASSWORD` environment variable using PBKDF2-HMAC-SHA256,
     a deliberately expensive key derivation function that is resistant to brute-force attacks.
     The salt may be customized via the `S3_LOG_EXTRACTION_SALT` environment variable.
+
+    The password is validated against minimum strength requirements before use; weak passwords are rejected.
     """
     password = os.environ.get("S3_LOG_EXTRACTION_PASSWORD", None)
     if password is None:
         message = "Environment variable `S3_LOG_EXTRACTION_PASSWORD` is not set - unable to run encryption tools."
         raise EnvironmentError(message)
+    validate_password_strength(password=password)
 
     salt = os.environ.get("S3_LOG_EXTRACTION_SALT", None)
     salt_bytes = salt.encode(encoding="utf-8") if salt is not None else _DEFAULT_SALT
@@ -125,5 +190,6 @@ __all__ = [
     "encrypt_bytes",
     "get_key",
     "read_text_from_file",
+    "validate_password_strength",
     "write_text_to_file",
 ]
