@@ -5,8 +5,8 @@ import pathlib
 import string
 
 import cryptography.fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import cryptography.hazmat.primitives.hashes
+import cryptography.hazmat.primitives.kdf.pbkdf2
 
 # Default salt used when `S3_LOG_EXTRACTION_SALT` is not set.
 # The key derivation must be deterministic so that data encrypted in one run can be decrypted in another,
@@ -26,7 +26,7 @@ _MINIMUM_DISTINCT_CHARACTERS = 8
 _MINIMUM_ENTROPY_BITS = 90.0
 
 
-def _estimate_entropy_bits(password: str) -> float:
+def _estimate_entropy_bits(password: str, /) -> float:
     """Estimate the entropy of a password in bits from its length and the character classes it uses."""
     charset_size = 0
     if any(character in string.ascii_lowercase for character in password):
@@ -45,7 +45,7 @@ def _estimate_entropy_bits(password: str) -> float:
     return len(password) * math.log2(charset_size)
 
 
-def validate_password_strength(password: str) -> None:
+def validate_password_strength(password: str, /) -> None:
     """Raise a ``ValueError`` if the password is too weak to be used for encryption.
 
     The checks are intentionally heuristic: they enforce a minimum length, a minimum number of distinct
@@ -91,13 +91,18 @@ def get_key() -> bytes:
     if password is None:
         message = "Environment variable `S3_LOG_EXTRACTION_PASSWORD` is not set - unable to run encryption tools."
         raise EnvironmentError(message)
-    validate_password_strength(password=password)
+    validate_password_strength(password)
 
     salt = os.environ.get("S3_LOG_EXTRACTION_SALT", None)
     salt_bytes = salt.encode(encoding="utf-8") if salt is not None else _DEFAULT_SALT
 
     password_bytes = password.encode(encoding="utf-8")
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt_bytes, iterations=_KDF_ITERATIONS)
+    kdf = cryptography.hazmat.primitives.kdf.pbkdf2.PBKDF2HMAC(
+        algorithm=cryptography.hazmat.primitives.hashes.SHA256(),
+        length=32,
+        salt=salt_bytes,
+        iterations=_KDF_ITERATIONS,
+    )
     derived_key = kdf.derive(key_material=password_bytes)
 
     key = base64.urlsafe_b64encode(derived_key)

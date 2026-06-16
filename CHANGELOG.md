@@ -2,6 +2,10 @@
 
 ## Upcoming
 
+### 🚀 Enhancement
+
+- Strengthened encryption key derivation. The `S3_LOG_EXTRACTION_PASSWORD` value now passes through PBKDF2-HMAC-SHA256 instead of a single SHA-256 pass, which resists brute-force attacks. Weak passwords are also rejected before any encryption runs. A public `validate_password_strength` helper was added. ([#283](https://github.com/dandi/s3-log-extraction/pull/283))
+
 ### 🐛 Bug Fix
 
 - Fixed the IPInfo quota-exceeded fallback so daily remote tests return `undetermined` instead of crashing on Python 3.14 when a warning is emitted. ([#N](https://github.com/dandi/s3-log-extraction/pull/N))
