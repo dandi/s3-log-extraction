@@ -5,6 +5,9 @@ import json
 import pathlib
 import typing
 
+from ..ip_utils._ip_cache import load_ip_cache
+from ..ip_utils._ip_utils import _read_ips_from_file
+
 
 class LogBucketStats(typing.TypedDict):
     """Statistics for all objects in a local S3 Inventory.
@@ -39,6 +42,159 @@ class ExtractionCompletionStats(typing.TypedDict):
     processed_file_count: int
     inventory_file_count: int
     percent_complete: float
+
+
+class IpCategoryCount(typing.TypedDict):
+    """Count and percentage for a single IP classification category.
+
+    Attributes
+    ----------
+    count : int
+        Number of IP addresses in this category.
+    percent : float
+        Fraction of total cached IPs, expressed as a percentage.
+    """
+
+    count: int
+    percent: float
+
+
+class IpStats(typing.TypedDict):
+    """Statistics comparing extracted IPs against the ip_to_region classification cache.
+
+    Attributes
+    ----------
+    extracted_ip_count : int
+        Number of unique IP addresses found across all ``ips.txt`` files in the
+        extraction cache.
+    classified_ip_count : int
+        Number of IP addresses present in the ``ip_to_region.yaml`` cache.
+    percent_classified : float
+        ``classified_ip_count / extracted_ip_count * 100`` (or ``0.0`` when
+        ``extracted_ip_count`` is zero).
+    determined : IpCategoryCount
+        IPs mapped to a concrete geographic region (country/region string).
+    missing : IpCategoryCount
+        IPs in the ``ip_to_region`` cache with no region resolved (``None``).
+    unknown : IpCategoryCount
+        IPs where the lookup returned an unexpected error (``"unknown"``).
+    undetermined : IpCategoryCount
+        IPs where the lookup hit API quota limits (``"undetermined"``).
+    bogon : IpCategoryCount
+        IPs flagged as bogon (private / reserved address space).
+    vpn : IpCategoryCount
+        IPs classified as VPN or datacenter addresses.
+    cloud_service : IpCategoryCount
+        IPs belonging to a known cloud provider CIDR (AWS or GCP).
+    github : IpCategoryCount
+        IPs belonging to GitHub CIDR ranges.
+    """
+
+    extracted_ip_count: int
+    classified_ip_count: int
+    percent_classified: float
+    determined: IpCategoryCount
+    missing: IpCategoryCount
+    unknown: IpCategoryCount
+    undetermined: IpCategoryCount
+    bogon: IpCategoryCount
+    vpn: IpCategoryCount
+    cloud_service: IpCategoryCount
+    github: IpCategoryCount
+
+
+def get_ip_stats(
+    cache_directory: str | pathlib.Path | None = None,
+    use_encryption: bool = True,
+) -> IpStats:
+    """Return IP address stats comparing extraction cache against the classification cache.
+
+    Counts unique IPs across all ``ips.txt`` files in the extraction cache and
+    compares that against the number of entries in ``ip_to_region.yaml``.  Also
+    bins every classified entry into one of these mutually-exclusive categories:
+
+    * **determined** – a real geographic region string (e.g. ``"US/California"``).
+    * **missing** – the cache entry is ``None`` (no region could be resolved).
+    * **unknown** – the lookup returned an unexpected error (``"unknown"``).
+    * **undetermined** – the lookup hit API quota limits (``"undetermined"``).
+    * **bogon** – the IP is in private / reserved address space (``"bogon"``).
+    * **vpn** – the IP matches a known VPN / datacenter CIDR (starts with ``"VPN"``).
+    * **cloud_service** – the IP belongs to an AWS or GCP CIDR range.
+    * **github** – the IP belongs to a GitHub CIDR range.
+
+    Parameters
+    ----------
+    cache_directory : path-like or None, optional
+        Root of the cache tree.  When ``None`` the configured default is used.
+    use_encryption : bool, optional
+        If ``True`` (default), ``ips.txt`` and cache files are decrypted before
+        reading.  Pass ``False`` for plaintext files.
+
+    Returns
+    -------
+    IpStats
+        A typed dict with extraction vs. classification counts and per-category
+        breakdowns.
+    """
+    from ..config import get_cache_directory
+
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
+
+    # Count unique IPs across all ips.txt files in the extraction subdirectory,
+    # matching the scope used by update_ip_to_region_codes.
+    extraction_dir = cache_path / "extraction"
+    extracted_ips: set[str] = set()
+    if extraction_dir.exists():
+        for ips_file in extraction_dir.rglob("ips.txt"):
+            extracted_ips.update(_read_ips_from_file(file_path=ips_file, use_encryption=use_encryption))
+    extracted_ip_count = len(extracted_ips)
+
+    # Load ip_to_region classification cache
+    ip_to_region: dict[str, str | None] = load_ip_cache(  # type: ignore[assignment]
+        cache_type="ip_to_region",
+        cache_directory=cache_directory,
+        use_encryption=use_encryption,
+    )
+    classified_ip_count = len(ip_to_region)
+    percent_classified = (classified_ip_count / extracted_ip_count * 100) if extracted_ip_count > 0 else 0.0
+
+    def _categorize(region: str | None) -> str:
+        match region:
+            case None:
+                return "missing"
+            case "unknown":
+                return "unknown"
+            case "undetermined":
+                return "undetermined"
+            case "bogon":
+                return "bogon"
+            case _ if region.startswith("VPN"):
+                return "vpn"
+            case _ if region.startswith(("AWS", "GCP")):
+                return "cloud_service"
+            case _ if region.startswith("GitHub"):
+                return "github"
+            case _:
+                return "determined"
+
+    counts = collections.Counter(_categorize(region) for region in ip_to_region.values())
+
+    def _pct(n: int) -> float:
+        return (n / classified_ip_count * 100) if classified_ip_count > 0 else 0.0
+
+    return IpStats(
+        extracted_ip_count=extracted_ip_count,
+        classified_ip_count=classified_ip_count,
+        percent_classified=percent_classified,
+        determined=IpCategoryCount(count=counts["determined"], percent=_pct(counts["determined"])),
+        missing=IpCategoryCount(count=counts["missing"], percent=_pct(counts["missing"])),
+        unknown=IpCategoryCount(count=counts["unknown"], percent=_pct(counts["unknown"])),
+        undetermined=IpCategoryCount(count=counts["undetermined"], percent=_pct(counts["undetermined"])),
+        bogon=IpCategoryCount(count=counts["bogon"], percent=_pct(counts["bogon"])),
+        vpn=IpCategoryCount(count=counts["vpn"], percent=_pct(counts["vpn"])),
+        cloud_service=IpCategoryCount(count=counts["cloud_service"], percent=_pct(counts["cloud_service"])),
+        github=IpCategoryCount(count=counts["github"], percent=_pct(counts["github"])),
+    )
 
 
 def _extract_date_from_log_filename(filename: str) -> str | None:
