@@ -7,12 +7,11 @@ import json
 import pathlib
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 import s3_log_extraction._command_line_interface._cli as cli_module
 from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
-import yaml
-
 from s3_log_extraction.utils.inventory import get_extraction_completion, get_ip_stats, get_log_bucket_stats
 
 
@@ -395,6 +394,7 @@ def test_update_totals_archive_forwards_cache_directory(
 # get_ip_stats tests
 # ---------------------------------------------------------------------------
 
+
 def _write_plaintext_ip_cache(cache_dir: pathlib.Path, data: dict) -> None:
     """Write a plaintext (unencrypted) ip_to_region.yaml cache file."""
     ips_dir = cache_dir / "ips"
@@ -411,17 +411,17 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
     and asserts that counts and percentages are computed correctly.
     """
     ip_cache = {
-        "1.1.1.1": "US/California",       # determined
-        "2.2.2.2": "AU/New South Wales",   # determined
-        "3.3.3.3": None,                   # missing
-        "4.4.4.4": "unknown",              # unknown
-        "5.5.5.5": "undetermined",         # unknown (quota exceeded)
-        "6.6.6.6": "bogon",                # bogon
-        "7.7.7.7": "VPN",                  # vpn
-        "8.8.8.8": "VPN/datacenter",       # vpn (sub-label)
-        "9.9.9.9": "AWS/us-east-1",        # cloud_service
+        "1.1.1.1": "US/California",  # determined
+        "2.2.2.2": "AU/New South Wales",  # determined
+        "3.3.3.3": None,  # missing
+        "4.4.4.4": "unknown",  # unknown
+        "5.5.5.5": "undetermined",  # unknown (quota exceeded)
+        "6.6.6.6": "bogon",  # bogon
+        "7.7.7.7": "VPN",  # vpn
+        "8.8.8.8": "VPN/datacenter",  # vpn (sub-label)
+        "9.9.9.9": "AWS/us-east-1",  # cloud_service
         "10.10.10.10": "GCP/us-central1",  # cloud_service
-        "11.11.11.11": "GitHub",           # github
+        "11.11.11.11": "GitHub",  # github
     }
     _write_plaintext_ip_cache(tmp_path, ip_cache)
 
