@@ -215,9 +215,12 @@ def test_stats_cli(
         s3logextraction_cli,
         [
             "stats",
-            "--inventory", str(inventory_dir),
-            "--cache", str(cache_dir),
-            "--encryption", "false",
+            "--inventory",
+            str(inventory_dir),
+            "--cache",
+            str(cache_dir),
+            "--encryption",
+            "false",
         ],
     )
 
