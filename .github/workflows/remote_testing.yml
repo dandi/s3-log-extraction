@@ -11,6 +11,9 @@ on:
       CODECOV_CREDENTIALS:
         required: true
 
+permissions:
+  contents: read
+
 env:
   S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
   IPINFO_API_KEY: ${{ secrets.IPINFO_API_KEY }}

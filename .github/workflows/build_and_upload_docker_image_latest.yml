@@ -6,6 +6,10 @@ on:
     workflows: [Upload Package to PyPI]
     types: [completed]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   release-image:
     name: Build and upload Docker image of latest release to GHCR

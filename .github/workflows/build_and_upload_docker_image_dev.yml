@@ -7,6 +7,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-test-push:
     name: Build and upload Docker image of dev branch to GHCR
