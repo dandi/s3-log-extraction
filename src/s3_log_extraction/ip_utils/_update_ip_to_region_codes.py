@@ -62,7 +62,7 @@ def update_ip_to_region_codes(
     ip_to_region = load_ip_cache(
         cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
     )
-    # Skip IPs already in the cache (including "undetermined"); use the refresh command to retry those.
+    # Skip IPs already in the cache (including "undetermined"); use the refresh command to retry those
     ips_to_update = list(all_ips - set(ip_to_region.keys()))
 
     # If a batch limit is set, shuffle the IPs to ensure repeated runs update different IPs
