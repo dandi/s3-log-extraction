@@ -20,7 +20,7 @@ from ..summarize import (
     generate_summaries,
 )
 from ..testing import generate_benchmark
-from ..utils import get_extraction_completion, get_log_bucket_stats
+from ..utils import IpCategoryCount, get_extraction_completion, get_ip_stats, get_log_bucket_stats
 from ..validate import (
     DownloadsLogicPreValidator,
     ExtractionHeuristicPreValidator,
@@ -515,7 +515,7 @@ def _validate_cli(
             validator.validate_directory(directory=directory)
 
 
-# s3logextraction stats --inventory <path>
+# s3logextraction stats --inventory <path> [--cache <path>]
 @s3logextraction_cli.command(name="stats")
 @rich_click.option(
     "--inventory",
@@ -530,21 +530,65 @@ def _validate_cli(
     required=True,
     type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
 )
-def _stats_cli(inventory_directory: str) -> None:
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Optional cache directory containing IP-to-region lookup records. "
+        "If omitted, uses the configured default cache directory."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Decrypt IP addresses in cache files. Enabled by default; pass --encryption=false for plaintext caches.",
+    type=rich_click.BOOL,
+    default=True,
+)
+def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use_encryption: bool = True) -> None:
     """
-    Report the number of log files and total size recorded in the inventory.
+    Report log-file inventory stats, extraction completion, and IP address classification stats.
 
     Reads a local pre-downloaded AWS S3 Inventory directory and prints the
-    file count and total size in bytes for all objects in the inventory.
+    file count for all objects in the inventory, the extraction completion
+    percentage, and a breakdown of IP address classification categories
+    (determined, missing, unknown, bogon, VPN, cloud service, GitHub).
     """
-    stats = get_log_bucket_stats(
-        inventory_directory=pathlib.Path(inventory_directory),
-    )
+    inventory_path = pathlib.Path(inventory_directory)
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+
+    stats = get_log_bucket_stats(inventory_directory=inventory_path)
     rich_click.echo(f"File count      : {stats['file_count']}")
-    if stats["total_size_bytes"] is not None:
-        rich_click.echo(f"Total size (B)  : {stats['total_size_bytes']}")
-    else:
-        rich_click.echo("Total size (B)  : N/A (Size column not present in inventory)")
+
+    completion = get_extraction_completion(
+        inventory_directory=inventory_path,
+        cache_directory=cache_path,
+    )
+    rich_click.echo(f"Processed files : {completion['processed_file_count']}")
+    rich_click.echo(f"Percent complete: {completion['percent_complete']:.2f}%")
+
+    ip_stats = get_ip_stats(cache_directory=cache_path, use_encryption=use_encryption)
+
+    rich_click.echo("")
+    rich_click.echo(f"Extracted IPs   : {ip_stats['extracted_ip_count']}")
+    rich_click.echo(f"Classified IPs  : {ip_stats['classified_ip_count']}")
+    rich_click.echo(f"Percent classif.: {ip_stats['percent_classified']:.2f}%")
+
+    rows: list[tuple[str, IpCategoryCount]] = [
+        ("Determined", ip_stats["determined"]),
+        ("Missing", ip_stats["missing"]),
+        ("Unknown", ip_stats["unknown"]),
+        ("Undetermined", ip_stats["undetermined"]),
+        ("Bogon", ip_stats["bogon"]),
+        ("VPN", ip_stats["vpn"]),
+        ("Cloud service", ip_stats["cloud_service"]),
+        ("GitHub", ip_stats["github"]),
+    ]
+    for label, entry in rows:
+        rich_click.echo(f"  {label:<14}: {entry['count']:>7}  ({entry['percent']:6.2f}%)")
 
 
 # s3logextraction completion --inventory <path> [--cache <path>]

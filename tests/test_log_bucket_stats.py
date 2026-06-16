@@ -7,11 +7,12 @@ import json
 import pathlib
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 import s3_log_extraction._command_line_interface._cli as cli_module
 from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
-from s3_log_extraction.utils.inventory import get_extraction_completion, get_log_bucket_stats
+from s3_log_extraction.utils.inventory import get_extraction_completion, get_ip_stats, get_log_bucket_stats
 
 
 def _build_inventory_directory(
@@ -167,7 +168,7 @@ _CLI_PARAMS = [
             (SOURCE_BUCKET, "other/2024-01-02-00-00-00-BBBB", 400),
             (SOURCE_BUCKET, "other/2024-01-02-00-05-00-CCCC", 500),
         ],
-        ["File count", "Total size", "3", "1000"],
+        ["File count", "3"],
         id="with_size_column",
     ),
     pytest.param(
@@ -177,7 +178,7 @@ _CLI_PARAMS = [
             (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
             (SOURCE_BUCKET, "other/2024-01-03-00-00-00-CCCC"),
         ],
-        ["File count", "3", "N/A"],
+        ["File count", "3"],
         id="without_size_column",
     ),
 ]
@@ -198,7 +199,7 @@ def test_stats_cli(
     The 'stats' CLI command counts all inventory keys and produces the expected output.
 
     Covers the ``Size`` column present and absent cases, and validates that the
-    ``File count`` and ``Total size`` labels always appear.
+    ``File count`` label always appears.
     """
     inventory_dir = _build_inventory_directory(
         tmp_path,
@@ -206,11 +207,21 @@ def test_stats_cli(
         rows=rows,
         file_schema=file_schema,
     )
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
 
     runner = CliRunner()
     result = runner.invoke(
         s3logextraction_cli,
-        ["stats", "--inventory", str(inventory_dir)],
+        [
+            "stats",
+            "--inventory",
+            str(inventory_dir),
+            "--cache",
+            str(cache_dir),
+            "--encryption",
+            "false",
+        ],
     )
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
@@ -387,3 +398,108 @@ def test_update_totals_archive_forwards_cache_directory(
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     assert captured["cache_directory"] == cache_dir
+
+
+# ---------------------------------------------------------------------------
+# get_ip_stats tests
+# ---------------------------------------------------------------------------
+
+
+def _write_plaintext_ip_cache(cache_dir: pathlib.Path, data: dict) -> None:
+    """Write a plaintext (unencrypted) ip_to_region.yaml cache file."""
+    ips_dir = cache_dir / "ips"
+    ips_dir.mkdir(parents=True, exist_ok=True)
+    (ips_dir / "ip_to_region.yaml").write_text(yaml.dump(data))
+
+
+def _write_plaintext_ips_txt(cache_dir: pathlib.Path, subpath: str, ips: list[str]) -> None:
+    """Write a plaintext (unencrypted) ips.txt file at cache_dir/subpath/ips.txt."""
+    target = cache_dir / subpath
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "ips.txt").write_text("\n".join(ips) + "\n")
+
+
+@pytest.mark.ai_generated
+def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
+    """
+    get_ip_stats correctly bins every classification category.
+
+    Writes plaintext ips.txt and ip_to_region cache files covering all eight
+    categories and asserts that extracted/classified counts and per-category
+    percentages are computed correctly.
+    """
+    all_ips = [
+        "1.1.1.1",
+        "2.2.2.2",
+        "3.3.3.3",
+        "4.4.4.4",
+        "5.5.5.5",
+        "6.6.6.6",
+        "7.7.7.7",
+        "8.8.8.8",
+        "9.9.9.9",
+        "10.10.10.10",
+        "11.11.11.11",
+        "12.12.12.12",  # extracted but not yet classified
+    ]
+    _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset1", all_ips[:6])
+    _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset2", all_ips[6:])
+
+    ip_cache = {
+        "1.1.1.1": "US/California",  # determined
+        "2.2.2.2": "AU/New South Wales",  # determined
+        "3.3.3.3": None,  # missing
+        "4.4.4.4": "unknown",  # unknown
+        "5.5.5.5": "undetermined",  # undetermined (quota exceeded)
+        "6.6.6.6": "bogon",  # bogon
+        "7.7.7.7": "VPN",  # vpn
+        "8.8.8.8": "VPN/datacenter",  # vpn (sub-label)
+        "9.9.9.9": "AWS/us-east-1",  # cloud_service
+        "10.10.10.10": "GCP/us-central1",  # cloud_service
+        "11.11.11.11": "GitHub",  # github
+    }
+    _write_plaintext_ip_cache(tmp_path, ip_cache)
+
+    stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    assert stats["extracted_ip_count"] == 12
+    assert stats["classified_ip_count"] == 11
+    assert abs(stats["percent_classified"] - 11 / 12 * 100) < 0.01
+
+    assert stats["determined"]["count"] == 2
+    assert stats["missing"]["count"] == 1
+    assert stats["unknown"]["count"] == 1
+    assert stats["undetermined"]["count"] == 1
+    assert stats["bogon"]["count"] == 1
+    assert stats["vpn"]["count"] == 2
+    assert stats["cloud_service"]["count"] == 2
+    assert stats["github"]["count"] == 1
+
+    assert abs(stats["determined"]["percent"] - 2 / 11 * 100) < 0.01
+    assert abs(stats["cloud_service"]["percent"] - 2 / 11 * 100) < 0.01
+
+
+@pytest.mark.ai_generated
+def test_get_ip_stats_empty_cache(tmp_path: pathlib.Path) -> None:
+    """get_ip_stats returns zeros and 0.0% for an empty cache."""
+    _write_plaintext_ip_cache(tmp_path, {})
+
+    stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    assert stats["extracted_ip_count"] == 0
+    assert stats["classified_ip_count"] == 0
+    assert stats["percent_classified"] == 0.0
+    for key in ("determined", "missing", "unknown", "undetermined", "bogon", "vpn", "cloud_service", "github"):
+        assert stats[key]["count"] == 0  # type: ignore[literal-required]
+        assert stats[key]["percent"] == 0.0  # type: ignore[literal-required]
+
+
+@pytest.mark.ai_generated
+def test_get_ip_stats_missing_cache_file(tmp_path: pathlib.Path) -> None:
+    """get_ip_stats returns zeros when the cache file does not exist yet."""
+    (tmp_path / "ips").mkdir(parents=True)  # dir exists but no yaml file
+
+    stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    assert stats["extracted_ip_count"] == 0
+    assert stats["classified_ip_count"] == 0
