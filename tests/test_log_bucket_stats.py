@@ -11,7 +11,9 @@ from click.testing import CliRunner
 
 import s3_log_extraction._command_line_interface._cli as cli_module
 from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
-from s3_log_extraction.utils.inventory import get_extraction_completion, get_log_bucket_stats
+import yaml
+
+from s3_log_extraction.utils.inventory import get_extraction_completion, get_ip_stats, get_log_bucket_stats
 
 
 def _build_inventory_directory(
@@ -387,3 +389,75 @@ def test_update_totals_archive_forwards_cache_directory(
 
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     assert captured["cache_directory"] == cache_dir
+
+
+# ---------------------------------------------------------------------------
+# get_ip_stats tests
+# ---------------------------------------------------------------------------
+
+def _write_plaintext_ip_cache(cache_dir: pathlib.Path, data: dict) -> None:
+    """Write a plaintext (unencrypted) ip_to_region.yaml cache file."""
+    ips_dir = cache_dir / "ips"
+    ips_dir.mkdir(parents=True, exist_ok=True)
+    (ips_dir / "ip_to_region.yaml").write_text(yaml.dump(data))
+
+
+@pytest.mark.ai_generated
+def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
+    """
+    get_ip_stats correctly bins every classification category.
+
+    Writes a plaintext ip_to_region cache covering all seven categories
+    and asserts that counts and percentages are computed correctly.
+    """
+    ip_cache = {
+        "1.1.1.1": "US/California",       # determined
+        "2.2.2.2": "AU/New South Wales",   # determined
+        "3.3.3.3": None,                   # missing
+        "4.4.4.4": "unknown",              # unknown
+        "5.5.5.5": "undetermined",         # unknown (quota exceeded)
+        "6.6.6.6": "bogon",                # bogon
+        "7.7.7.7": "VPN",                  # vpn
+        "8.8.8.8": "VPN/datacenter",       # vpn (sub-label)
+        "9.9.9.9": "AWS/us-east-1",        # cloud_service
+        "10.10.10.10": "GCP/us-central1",  # cloud_service
+        "11.11.11.11": "GitHub",           # github
+    }
+    _write_plaintext_ip_cache(tmp_path, ip_cache)
+
+    stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    assert stats["total"] == 11
+    assert stats["determined"]["count"] == 2
+    assert stats["missing"]["count"] == 1
+    assert stats["unknown"]["count"] == 2
+    assert stats["bogon"]["count"] == 1
+    assert stats["vpn"]["count"] == 2
+    assert stats["cloud_service"]["count"] == 2
+    assert stats["github"]["count"] == 1
+
+    assert abs(stats["determined"]["percent"] - 2 / 11 * 100) < 0.01
+    assert abs(stats["cloud_service"]["percent"] - 2 / 11 * 100) < 0.01
+
+
+@pytest.mark.ai_generated
+def test_get_ip_stats_empty_cache(tmp_path: pathlib.Path) -> None:
+    """get_ip_stats returns zeros and 0.0% for an empty cache."""
+    _write_plaintext_ip_cache(tmp_path, {})
+
+    stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    assert stats["total"] == 0
+    for key in ("determined", "missing", "unknown", "bogon", "vpn", "cloud_service", "github"):
+        assert stats[key]["count"] == 0  # type: ignore[literal-required]
+        assert stats[key]["percent"] == 0.0  # type: ignore[literal-required]
+
+
+@pytest.mark.ai_generated
+def test_get_ip_stats_missing_cache_file(tmp_path: pathlib.Path) -> None:
+    """get_ip_stats returns zeros when the cache file does not exist yet."""
+    (tmp_path / "ips").mkdir(parents=True)  # dir exists but no yaml file
+
+    stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    assert stats["total"] == 0
