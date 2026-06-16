@@ -72,7 +72,7 @@ def validate_password_strength(password: str) -> None:
         message = (
             "The value of the `S3_LOG_EXTRACTION_PASSWORD` environment variable is not strong enough: "
             f"{joined_problems}. "
-            "Please use a randomly generated secret, for example the output of `python -c \"import secrets; "
+            'Please use a randomly generated secret, for example the output of `python -c "import secrets; '
             'print(secrets.token_urlsafe(32))"`.'
         )
         raise ValueError(message)
