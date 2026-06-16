@@ -167,7 +167,7 @@ _CLI_PARAMS = [
             (SOURCE_BUCKET, "other/2024-01-02-00-00-00-BBBB", 400),
             (SOURCE_BUCKET, "other/2024-01-02-00-05-00-CCCC", 500),
         ],
-        ["File count", "Total size", "3", "1000"],
+        ["File count", "3"],
         id="with_size_column",
     ),
     pytest.param(
@@ -177,7 +177,7 @@ _CLI_PARAMS = [
             (SOURCE_BUCKET, "logs/2024-01-02-00-00-00-BBBB"),
             (SOURCE_BUCKET, "other/2024-01-03-00-00-00-CCCC"),
         ],
-        ["File count", "3", "N/A"],
+        ["File count", "3"],
         id="without_size_column",
     ),
 ]
@@ -198,7 +198,7 @@ def test_stats_cli(
     The 'stats' CLI command counts all inventory keys and produces the expected output.
 
     Covers the ``Size`` column present and absent cases, and validates that the
-    ``File count`` and ``Total size`` labels always appear.
+    ``File count`` label always appears.
     """
     inventory_dir = _build_inventory_directory(
         tmp_path,

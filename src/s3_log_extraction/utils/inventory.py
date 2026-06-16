@@ -129,31 +129,24 @@ def get_ip_stats(
         use_encryption=use_encryption,
     )
 
-    counts: dict[str, int] = {
-        "determined": 0,
-        "missing": 0,
-        "unknown": 0,
-        "bogon": 0,
-        "vpn": 0,
-        "cloud_service": 0,
-        "github": 0,
-    }
+    def _categorize(region: str | None) -> str:
+        match region:
+            case None:
+                return "missing"
+            case "unknown" | "undetermined":
+                return "unknown"
+            case "bogon":
+                return "bogon"
+            case _ if region.startswith("VPN"):
+                return "vpn"
+            case _ if region.startswith(("AWS", "GCP")):
+                return "cloud_service"
+            case _ if region.startswith("GitHub"):
+                return "github"
+            case _:
+                return "determined"
 
-    for region in ip_to_region.values():
-        if region is None:
-            counts["missing"] += 1
-        elif region in ("unknown", "undetermined"):
-            counts["unknown"] += 1
-        elif region == "bogon":
-            counts["bogon"] += 1
-        elif region.startswith("VPN"):
-            counts["vpn"] += 1
-        elif region.startswith(("AWS", "GCP")):
-            counts["cloud_service"] += 1
-        elif region.startswith("GitHub"):
-            counts["github"] += 1
-        else:
-            counts["determined"] += 1
+    counts = collections.Counter(_categorize(region) for region in ip_to_region.values())
 
     total = len(ip_to_region)
 
