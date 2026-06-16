@@ -20,7 +20,7 @@ from ..summarize import (
     generate_summaries,
 )
 from ..testing import generate_benchmark
-from ..utils import get_extraction_completion, get_log_bucket_stats
+from ..utils import get_extraction_completion, get_ip_stats, get_log_bucket_stats
 from ..validate import (
     DownloadsLogicPreValidator,
     ExtractionHeuristicPreValidator,
@@ -515,7 +515,7 @@ def _validate_cli(
             validator.validate_directory(directory=directory)
 
 
-# s3logextraction stats --inventory <path>
+# s3logextraction stats --inventory <path> [--cache <path>]
 @s3logextraction_cli.command(name="stats")
 @rich_click.option(
     "--inventory",
@@ -530,12 +530,26 @@ def _validate_cli(
     required=True,
     type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
 )
-def _stats_cli(inventory_directory: str) -> None:
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Optional cache directory containing IP-to-region lookup records. "
+        "If omitted, uses the configured default cache directory."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+def _stats_cli(inventory_directory: str, cache_directory: str | None = None) -> None:
     """
-    Report the number of log files and total size recorded in the inventory.
+    Report log-file inventory stats and IP address classification stats.
 
     Reads a local pre-downloaded AWS S3 Inventory directory and prints the
     file count and total size in bytes for all objects in the inventory.
+    Also loads the IP-to-region cache and summarises how many IP addresses
+    fall into each classification category (determined, missing, unknown,
+    bogon, VPN, cloud service, GitHub).
     """
     stats = get_log_bucket_stats(
         inventory_directory=pathlib.Path(inventory_directory),
@@ -545,6 +559,25 @@ def _stats_cli(inventory_directory: str) -> None:
         rich_click.echo(f"Total size (B)  : {stats['total_size_bytes']}")
     else:
         rich_click.echo("Total size (B)  : N/A (Size column not present in inventory)")
+
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    ip_stats = get_ip_stats(cache_directory=cache_path)
+
+    rich_click.echo("")
+    rich_click.echo(f"IPs in cache    : {ip_stats['total']}")
+
+    categories = [
+        ("determined", "Determined"),
+        ("missing", "Missing"),
+        ("unknown", "Unknown"),
+        ("bogon", "Bogon"),
+        ("vpn", "VPN"),
+        ("cloud_service", "Cloud service"),
+        ("github", "GitHub"),
+    ]
+    for key, label in categories:
+        entry = ip_stats[key]  # type: ignore[literal-required]
+        rich_click.echo(f"  {label:<14}: {entry['count']:>7}  ({entry['percent']:6.2f}%)")
 
 
 # s3logextraction completion --inventory <path> [--cache <path>]
