@@ -553,7 +553,7 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
     Report log-file inventory stats and IP address classification stats.
 
     Reads a local pre-downloaded AWS S3 Inventory directory and prints the
-    file count and total size in bytes for all objects in the inventory.
+    file count for all objects in the inventory.
     Also loads the IP-to-region cache and summarises how many IP addresses
     fall into each classification category (determined, missing, unknown,
     bogon, VPN, cloud service, GitHub).
@@ -562,10 +562,6 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
         inventory_directory=pathlib.Path(inventory_directory),
     )
     rich_click.echo(f"File count      : {stats['file_count']}")
-    if stats["total_size_bytes"] is not None:
-        rich_click.echo(f"Total size (B)  : {stats['total_size_bytes']}")
-    else:
-        rich_click.echo("Total size (B)  : N/A (Size column not present in inventory)")
 
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     ip_stats = get_ip_stats(cache_directory=cache_path, use_encryption=use_encryption)
