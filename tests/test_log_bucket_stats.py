@@ -442,8 +442,8 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
         "11.11.11.11",
         "12.12.12.12",  # extracted but not yet classified
     ]
-    _write_plaintext_ips_txt(tmp_path, "dataset/asset1", all_ips[:6])
-    _write_plaintext_ips_txt(tmp_path, "dataset/asset2", all_ips[6:])
+    _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset1", all_ips[:6])
+    _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset2", all_ips[6:])
 
     ip_cache = {
         "1.1.1.1": "US/California",  # determined

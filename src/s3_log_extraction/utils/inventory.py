@@ -140,10 +140,13 @@ def get_ip_stats(
 
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
 
-    # Count unique IPs across all ips.txt files in the extraction cache
+    # Count unique IPs across all ips.txt files in the extraction subdirectory,
+    # matching the scope used by update_ip_to_region_codes.
+    extraction_dir = cache_path / "extraction"
     extracted_ips: set[str] = set()
-    for ips_file in cache_path.rglob("ips.txt"):
-        extracted_ips.update(_read_ips_from_file(file_path=ips_file, use_encryption=use_encryption))
+    if extraction_dir.exists():
+        for ips_file in extraction_dir.rglob("ips.txt"):
+            extracted_ips.update(_read_ips_from_file(file_path=ips_file, use_encryption=use_encryption))
     extracted_ip_count = len(extracted_ips)
 
     # Load ip_to_region classification cache
