@@ -579,6 +579,7 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
         ("Determined", ip_stats["determined"]),
         ("Missing", ip_stats["missing"]),
         ("Unknown", ip_stats["unknown"]),
+        ("Undetermined", ip_stats["undetermined"]),
         ("Bogon", ip_stats["bogon"]),
         ("VPN", ip_stats["vpn"]),
         ("Cloud service", ip_stats["cloud_service"]),

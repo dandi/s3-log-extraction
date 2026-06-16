@@ -70,8 +70,9 @@ class IpStats(typing.TypedDict):
     missing : IpCategoryCount
         IPs in the cache with no region resolved (stored as ``None``).
     unknown : IpCategoryCount
-        IPs that produced an error or quota-exceeded result (``"unknown"`` or
-        ``"undetermined"``).
+        IPs where the lookup returned an unexpected error (``"unknown"``).
+    undetermined : IpCategoryCount
+        IPs where the lookup could not complete due to API quota (``"undetermined"``).
     bogon : IpCategoryCount
         IPs flagged as bogon (private / reserved address space).
     vpn : IpCategoryCount
@@ -86,6 +87,7 @@ class IpStats(typing.TypedDict):
     determined: IpCategoryCount
     missing: IpCategoryCount
     unknown: IpCategoryCount
+    undetermined: IpCategoryCount
     bogon: IpCategoryCount
     vpn: IpCategoryCount
     cloud_service: IpCategoryCount
@@ -103,7 +105,8 @@ def get_ip_stats(
 
     * **determined** – a real geographic region string (e.g. ``"US/California"``).
     * **missing** – the cache entry is ``None`` (no information could be resolved).
-    * **unknown** – the lookup returned ``"unknown"`` or ``"undetermined"``.
+    * **unknown** – the lookup returned an unexpected error (``"unknown"``).
+    * **undetermined** – the lookup hit API quota limits (``"undetermined"``).
     * **bogon** – the IP is in private / reserved address space (``"bogon"``).
     * **vpn** – the IP matches a known VPN / datacenter CIDR (starts with ``"VPN"``).
     * **cloud_service** – the IP belongs to an AWS or GCP CIDR range.
@@ -133,8 +136,10 @@ def get_ip_stats(
         match region:
             case None:
                 return "missing"
-            case "unknown" | "undetermined":
+            case "unknown":
                 return "unknown"
+            case "undetermined":
+                return "undetermined"
             case "bogon":
                 return "bogon"
             case _ if region.startswith("VPN"):
@@ -158,6 +163,7 @@ def get_ip_stats(
         determined=IpCategoryCount(count=counts["determined"], percent=_pct(counts["determined"])),
         missing=IpCategoryCount(count=counts["missing"], percent=_pct(counts["missing"])),
         unknown=IpCategoryCount(count=counts["unknown"], percent=_pct(counts["unknown"])),
+        undetermined=IpCategoryCount(count=counts["undetermined"], percent=_pct(counts["undetermined"])),
         bogon=IpCategoryCount(count=counts["bogon"], percent=_pct(counts["bogon"])),
         vpn=IpCategoryCount(count=counts["vpn"], percent=_pct(counts["vpn"])),
         cloud_service=IpCategoryCount(count=counts["cloud_service"], percent=_pct(counts["cloud_service"])),
