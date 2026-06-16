@@ -35,7 +35,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push latest-minimal
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           push: true
           tags: ghcr.io/dandi/s3-log-extraction:latest-minimal,ghcr.io/dandi/s3-log-extraction:${{ steps.parsed_version.outputs.version_tag }}-minimal
@@ -45,7 +45,7 @@ jobs:
           provenance: false
 
       - name: Build and push latest
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           push: true
           tags: ghcr.io/dandi/s3-log-extraction:latest,ghcr.io/dandi/s3-log-extraction:${{ steps.parsed_version.outputs.version_tag }}
