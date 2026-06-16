@@ -188,13 +188,3 @@ def write_text_to_file(*, file_path: pathlib.Path, text: str, use_encryption: bo
         file_path.write_bytes(encrypt_bytes(text.encode(encoding="utf-8")))
     else:
         file_path.write_text(text)
-
-
-__all__ = [
-    "decrypt_bytes",
-    "encrypt_bytes",
-    "get_key",
-    "read_text_from_file",
-    "validate_password_strength",
-    "write_text_to_file",
-]
