@@ -550,20 +550,26 @@ def _validate_cli(
 )
 def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use_encryption: bool = True) -> None:
     """
-    Report log-file inventory stats and IP address classification stats.
+    Report log-file inventory stats, extraction completion, and IP address classification stats.
 
     Reads a local pre-downloaded AWS S3 Inventory directory and prints the
-    file count for all objects in the inventory.
-    Also loads the IP-to-region cache and summarises how many IP addresses
-    fall into each classification category (determined, missing, unknown,
-    bogon, VPN, cloud service, GitHub).
+    file count for all objects in the inventory, the extraction completion
+    percentage, and a breakdown of IP address classification categories
+    (determined, missing, unknown, bogon, VPN, cloud service, GitHub).
     """
-    stats = get_log_bucket_stats(
-        inventory_directory=pathlib.Path(inventory_directory),
-    )
+    inventory_path = pathlib.Path(inventory_directory)
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+
+    stats = get_log_bucket_stats(inventory_directory=inventory_path)
     rich_click.echo(f"File count      : {stats['file_count']}")
 
-    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    completion = get_extraction_completion(
+        inventory_directory=inventory_path,
+        cache_directory=cache_path,
+    )
+    rich_click.echo(f"Processed files : {completion['processed_file_count']}")
+    rich_click.echo(f"Percent complete: {completion['percent_complete']:.2f}%")
+
     ip_stats = get_ip_stats(cache_directory=cache_path, use_encryption=use_encryption)
 
     rich_click.echo("")
