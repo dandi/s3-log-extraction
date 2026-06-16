@@ -5,7 +5,7 @@
 ### 🚀 Enhancement
 
 - Strengthened encryption key derivation. The `S3_LOG_EXTRACTION_PASSWORD` value now passes through PBKDF2-HMAC-SHA256 instead of a single SHA-256 pass, which resists brute-force attacks. Weak passwords are also rejected before any encryption runs. A public `validate_password_strength` helper was added. ([#283](https://github.com/dandi/s3-log-extraction/pull/283))
-- Backfilled a missing changelog entry. The `s3logextraction stats` CLI command and the `get_log_bucket_stats` API helper for S3 inventory summarization were added earlier but never recorded here. ([#224](https://github.com/dandi/s3-log-extraction/pull/224))
+- Added the `s3logextraction stats` CLI command and the `get_log_bucket_stats` API helper for summarizing S3 inventory. ([#224](https://github.com/dandi/s3-log-extraction/pull/224))
 
 ### 🐛 Bug Fix
 
