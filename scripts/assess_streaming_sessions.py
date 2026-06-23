@@ -35,7 +35,7 @@ TIMESTAMP_FORMAT = "%y%m%d%H%M%S"  # YYMMDDHHmmss
 
 
 def _parse_timestamp(ts_str: str) -> pd.Timestamp:
-    return pd.Timestamp.strptime(ts_str.strip(), TIMESTAMP_FORMAT)
+    return pd.to_datetime(ts_str.strip(), format=TIMESTAMP_FORMAT)
 
 
 def _read_lines(path: pathlib.Path) -> list[str]:
