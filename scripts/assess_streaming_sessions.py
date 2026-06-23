@@ -117,21 +117,23 @@ def load_streaming_requests(
 def compute_inter_request_intervals(df: pd.DataFrame) -> np.ndarray:
     """Return array of inter-request intervals in seconds, computed per IP."""
     intervals = []
-    for _ip, group in df.groupby("ip"):
+    groups = list(df.groupby("ip"))
+    for _ip, group in tqdm.tqdm(groups, desc="Computing intervals", unit="IP"):
         times = group["timestamp"].sort_values()
         deltas = times.diff().dropna().dt.total_seconds()
         intervals.extend(deltas[deltas > 0].tolist())
     return np.array(intervals)
 
 
-def compute_gap_beyond_bin(df: pd.DataFrame, bin_seconds: int) -> np.ndarray:
+def compute_gap_beyond_bin(df: pd.DataFrame, bin_seconds: int, label: str = "") -> np.ndarray:
     """
     For each IP, find requests that would be the *last* in a time bin,
     then measure how long until the *next* request from that IP.
     Returns array of those gap durations in seconds (NaN = no next request).
     """
     gaps = []
-    for _ip, group in df.groupby("ip"):
+    groups = list(df.groupby("ip"))
+    for _ip, group in tqdm.tqdm(groups, desc=f"Gap-beyond-bin ({label})", unit="IP"):
         times = group["timestamp"].sort_values().reset_index(drop=True)
         ts_sec = times.astype(np.int64) // 10**9  # epoch seconds
 
@@ -191,7 +193,7 @@ def plot_assessment(
 
     # --- Columns 1..N: gap-beyond-bin plots ---
     for col_idx, (label, bin_sec) in enumerate(bin_configs):
-        gaps = compute_gap_beyond_bin(df, bin_sec)
+        gaps = compute_gap_beyond_bin(df, bin_sec, label=label)
         gaps = gaps[np.isfinite(gaps) & (gaps > 0)]
 
         # Row 0: histogram
