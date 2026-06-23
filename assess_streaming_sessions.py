@@ -23,7 +23,6 @@ S3_LOG_EXTRACTION_PASS environment variable (same as the main library).
 """
 
 import argparse
-import os
 import pathlib
 import sys
 
@@ -31,7 +30,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tqdm
-
 
 TIMESTAMP_FORMAT = "%y%m%d%H%M%S"  # YYMMDDHHmmss
 
@@ -50,6 +48,7 @@ def _read_ips(path: pathlib.Path, use_encryption: bool) -> list[str]:
     # Reuse the library's decryption helper
     sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
     from s3_log_extraction.utils.encryption import read_text_from_file
+
     text = read_text_from_file(file_path=path, use_encryption=True)
     return [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -125,9 +124,7 @@ def compute_inter_request_intervals(df: pd.DataFrame) -> np.ndarray:
     return np.array(intervals)
 
 
-def compute_gap_beyond_bin(
-    df: pd.DataFrame, bin_seconds: int
-) -> np.ndarray:
+def compute_gap_beyond_bin(df: pd.DataFrame, bin_seconds: int) -> np.ndarray:
     """
     For each IP, find requests that would be the *last* in a time bin,
     then measure how long until the *next* request from that IP.
@@ -231,14 +228,19 @@ def plot_assessment(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cache-dir", required=True, type=pathlib.Path,
-                        help="Path to the root extraction cache directory")
-    parser.add_argument("--dataset", default=None,
-                        help="Optional dataset name/ID substring to filter (e.g. 'DANDI:000123')")
-    parser.add_argument("--no-encryption", action="store_true",
-                        help="Treat ips.txt files as plaintext (no decryption)")
-    parser.add_argument("--out", default="session_assessment.png", type=pathlib.Path,
-                        help="Output PNG path (default: session_assessment.png)")
+    parser.add_argument(
+        "--cache-dir", required=True, type=pathlib.Path, help="Path to the root extraction cache directory"
+    )
+    parser.add_argument(
+        "--dataset", default=None, help="Optional dataset name/ID substring to filter (e.g. 'DANDI:000123')"
+    )
+    parser.add_argument("--no-encryption", action="store_true", help="Treat ips.txt files as plaintext (no decryption)")
+    parser.add_argument(
+        "--out",
+        default="session_assessment.png",
+        type=pathlib.Path,
+        help="Output PNG path (default: session_assessment.png)",
+    )
     args = parser.parse_args()
 
     use_encryption = not args.no_encryption
