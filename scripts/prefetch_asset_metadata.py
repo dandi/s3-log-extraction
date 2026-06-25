@@ -15,7 +15,7 @@ Output is a CSV saved to --out (default: asset_metadata.csv).
 
 Requirements
 ------------
-    pip install dandi h5py fsspec s3fs zarr boto3 tqdm pandas
+    pip install dandi h5py remfile zarr boto3 tqdm pandas
 
 Usage
 -----
@@ -45,22 +45,22 @@ def _path_depth(path: str) -> int:
     return path.count("/")
 
 
-def _inspect_hdf5(s3_url: str) -> dict:
-    """Open an NWB/HDF5 file via range-request streaming and walk its internals."""
-    import fsspec
+def _inspect_hdf5(https_url: str) -> dict:
+    """Open an NWB/HDF5 file via remfile (HTTP range requests, no local cache) and walk its internals."""
     import h5py
+    import remfile
 
     paths = []
     try:
-        with fsspec.open(s3_url, "rb", anon=True) as f:
-            with h5py.File(f, "r") as hf:
+        rf = remfile.File(https_url)
+        with h5py.File(rf, "r") as hf:
 
-                def _visitor(name, _obj):
-                    paths.append(name)
+            def _visitor(name, _obj):
+                paths.append(name)
 
-                hf.visititems(_visitor)
+            hf.visititems(_visitor)
     except Exception as exc:
-        warnings.warn(f"HDF5 inspect failed for {s3_url}: {exc}")
+        warnings.warn(f"HDF5 inspect failed for {https_url}: {exc}")
         return {"n_objects": None, "min_path_depth": None, "max_path_depth": None, "avg_path_depth": None}
 
     if not paths:
@@ -146,10 +146,8 @@ def _process_asset(asset, dandiset_id: str, s3_bucket: str) -> dict | None:
 
     try:
         if asset_type == "hdf5":
-            # Build an anonymous S3 URL from the asset's download URL or path
-            s3_key = f"{dandiset_id.replace('DANDI:', 'dandisets/')}/{asset.path}"
-            s3_url = f"s3://{s3_bucket}/{s3_key}"
-            row.update(_inspect_hdf5(s3_url))
+            https_url = asset.download_url
+            row.update(_inspect_hdf5(https_url))
 
         elif asset_type == "zarr":
             s3_key = f"{dandiset_id.replace('DANDI:', 'dandisets/')}/{asset.path}"

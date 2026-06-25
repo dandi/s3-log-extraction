@@ -145,7 +145,6 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     df_obj = df[has_objects].copy()
     df_obj["log_n_objects"] = np.log10(df_obj["n_objects"])
 
-    asset_types = df["asset_type"].unique()
     type_colors = {"hdf5": "steelblue", "zarr": "darkorange", "other": "gray"}
     type_vals = df["asset_type"].map(type_colors).fillna("gray")
 
@@ -374,9 +373,6 @@ def main() -> None:
     plot_complexity_vs_streaming(merged, out_path=args.out)
 
     # Print top contradictions
-    df_fit = merged.dropna(
-        subset=["log_size" if "log_size" in merged.columns else "size_bytes", "n_streaming_requests"]
-    )
     merged2 = merged.copy()
     merged2["log_size"] = np.log10(merged2["size_bytes"].clip(lower=1))
     merged2["log_requests"] = np.log10(merged2["n_streaming_requests"].clip(lower=1))
