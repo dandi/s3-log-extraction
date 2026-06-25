@@ -23,16 +23,16 @@ Usage
 import argparse
 import pathlib
 
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tqdm
 
-
 # ---------------------------------------------------------------------------
 # Load extraction cache streaming counts
 # ---------------------------------------------------------------------------
+
 
 def _read_lines(path: pathlib.Path) -> list[str]:
     return [line.strip() for line in path.read_text().splitlines() if line.strip()]
@@ -42,8 +42,10 @@ def _read_ips(path: pathlib.Path, use_encryption: bool) -> list[str]:
     if not use_encryption:
         return _read_lines(path)
     import sys
+
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
     from s3_log_extraction.utils.encryption import read_text_from_file
+
     text = read_text_from_file(file_path=path, use_encryption=True)
     return [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -94,13 +96,15 @@ def load_streaming_counts(
                 ips = ["?"] * len(downloads)
 
             streaming_ips = {ip for ip, is_s in zip(ips, streaming_mask) if is_s}
-            records.append({
-                "dandiset_id": dandiset_id,
-                "asset_path": rel_path,
-                "n_streaming_requests": n_streaming,
-                "n_unique_ips": len(streaming_ips),
-                "n_total_requests": len(downloads),
-            })
+            records.append(
+                {
+                    "dandiset_id": dandiset_id,
+                    "asset_path": rel_path,
+                    "n_streaming_requests": n_streaming,
+                    "n_unique_ips": len(streaming_ips),
+                    "n_total_requests": len(downloads),
+                }
+            )
 
     return pd.DataFrame(records)
 
@@ -108,6 +112,7 @@ def load_streaming_counts(
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
+
 
 def _scatter_with_marginals(ax_main, ax_top, ax_right, x, y, c, cmap, norm, label_x, label_y, title):
     """Scatter on ax_main with 1D histograms on marginal axes."""
@@ -175,9 +180,13 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     ax.legend(fontsize=7, loc="upper left")
     if ax_t:
         ax_t.hist(df["log_size"], bins=40, color="steelblue", alpha=0.7, edgecolor="none")
-        ax_t.set_xlim(ax.get_xlim()); ax_t.axis("off")
-        ax_r.hist(df["log_requests"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none")
-        ax_r.set_ylim(ax.get_ylim()); ax_r.axis("off")
+        ax_t.set_xlim(ax.get_xlim())
+        ax_t.axis("off")
+        ax_r.hist(
+            df["log_requests"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none"
+        )
+        ax_r.set_ylim(ax.get_ylim())
+        ax_r.axis("off")
 
     # ---- Panel (0,1): size vs unique IPs ----
     ax, ax_t, ax_r = _make_panel(gs_outer[0, 1])
@@ -189,9 +198,13 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     _xtick(ax, [1e3, 1e6, 1e9, 1e12], ["1 KB", "1 MB", "1 GB", "1 TB"])
     if ax_t:
         ax_t.hist(df["log_size"], bins=40, color="steelblue", alpha=0.7, edgecolor="none")
-        ax_t.set_xlim(ax.get_xlim()); ax_t.axis("off")
-        ax_r.hist(df["log_unique_ips"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none")
-        ax_r.set_ylim(ax.get_ylim()); ax_r.axis("off")
+        ax_t.set_xlim(ax.get_xlim())
+        ax_t.axis("off")
+        ax_r.hist(
+            df["log_unique_ips"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none"
+        )
+        ax_r.set_ylim(ax.get_ylim())
+        ax_r.axis("off")
 
     # ---- Panel (0,2): n_objects vs streaming requests ----
     ax, ax_t, ax_r = _make_panel(gs_outer[0, 2])
@@ -204,17 +217,29 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     ax.grid(True, alpha=0.2)
     if ax_t and len(df_obj):
         ax_t.hist(df_obj["log_n_objects"], bins=40, color="steelblue", alpha=0.7, edgecolor="none")
-        ax_t.set_xlim(ax.get_xlim()); ax_t.axis("off")
-        ax_r.hist(df_obj["log_requests"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none")
-        ax_r.set_ylim(ax.get_ylim()); ax_r.axis("off")
+        ax_t.set_xlim(ax.get_xlim())
+        ax_t.axis("off")
+        ax_r.hist(
+            df_obj["log_requests"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none"
+        )
+        ax_r.set_ylim(ax.get_ylim())
+        ax_r.axis("off")
 
     # ---- Panel (1,0): avg path depth vs requests ----
     ax, ax_t, ax_r = _make_panel(gs_outer[1, 0])
     df_depth = df[df["avg_path_depth"].notna()]
     if len(df_depth):
         norm = mcolors.LogNorm(vmin=max(1, df_depth["size_bytes"].min()), vmax=df_depth["size_bytes"].max())
-        sc = ax.scatter(df_depth["avg_path_depth"], df_depth["log_requests"],
-                        c=df_depth["size_bytes"], cmap="viridis", norm=norm, alpha=0.5, s=16, linewidths=0)
+        sc = ax.scatter(
+            df_depth["avg_path_depth"],
+            df_depth["log_requests"],
+            c=df_depth["size_bytes"],
+            cmap="viridis",
+            norm=norm,
+            alpha=0.5,
+            s=16,
+            linewidths=0,
+        )
         plt.colorbar(sc, ax=ax, label="Size (bytes)", pad=0.01)
     ax.set_xlabel("Avg internal path depth (number of /)")
     ax.set_ylabel("Streaming requests (log₁₀)")
@@ -314,14 +339,16 @@ def _ytick(ax, vals):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--metadata", required=True, type=pathlib.Path,
-                        help="CSV produced by prefetch_asset_metadata.py")
-    parser.add_argument("--cache-dir", required=True, type=pathlib.Path,
-                        help="Root extraction cache directory")
-    parser.add_argument("--dataset", default=None,
-                        help="Optional dandiset ID substring to filter (e.g. 'DANDI:000123')")
+    parser.add_argument(
+        "--metadata", required=True, type=pathlib.Path, help="CSV produced by prefetch_asset_metadata.py"
+    )
+    parser.add_argument("--cache-dir", required=True, type=pathlib.Path, help="Root extraction cache directory")
+    parser.add_argument(
+        "--dataset", default=None, help="Optional dandiset ID substring to filter (e.g. 'DANDI:000123')"
+    )
     parser.add_argument("--no-encryption", action="store_true")
     parser.add_argument("--out", default="complexity_assessment.png", type=pathlib.Path)
     args = parser.parse_args()
@@ -347,7 +374,9 @@ def main() -> None:
     plot_complexity_vs_streaming(merged, out_path=args.out)
 
     # Print top contradictions
-    df_fit = merged.dropna(subset=["log_size" if "log_size" in merged.columns else "size_bytes", "n_streaming_requests"])
+    df_fit = merged.dropna(
+        subset=["log_size" if "log_size" in merged.columns else "size_bytes", "n_streaming_requests"]
+    )
     merged2 = merged.copy()
     merged2["log_size"] = np.log10(merged2["size_bytes"].clip(lower=1))
     merged2["log_requests"] = np.log10(merged2["n_streaming_requests"].clip(lower=1))
@@ -355,9 +384,17 @@ def main() -> None:
         coeffs = np.polyfit(merged2["log_size"], merged2["log_requests"], 1)
         merged2["residual"] = merged2["log_requests"] - np.polyval(coeffs, merged2["log_size"])
         print("\n--- Top 10 over-streamed assets (small but heavily accessed) ---")
-        print(merged2.nlargest(10, "residual")[["dandiset_id", "asset_path", "size_bytes", "n_streaming_requests", "residual"]].to_string(index=False))
+        print(
+            merged2.nlargest(10, "residual")[
+                ["dandiset_id", "asset_path", "size_bytes", "n_streaming_requests", "residual"]
+            ].to_string(index=False)
+        )
         print("\n--- Top 10 under-streamed assets (large but rarely accessed) ---")
-        print(merged2.nsmallest(10, "residual")[["dandiset_id", "asset_path", "size_bytes", "n_streaming_requests", "residual"]].to_string(index=False))
+        print(
+            merged2.nsmallest(10, "residual")[
+                ["dandiset_id", "asset_path", "size_bytes", "n_streaming_requests", "residual"]
+            ].to_string(index=False)
+        )
 
 
 if __name__ == "__main__":
