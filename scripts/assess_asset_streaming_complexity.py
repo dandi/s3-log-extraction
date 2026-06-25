@@ -139,7 +139,6 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     df = df[df["size_bytes"] > 0]
     df["log_size"] = np.log10(df["size_bytes"])
     df["log_requests"] = np.log10(df["n_streaming_requests"].clip(lower=1))
-    df["log_unique_ips"] = np.log10(df["n_unique_ips"].clip(lower=1))
 
     has_objects = df["n_objects"].notna() & (df["n_objects"] > 0)
     df_obj = df[has_objects].copy()
@@ -149,9 +148,9 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     type_vals = df["asset_type"].map(type_colors).fillna("gray")
 
     # --- Figure layout: 3 rows × 3 cols ---
-    # Row 0: size vs requests | size vs unique IPs | n_objects vs requests
-    # Row 1: avg_path_depth vs requests | max_path_depth vs n_objects | requests vs unique IPs
-    # Row 2: residual plots (log requests - expected from size) coloured by path depth / type
+    # Row 0: size vs requests | n_objects vs requests | requests-per-IP vs size
+    # Row 1: avg_path_depth vs requests | max_path_depth vs n_objects | (empty)
+    # Row 2: residuals vs size | residuals vs path depth | residuals vs n_objects
 
     fig = plt.figure(figsize=(18, 16))
     fig.suptitle("Asset Structural Complexity vs. Streaming Request Patterns", fontsize=13, fontweight="bold")
@@ -166,7 +165,7 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
 
     # ---- Panel (0,0): size vs streaming requests ----
     ax, ax_t, ax_r = _make_panel(gs_outer[0, 0])
-    sc = ax.scatter(df["log_size"], df["log_requests"], c=type_vals, alpha=0.45, s=16, linewidths=0)
+    ax.scatter(df["log_size"], df["log_requests"], c=type_vals, alpha=0.45, s=16, linewidths=0)
     ax.set_xlabel("Asset size (bytes, log₁₀)")
     ax.set_ylabel("Streaming requests (log₁₀)")
     ax.set_title("Size vs. streaming requests\n(colour = asset type)", fontsize=9)
@@ -187,26 +186,8 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
         ax_r.set_ylim(ax.get_ylim())
         ax_r.axis("off")
 
-    # ---- Panel (0,1): size vs unique IPs ----
+    # ---- Panel (0,1): n_objects vs streaming requests ----
     ax, ax_t, ax_r = _make_panel(gs_outer[0, 1])
-    ax.scatter(df["log_size"], df["log_unique_ips"], c=type_vals, alpha=0.45, s=16, linewidths=0)
-    ax.set_xlabel("Asset size (bytes, log₁₀)")
-    ax.set_ylabel("Unique IPs streaming (log₁₀)")
-    ax.set_title("Size vs. unique IPs streaming", fontsize=9)
-    ax.grid(True, alpha=0.2)
-    _xtick(ax, [1e3, 1e6, 1e9, 1e12], ["1 KB", "1 MB", "1 GB", "1 TB"])
-    if ax_t:
-        ax_t.hist(df["log_size"], bins=40, color="steelblue", alpha=0.7, edgecolor="none")
-        ax_t.set_xlim(ax.get_xlim())
-        ax_t.axis("off")
-        ax_r.hist(
-            df["log_unique_ips"], bins=40, orientation="horizontal", color="darkorange", alpha=0.7, edgecolor="none"
-        )
-        ax_r.set_ylim(ax.get_ylim())
-        ax_r.axis("off")
-
-    # ---- Panel (0,2): n_objects vs streaming requests ----
-    ax, ax_t, ax_r = _make_panel(gs_outer[0, 2])
     if len(df_obj):
         c_obj = df_obj["asset_type"].map(type_colors).fillna("gray")
         ax.scatter(df_obj["log_n_objects"], df_obj["log_requests"], c=c_obj, alpha=0.45, s=16, linewidths=0)
@@ -254,19 +235,6 @@ def plot_complexity_vs_streaming(merged: pd.DataFrame, out_path: pathlib.Path) -
     ax.set_ylabel("Internal objects (log₁₀)")
     ax.set_title("Path depth vs. object count\n(structural shape of assets)", fontsize=9)
     ax.grid(True, alpha=0.2)
-
-    # ---- Panel (1,2): requests per unique IP vs size ----
-    ax, ax_t, ax_r = _make_panel(gs_outer[1, 2])
-    df2 = df[df["n_unique_ips"] > 0].copy()
-    df2["requests_per_ip"] = df2["n_streaming_requests"] / df2["n_unique_ips"]
-    df2["log_rpi"] = np.log10(df2["requests_per_ip"].clip(lower=0.01))
-    c2 = df2["asset_type"].map(type_colors).fillna("gray")
-    ax.scatter(df2["log_size"], df2["log_rpi"], c=c2, alpha=0.45, s=16, linewidths=0)
-    ax.set_xlabel("Asset size (bytes, log₁₀)")
-    ax.set_ylabel("Streaming requests / unique IP (log₁₀)")
-    ax.set_title("Requests-per-viewer vs. size\n(high = repeated access / scrubbing)", fontsize=9)
-    ax.grid(True, alpha=0.2)
-    _xtick(ax, [1e3, 1e6, 1e9, 1e12], ["1 KB", "1 MB", "1 GB", "1 TB"])
 
     # ---- Row 2: residual (actual - size-predicted requests) coloured by depth / type ----
     # Fit log_requests ~ log_size (OLS) then plot residuals
