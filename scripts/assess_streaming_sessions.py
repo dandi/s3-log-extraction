@@ -156,6 +156,75 @@ def compute_gap_beyond_bin(df: pd.DataFrame, bin_seconds: int, label: str = "") 
     return np.array(gaps)
 
 
+def _fmt_seconds(s: float) -> str:
+    """Human-readable duration."""
+    if s < 90:
+        return f"{s:.0f}s"
+    if s < 5400:
+        return f"{s / 60:.1f}m"
+    if s < 129600:
+        return f"{s / 3600:.1f}h"
+    return f"{s / 86400:.2f}d"
+
+
+def find_emptiest_band(intervals: np.ndarray, lo_seconds: float = 60.0, hi_seconds: float = 7 * 86400.0) -> dict | None:
+    """
+    Find the widest contiguous band of lag values containing ZERO observed
+    inter-request intervals, restricted to ``[lo_seconds, hi_seconds]``.
+
+    A truly empty band is the deterministic "moat": placing the session timeout
+    anywhere inside it means no observed gap sits near the boundary, so no request
+    is ambiguously classified. Returns the widest such band measured two ways —
+    by absolute width and by log10 ratio (more meaningful on a log time axis) —
+    each with a suggested timeout ``T`` at the geometric midpoint.
+
+    Returns ``None`` if fewer than two intervals fall in the region of interest.
+    """
+    region = np.sort(intervals[(intervals >= lo_seconds) & (intervals <= hi_seconds)])
+    if region.size < 2:
+        return None
+
+    lower = region[:-1]
+    upper = region[1:]
+    abs_width = upper - lower
+    log_ratio = np.log10(upper) - np.log10(lower)
+
+    def _band(i: int) -> dict:
+        a, b = float(region[i]), float(region[i + 1])
+        return {
+            "lower": a,
+            "upper": b,
+            "width_seconds": b - a,
+            "log10_ratio": float(np.log10(b) - np.log10(a)),
+            "geometric_mid": float(np.sqrt(a * b)),
+            "arithmetic_mid": 0.5 * (a + b),
+        }
+
+    return {
+        "widest_absolute": _band(int(np.argmax(abs_width))),
+        "widest_logratio": _band(int(np.argmax(log_ratio))),
+    }
+
+
+def guard_band_report(intervals: np.ndarray, candidate_seconds: float, rel_tolerance: float = 0.1) -> dict:
+    """
+    For a candidate session timeout ``T``, count observed intervals falling within
+    the multiplicative guard band ``[T / (1 + tol), T * (1 + tol)]`` — the
+    "ambiguity count". Zero means the cutoff is perfectly deterministic in this
+    snapshot; this same count is the metric to monitor on future data.
+    """
+    lo = candidate_seconds / (1 + rel_tolerance)
+    hi = candidate_seconds * (1 + rel_tolerance)
+    in_band = int(np.count_nonzero((intervals >= lo) & (intervals <= hi)))
+    return {
+        "candidate_seconds": candidate_seconds,
+        "guard_lo": lo,
+        "guard_hi": hi,
+        "ambiguity_count": in_band,
+        "ambiguity_fraction": in_band / intervals.size if intervals.size else 0.0,
+    }
+
+
 def plot_assessment(
     intervals: np.ndarray,
     bin_configs: list[tuple[str, int]],
@@ -275,6 +344,42 @@ def main() -> None:
     print(f"  Median interval: {np.median(intervals):.0f}s")
     print(f"  95th percentile: {np.percentile(intervals, 95):.0f}s")
     print(f"  99th percentile: {np.percentile(intervals, 99):.0f}s")
+
+    # --- Session-boundary determinism diagnostic ---
+    # (1) Auto-pick the widest zero-density "moat" between sessions.
+    print("\n--- Emptiest (zero-density) band in inter-request interval distribution ---")
+    bands = find_emptiest_band(intervals, lo_seconds=60.0, hi_seconds=7 * 86400.0)
+    if bands is None:
+        print("  Not enough intervals in the 60s–7d region of interest.")
+    else:
+        for key, title in [("widest_absolute", "widest by absolute width"), ("widest_logratio", "widest by log ratio")]:
+            b = bands[key]
+            print(
+                f"  [{title}] empty band {_fmt_seconds(b['lower'])} – {_fmt_seconds(b['upper'])} "
+                f"(width {_fmt_seconds(b['width_seconds'])}, {b['log10_ratio']:.2f} decades); "
+                f"suggested T = {_fmt_seconds(b['geometric_mid'])}"
+            )
+
+    # (2) Quantify the ambiguity at fixed candidate timeouts, including the 1-day choice.
+    print("\n--- Guard-band ambiguity at candidate timeouts (±10% multiplicative window) ---")
+    candidates = [
+        ("10 min", 600.0),
+        ("30 min", 1800.0),
+        ("1 hour", 3600.0),
+        ("2 hours", 7200.0),
+        ("1 day", 86400.0),
+    ]
+    if bands is not None:
+        t_auto = bands["widest_logratio"]["geometric_mid"]
+        candidates.append((f"auto-trough ({_fmt_seconds(t_auto)})", t_auto))
+    for label, secs in candidates:
+        r = guard_band_report(intervals, secs, rel_tolerance=0.1)
+        print(
+            f"  {label:>24}: {r['ambiguity_count']:>9,} intervals in "
+            f"[{_fmt_seconds(r['guard_lo'])}, {_fmt_seconds(r['guard_hi'])}] "
+            f"({100 * r['ambiguity_fraction']:.4f}% of all) "
+            f"{'← DETERMINISTIC (empty)' if r['ambiguity_count'] == 0 else ''}"
+        )
 
 
 if __name__ == "__main__":
