@@ -23,6 +23,7 @@ S3_LOG_EXTRACTION_PASS environment variable (same as the main library).
 """
 
 import argparse
+import fnmatch
 import pathlib
 import sys
 
@@ -57,11 +58,14 @@ def load_streaming_requests(
     cache_dir: pathlib.Path,
     dataset_filter: str | None,
     use_encryption: bool,
+    exclude_patterns: list[str] | None = None,
 ) -> pd.DataFrame:
     """Walk the extraction cache and collect all streaming (download=0) requests."""
     extraction_root = cache_dir / "extraction"
     if not extraction_root.exists():
         raise FileNotFoundError(f"No 'extraction' subdirectory found under {cache_dir}")
+
+    exclude_patterns = exclude_patterns or []
 
     # Gather all asset directories (leaf dirs containing timestamps.txt)
     asset_dirs = []
@@ -79,8 +83,15 @@ def load_streaming_requests(
 
     print(f"Found {len(asset_dirs)} asset directories")
 
+    n_excluded_assets = 0
     records = []
     for asset_dir in tqdm.tqdm(asset_dirs, desc="Loading assets"):
+        # Asset path relative to the extraction root, e.g. "ds000123/sub-01/.../file.nwb"
+        asset_path = str(asset_dir.relative_to(extraction_root))
+        if any(fnmatch.fnmatch(asset_path, pat) for pat in exclude_patterns):
+            n_excluded_assets += 1
+            continue
+
         timestamps_path = asset_dir / "timestamps.txt"
         downloads_path = asset_dir / "download.txt"
         ips_path = asset_dir / "ips.txt"
@@ -101,9 +112,12 @@ def load_streaming_requests(
             if dl_str == "0":  # streaming only
                 try:
                     ts = _parse_timestamp(ts_str)
-                    records.append({"timestamp": ts, "ip": ip})
+                    records.append({"timestamp": ts, "ip": ip, "asset_path": asset_path})
                 except ValueError:
                     pass
+
+    if n_excluded_assets:
+        print(f"Excluded {n_excluded_assets} asset(s) matching {exclude_patterns}")
 
     if not records:
         raise ValueError("No streaming requests found — check cache path and filters")
@@ -114,15 +128,63 @@ def load_streaming_requests(
     return df
 
 
-def compute_inter_request_intervals(df: pd.DataFrame) -> np.ndarray:
-    """Return array of inter-request intervals in seconds, computed per IP."""
-    intervals = []
+def compute_inter_request_intervals(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Return a tidy DataFrame of per-IP inter-request intervals.
+
+    Columns: ``ip``, ``interval`` (seconds), and — when the input carries an
+    ``asset_path`` column — ``asset_before`` / ``asset_after`` identifying the
+    assets of the two requests that bound each gap. The asset attribution lets
+    downstream code attribute "moat-filling" intervals to specific assets (e.g.
+    bot-hammered testing assets).
+    """
+    has_asset = "asset_path" in df.columns
+    seg_ip, seg_int, seg_before, seg_after = [], [], [], []
     groups = list(df.groupby("ip"))
-    for _ip, group in tqdm.tqdm(groups, desc="Computing intervals", unit="IP"):
-        times = group["timestamp"].sort_values()
-        deltas = times.diff().dropna().dt.total_seconds()
-        intervals.extend(deltas[deltas > 0].tolist())
-    return np.array(intervals)
+    for ip, group in tqdm.tqdm(groups, desc="Computing intervals", unit="IP"):
+        g = group.sort_values("timestamp")
+        times = g["timestamp"].to_numpy()
+        if times.size < 2:
+            continue
+        deltas = (np.diff(times) / np.timedelta64(1, "s")).astype(np.float64)
+        mask = deltas > 0
+        if not mask.any():
+            continue
+        seg_int.append(deltas[mask])
+        seg_ip.append(np.full(int(mask.sum()), ip, dtype=object))
+        if has_asset:
+            assets = g["asset_path"].to_numpy()
+            seg_before.append(assets[:-1][mask])
+            seg_after.append(assets[1:][mask])
+
+    if not seg_int:
+        return pd.DataFrame({"ip": [], "interval": []})
+
+    out = pd.DataFrame({"ip": np.concatenate(seg_ip), "interval": np.concatenate(seg_int)})
+    if has_asset:
+        out["asset_before"] = np.concatenate(seg_before)
+        out["asset_after"] = np.concatenate(seg_after)
+    return out
+
+
+def attribute_band_intervals(intervals_df: pd.DataFrame, lo_seconds: float, hi_seconds: float, top_n: int = 10) -> dict:
+    """
+    Attribute the intervals falling within ``[lo_seconds, hi_seconds]`` to assets and IPs.
+
+    These are the gaps that would land in a session "moat" and thus threaten
+    determinism. If they concentrate on a few assets (and are mostly same-asset,
+    the bot signature), those are the testing assets to exclude.
+    """
+    band = intervals_df[(intervals_df["interval"] >= lo_seconds) & (intervals_df["interval"] <= hi_seconds)]
+    result = {"n_in_band": int(len(band)), "top_assets": None, "top_ips": None, "same_asset_fraction": None}
+    if len(band) == 0 or "asset_after" not in band.columns:
+        return result
+
+    same_asset = (band["asset_before"] == band["asset_after"]).mean()
+    result["same_asset_fraction"] = float(same_asset)
+    result["top_assets"] = band["asset_after"].value_counts().head(top_n)
+    result["top_ips"] = band["ip"].value_counts().head(top_n)
+    return result
 
 
 def compute_gap_beyond_bin(df: pd.DataFrame, bin_seconds: int, label: str = "") -> np.ndarray:
@@ -307,6 +369,20 @@ def main() -> None:
     )
     parser.add_argument("--no-encryption", action="store_true", help="Treat ips.txt files as plaintext (no decryption)")
     parser.add_argument(
+        "--exclude-asset",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="Glob pattern (matched against the asset path relative to extraction/) to exclude, "
+        "e.g. '*test*' or 'ds000xxx/*'. Repeatable. Use to drop bot-hammered testing assets.",
+    )
+    parser.add_argument(
+        "--exclude-asset-file",
+        type=pathlib.Path,
+        default=None,
+        help="Optional text file with one exclusion glob per line (added to any --exclude-asset patterns).",
+    )
+    parser.add_argument(
         "--out",
         default="session_assessment.png",
         type=pathlib.Path,
@@ -316,14 +392,24 @@ def main() -> None:
 
     use_encryption = not args.no_encryption
 
+    exclude_patterns = list(args.exclude_asset)
+    if args.exclude_asset_file:
+        exclude_patterns += [
+            line.strip()
+            for line in args.exclude_asset_file.read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+
     df = load_streaming_requests(
         cache_dir=args.cache_dir,
         dataset_filter=args.dataset,
         use_encryption=use_encryption,
+        exclude_patterns=exclude_patterns,
     )
 
     print("Computing inter-request intervals...")
-    intervals = compute_inter_request_intervals(df)
+    intervals_df = compute_inter_request_intervals(df)
+    intervals = intervals_df["interval"].to_numpy()
     print(f"  {len(intervals):,} intervals computed")
 
     bin_configs = [
@@ -356,11 +442,13 @@ def main() -> None:
             b = bands[key]
             print(
                 f"  [{title}] empty band {_fmt_seconds(b['lower'])} – {_fmt_seconds(b['upper'])} "
-                f"(width {_fmt_seconds(b['width_seconds'])}, {b['log10_ratio']:.2f} decades); "
+                f"(width {_fmt_seconds(b['width_seconds'])}, {b['log10_ratio']:.2f} orders of magnitude); "
                 f"suggested T = {_fmt_seconds(b['geometric_mid'])}"
             )
 
     # (2) Quantify the ambiguity at fixed candidate timeouts, including the 1-day choice.
+    #     When a guard band is non-empty, attribute the offending intervals to assets/IPs:
+    #     if they pile up on a few same-asset (bot-like) testing assets, exclude those and re-run.
     print("\n--- Guard-band ambiguity at candidate timeouts (±10% multiplicative window) ---")
     candidates = [
         ("10 min", 600.0),
@@ -380,6 +468,15 @@ def main() -> None:
             f"({100 * r['ambiguity_fraction']:.4f}% of all) "
             f"{'← DETERMINISTIC (empty)' if r['ambiguity_count'] == 0 else ''}"
         )
+        if r["ambiguity_count"] > 0 and "asset_after" in intervals_df.columns:
+            attribution = attribute_band_intervals(intervals_df, r["guard_lo"], r["guard_hi"], top_n=5)
+            if attribution["same_asset_fraction"] is not None:
+                print(
+                    f"      {100 * attribution['same_asset_fraction']:.1f}% are same-asset gaps "
+                    f"(bot signature); top contributing assets:"
+                )
+                for asset, count in attribution["top_assets"].items():
+                    print(f"        {count:>7,}  {asset}")
 
 
 if __name__ == "__main__":
