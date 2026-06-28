@@ -229,42 +229,42 @@ def _fmt_seconds(s: float) -> str:
     return f"{s / 86400:.2f}d"
 
 
-def find_emptiest_band(intervals: np.ndarray, lo_seconds: float = 60.0, hi_seconds: float = 7 * 86400.0) -> dict | None:
+def find_min_density_band(
+    intervals: np.ndarray, lo_seconds: float = 60.0, hi_seconds: float = 2 * 86400.0, n_bins: int = 60
+) -> dict | None:
     """
-    Find the widest contiguous band of lag values containing ZERO observed
-    inter-request intervals, restricted to ``[lo_seconds, hi_seconds]``.
+    Find the minimum-density valley of the inter-request interval distribution,
+    using log-spaced bins over ``[lo_seconds, hi_seconds]``.
 
-    A truly empty band is the deterministic "moat": placing the session timeout
-    anywhere inside it means no observed gap sits near the boundary, so no request
-    is ambiguously classified. Returns the widest such band measured two ways —
-    by absolute width and by log10 ratio (more meaningful on a log time axis) —
-    each with a suggested timeout ``T`` at the geometric midpoint.
+    At realistic data volumes there is no literally empty band — gaps occur at
+    every lag — so the best session "moat" is the lowest-density valley rather
+    than a zero-count gap. Density is normalized per order of magnitude so the
+    comparison is fair across a log axis. Returns the single lowest-density bin
+    (edges, geometric-center ``geometric_mid`` as the suggested timeout ``T``,
+    its count and density) plus the full per-bin profile (``edges``, ``counts``,
+    ``density``) for inspection.
 
-    Returns ``None`` if fewer than two intervals fall in the region of interest.
+    Returns ``None`` if fewer than ``n_bins`` intervals fall in the region.
     """
-    region = np.sort(intervals[(intervals >= lo_seconds) & (intervals <= hi_seconds)])
-    if region.size < 2:
+    region = intervals[(intervals >= lo_seconds) & (intervals <= hi_seconds)]
+    if region.size < n_bins:
         return None
 
-    lower = region[:-1]
-    upper = region[1:]
-    abs_width = upper - lower
-    log_ratio = np.log10(upper) - np.log10(lower)
+    edges = np.logspace(np.log10(lo_seconds), np.log10(hi_seconds), n_bins + 1)
+    counts, _ = np.histogram(region, bins=edges)
+    log_widths = np.diff(np.log10(edges))  # width of each bin in orders of magnitude
+    density = counts / log_widths  # counts per order of magnitude (fair on a log axis)
 
-    def _band(i: int) -> dict:
-        a, b = float(region[i]), float(region[i + 1])
-        return {
-            "lower": a,
-            "upper": b,
-            "width_seconds": b - a,
-            "log10_ratio": float(np.log10(b) - np.log10(a)),
-            "geometric_mid": float(np.sqrt(a * b)),
-            "arithmetic_mid": 0.5 * (a + b),
-        }
-
+    i = int(np.argmin(density))
     return {
-        "widest_absolute": _band(int(np.argmax(abs_width))),
-        "widest_logratio": _band(int(np.argmax(log_ratio))),
+        "lower": float(edges[i]),
+        "upper": float(edges[i + 1]),
+        "geometric_mid": float(np.sqrt(edges[i] * edges[i + 1])),
+        "count": int(counts[i]),
+        "density_per_decade": float(density[i]),
+        "edges": edges,
+        "counts": counts,
+        "density": density,
     }
 
 
@@ -285,6 +285,22 @@ def guard_band_report(intervals: np.ndarray, candidate_seconds: float, rel_toler
         "ambiguity_count": in_band,
         "ambiguity_fraction": in_band / intervals.size if intervals.size else 0.0,
     }
+
+
+def sweep_guard_bands(
+    intervals: np.ndarray,
+    lo_seconds: float = 60.0,
+    hi_seconds: float = 7 * 86400.0,
+    n: int = 32,
+    rel_tolerance: float = 0.1,
+) -> list[dict]:
+    """
+    Run :func:`guard_band_report` across a coarse log-spaced grid of candidate
+    timeouts spanning ``[lo_seconds, hi_seconds]``, so the full ambiguity profile
+    (and its valley) is visible across every timescale, not just a few candidates.
+    """
+    grid = np.logspace(np.log10(lo_seconds), np.log10(hi_seconds), n)
+    return [guard_band_report(intervals, float(t), rel_tolerance) for t in grid]
 
 
 def plot_assessment(
@@ -432,24 +448,43 @@ def main() -> None:
     print(f"  99th percentile: {np.percentile(intervals, 99):.0f}s")
 
     # --- Session-boundary determinism diagnostic ---
-    # (1) Auto-pick the widest zero-density "moat" between sessions.
-    print("\n--- Emptiest (zero-density) band in inter-request interval distribution ---")
-    bands = find_emptiest_band(intervals, lo_seconds=60.0, hi_seconds=7 * 86400.0)
-    if bands is None:
-        print("  Not enough intervals in the 60s–7d region of interest.")
+    # (1) Locate the lowest-density valley (the best session "moat"). At realistic
+    #     data volumes there is no literally empty band, so the valley is what matters.
+    print("\n--- Minimum-density valley in inter-request interval distribution ---")
+    valley = find_min_density_band(intervals, lo_seconds=60.0, hi_seconds=2 * 86400.0, n_bins=60)
+    if valley is None:
+        print("  Not enough intervals in the 60s–2d region of interest.")
     else:
-        for key, title in [("widest_absolute", "widest by absolute width"), ("widest_logratio", "widest by log ratio")]:
-            b = bands[key]
+        order = np.argsort(valley["density"])
+        print("  Lowest-density bins (best separation valleys):")
+        for rank, i in enumerate(order[:3], start=1):
+            lo, hi = valley["edges"][i], valley["edges"][i + 1]
             print(
-                f"  [{title}] empty band {_fmt_seconds(b['lower'])} – {_fmt_seconds(b['upper'])} "
-                f"(width {_fmt_seconds(b['width_seconds'])}, {b['log10_ratio']:.2f} orders of magnitude); "
-                f"suggested T = {_fmt_seconds(b['geometric_mid'])}"
+                f"    {rank}. {_fmt_seconds(lo)} – {_fmt_seconds(hi)}: "
+                f"{int(valley['counts'][i]):,} intervals ({valley['density'][i]:,.0f} per order of magnitude)"
             )
+        print(
+            f"  → suggested session timeout T = {_fmt_seconds(valley['geometric_mid'])} "
+            f"(center of the single lowest-density bin)"
+        )
 
-    # (2) Quantify the ambiguity at fixed candidate timeouts, including the 1-day choice.
-    #     When a guard band is non-empty, attribute the offending intervals to assets/IPs:
-    #     if they pile up on a few same-asset (bot-like) testing assets, exclude those and re-run.
-    print("\n--- Guard-band ambiguity at candidate timeouts (±10% multiplicative window) ---")
+    # (2) Full coarse sweep of guard-band ambiguity across every timescale, with a
+    #     visual bar so the valley is obvious end-to-end.
+    print("\n--- Guard-band ambiguity sweep (±10% window, log-spaced from 1m to 7d) ---")
+    sweep = sweep_guard_bands(intervals, lo_seconds=60.0, hi_seconds=7 * 86400.0, n=32, rel_tolerance=0.1)
+    max_count = max((r["ambiguity_count"] for r in sweep), default=0) or 1
+    for r in sweep:
+        bar = "█" * int(round(40 * r["ambiguity_count"] / max_count))
+        flag = " ← DETERMINISTIC (empty)" if r["ambiguity_count"] == 0 else ""
+        print(
+            f"  T={_fmt_seconds(r['candidate_seconds']):>7}: "
+            f"{r['ambiguity_count']:>9,} ({100 * r['ambiguity_fraction']:.4f}%) {bar}{flag}"
+        )
+
+    # (3) Named candidate timeouts with asset/IP attribution of the offending intervals:
+    #     when a band is non-empty and piles up on a few same-asset (bot-like) testing
+    #     assets, exclude those (see --exclude-asset-file) and re-run.
+    print("\n--- Named candidate timeouts (±10% window) with bot attribution ---")
     candidates = [
         ("10 min", 600.0),
         ("30 min", 1800.0),
@@ -457,8 +492,8 @@ def main() -> None:
         ("2 hours", 7200.0),
         ("1 day", 86400.0),
     ]
-    if bands is not None:
-        t_auto = bands["widest_logratio"]["geometric_mid"]
+    if valley is not None:
+        t_auto = valley["geometric_mid"]
         candidates.append((f"auto-trough ({_fmt_seconds(t_auto)})", t_auto))
     for label, secs in candidates:
         r = guard_band_report(intervals, secs, rel_tolerance=0.1)
