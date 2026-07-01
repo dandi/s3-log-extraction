@@ -49,7 +49,7 @@ jobs:
         run: ls ~
 
       - name: Cache IP to region mapping to prevent overuse of IPInfo and OpenCage APIs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: enable_cache
         with:
           path: ~/.s3_log_extraction
