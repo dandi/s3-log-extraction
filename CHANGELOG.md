@@ -4,6 +4,7 @@
 
 ### 🚀 Enhancement
 
+- Excluded known cloud service and VPN IPs (GitHub, AWS, GCP, VPN) from the `number_of_requesters` count reported in per-dataset, archive, and total summaries. ([#291](https://github.com/dandi/s3-log-extraction/pull/291))
 - Strengthened encryption key derivation. The `S3_LOG_EXTRACTION_PASSWORD` value now passes through PBKDF2-HMAC-SHA256 instead of a single SHA-256 pass, which resists brute-force attacks. Weak passwords are also rejected before any encryption runs. A public `validate_password_strength` helper was added. ([#283](https://github.com/dandi/s3-log-extraction/pull/283))
 - Added the `s3logextraction stats` CLI command and the `get_log_bucket_stats` API helper for summarizing S3 inventory. ([#224](https://github.com/dandi/s3-log-extraction/pull/224))
 - Extended the `s3logextraction stats` command and added a `get_ip_stats` API helper to report IP address classification statistics from the IP cache. Every cached IP is binned into one of seven categories (determined, missing, unknown, bogon, VPN, cloud service, GitHub) with counts and percentages. The command also gains `--cache` and `--encryption` flags. ([#274](https://github.com/dandi/s3-log-extraction/pull/274))
