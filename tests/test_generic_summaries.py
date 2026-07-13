@@ -370,13 +370,39 @@ def test_round_requester_count(count: int, modulo: int, minimum: int, expected: 
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("region_label", "expected"),
+    [
+        # Genuine known cloud service / VPN labels are excluded
+        ("GitHub", True),
+        ("VPN", True),
+        ("AWS/us-east-1", True),
+        ("GCP/us-central1", True),
+        # Unresolved-location labels are NOT cloud/VPN labels; a real requester's IP
+        # simply failed to geolocate (rate limit, quota exceeded, obscure IP, etc.)
+        ("unknown", False),
+        ("undetermined", False),
+        ("missing", False),
+        ("bogon", False),
+        # Genuine geographic labels are not excluded
+        ("US/California", False),
+    ],
+)
+def test_is_cloud_service_or_vpn_label(region_label: str, expected: bool) -> None:
+    """Only genuine cloud/VPN service labels are excluded; unresolved-location labels are not."""
+    from s3_log_extraction.ip_utils import is_cloud_service_or_vpn_label
+
+    assert is_cloud_service_or_vpn_label(region_label) == expected
+
+
+@pytest.mark.ai_generated
 def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.local) -> None:
-    """Known cloud service/VPN IPs (per EXCLUDED_REGION_LABELS) are excluded from the requester count."""
+    """Known cloud service/VPN IPs are excluded from the requester count, but unresolved-location IPs are not."""
     from s3_log_extraction.summarize._generate_summaries import _collect_unique_ips
 
     asset_dir = pathlib.Path(tmpdir) / "asset"
     asset_dir.mkdir(parents=True, exist_ok=True)
-    (asset_dir / "ips.txt").write_text("1.2.3.4\n5.6.7.8\n9.10.11.12\n13.14.15.16\n17.18.19.20\n")
+    (asset_dir / "ips.txt").write_text("1.2.3.4\n5.6.7.8\n9.10.11.12\n13.14.15.16\n17.18.19.20\n21.22.23.24\n")
 
     ip_to_region = {
         "1.2.3.4": "US/California",
@@ -384,11 +410,12 @@ def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.loc
         "9.10.11.12": "AWS/us-east-1",
         "13.14.15.16": "VPN",
         "17.18.19.20": "bogon",
+        "21.22.23.24": "unknown",
     }
 
     unique_ips = _collect_unique_ips(asset_directories=[asset_dir], use_encryption=False, ip_to_region=ip_to_region)
 
-    assert unique_ips == {"1.2.3.4"}
+    assert unique_ips == {"1.2.3.4", "17.18.19.20", "21.22.23.24"}
 
 
 @pytest.mark.ai_generated

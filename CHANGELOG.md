@@ -11,6 +11,7 @@
 
 ### 🐛 Bug Fix
 
+- Narrowed `is_cloud_service_or_vpn_label` to only match genuine cloud/VPN service labels (`"GitHub"`, `"VPN"`, `"AWS/…"`, `"GCP/…"`). It previously also matched unresolved-location labels (`"unknown"`, `"undetermined"`, `"missing"`, `"bogon"`), which caused real requesters whose IPs could not be geolocated to be silently dropped from `number_of_requesters`. ([#291](https://github.com/dandi/s3-log-extraction/pull/291))
 - Fixed the IPInfo quota-exceeded fallback so daily remote tests return `undetermined` instead of crashing on Python 3.14 when a warning is emitted. ([#273](https://github.com/dandi/s3-log-extraction/pull/273))
 
 

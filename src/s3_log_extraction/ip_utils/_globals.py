@@ -8,10 +8,14 @@ def is_cloud_service_or_vpn_label(region_label: str) -> bool:
     Determine whether a region/service label (as produced by ``ip_to_region``) refers to a
     known cloud service or VPN provider (e.g. ``"GitHub"``, ``"AWS/us-east-1"``, ``"GCP/us-central1"``,
     ``"VPN"``) rather than a genuine geographic requester location.
+
+    Note that unresolved labels such as ``"unknown"``, ``"undetermined"``, ``"missing"``, or ``"bogon"``
+    are NOT considered cloud service or VPN labels here; they simply mean the requester's location could
+    not be determined, not that the requester is known cloud/VPN infrastructure.
     """
-    if region_label in EXCLUDED_REGION_LABELS:
+    if region_label in ("VPN", "GitHub"):
         return True
-    return any(region_label.startswith(f"{service_name}/") for service_name in _KNOWN_SERVICES)
+    return any(region_label.startswith(f"{service_name}/") for service_name in ("AWS", "GCP"))
 
 
 _DEFAULT_REGION_CODES_TO_COORDINATES = {
