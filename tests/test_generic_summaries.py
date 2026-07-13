@@ -367,3 +367,77 @@ def test_round_requester_count(count: int, modulo: int, minimum: int, expected: 
     from s3_log_extraction.summarize._generate_summaries import _round_requester_count
 
     assert _round_requester_count(count=count, modulo=modulo, minimum=minimum) == expected
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("region_label", "expected"),
+    [
+        # Genuine known cloud service / VPN labels are excluded
+        ("GitHub", True),
+        ("VPN", True),
+        ("AWS/us-east-1", True),
+        ("GCP/us-central1", True),
+        # Unresolved-location labels are NOT cloud/VPN labels; a real requester's IP
+        # simply failed to geolocate (rate limit, quota exceeded, obscure IP, etc.)
+        ("unknown", False),
+        ("undetermined", False),
+        ("missing", False),
+        ("bogon", False),
+        # Genuine geographic labels are not excluded
+        ("US/California", False),
+    ],
+)
+def test_is_cloud_service_or_vpn_label(region_label: str, expected: bool) -> None:
+    """Only genuine cloud/VPN service labels are excluded; unresolved-location labels are not."""
+    from s3_log_extraction.ip_utils import is_cloud_service_or_vpn_label
+
+    assert is_cloud_service_or_vpn_label(region_label) == expected
+
+
+@pytest.mark.ai_generated
+def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.local) -> None:
+    """Known cloud service/VPN IPs are excluded from the requester count, but unresolved-location IPs are not."""
+    from s3_log_extraction.summarize._generate_summaries import _collect_unique_ips
+
+    asset_dir = pathlib.Path(tmpdir) / "asset"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    (asset_dir / "ips.txt").write_text("1.2.3.4\n5.6.7.8\n9.10.11.12\n13.14.15.16\n17.18.19.20\n21.22.23.24\n")
+
+    ip_to_region = {
+        "1.2.3.4": "US/California",
+        "5.6.7.8": "GitHub",
+        "9.10.11.12": "AWS/us-east-1",
+        "13.14.15.16": "VPN",
+        "17.18.19.20": "bogon",
+        "21.22.23.24": "unknown",
+    }
+
+    unique_ips = _collect_unique_ips(asset_directories=[asset_dir], use_encryption=False, ip_to_region=ip_to_region)
+
+    assert unique_ips == {"1.2.3.4", "17.18.19.20", "21.22.23.24"}
+
+
+@pytest.mark.ai_generated
+def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpdir: py.path.local) -> None:
+    """The rounded requester count written to disk excludes known cloud service/VPN IPs."""
+    from s3_log_extraction.summarize._generate_summaries import _summarize_dataset_requester_count
+
+    asset_dir = pathlib.Path(tmpdir) / "asset"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    real_ips = [f"10.0.0.{index}" for index in range(60)]
+    cloud_ips = [f"192.168.0.{index}" for index in range(60)]
+    (asset_dir / "ips.txt").write_text("\n".join(real_ips + cloud_ips))
+
+    ip_to_region = {ip: "US/California" for ip in real_ips} | {ip: "GitHub" for ip in cloud_ips}
+
+    summary_file_path = pathlib.Path(tmpdir) / "requester_count.tsv"
+    _summarize_dataset_requester_count(
+        asset_directories=[asset_dir],
+        summary_file_path=summary_file_path,
+        ip_to_region=ip_to_region,
+        minimum=50,
+        use_encryption=False,
+    )
+
+    assert summary_file_path.read_text().strip() == "60"
