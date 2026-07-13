@@ -2,6 +2,8 @@
 
 ## Upcoming
 
+## v1.10.8
+
 ### 🚀 Enhancement
 
 - Excluded known cloud service and VPN IPs (GitHub, AWS, GCP, VPN) from the `number_of_requesters` count reported in per-dataset, archive, and total summaries. ([#291](https://github.com/dandi/s3-log-extraction/pull/291))
