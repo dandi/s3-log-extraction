@@ -13,9 +13,9 @@ def is_cloud_service_or_vpn_label(region_label: str) -> bool:
     are NOT considered cloud service or VPN labels here; they simply mean the requester's location could
     not be determined, not that the requester is known cloud/VPN infrastructure.
     """
-    if region_label in ("VPN", "GitHub"):
-        return True
-    return any(region_label.startswith(f"{service_name}/") for service_name in ("AWS", "GCP"))
+    return any(
+        region_label == service_name or region_label.startswith(f"{service_name}/") for service_name in _KNOWN_SERVICES
+    )
 
 
 _DEFAULT_REGION_CODES_TO_COORDINATES = {
