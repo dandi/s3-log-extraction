@@ -13,6 +13,7 @@ def is_cloud_service_or_vpn_label(region_label: str) -> bool:
         return True
     return any(region_label.startswith(f"{service_name}/") for service_name in _KNOWN_SERVICES)
 
+
 _DEFAULT_REGION_CODES_TO_COORDINATES = {
     # Included for testing/demo purposes
     "AWS/us-east-2": {"latitude": 39.9612, "longitude": -82.9988},
