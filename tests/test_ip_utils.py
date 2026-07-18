@@ -228,6 +228,49 @@ def test_update_ip_to_region_codes_saves_progress_before_quota_exceeded(
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("details", "expected_region"),
+    [
+        ({"country": "US", "region": "California"}, "US/California"),
+        ({"country": "US"}, "US"),
+        ({"region": "California"}, "California"),
+        ({"bogon": True}, "bogon"),
+        ({}, None),
+    ],
+)
+def test_update_ip_to_region_codes_detail_combinations(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    details: dict,
+    expected_region: str | None,
+) -> None:
+    """Each combination of country/region/bogon in the IPInfo response maps to the expected region code."""
+    extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
+    extraction_dir.mkdir(parents=True)
+    test_ip = "192.0.2.1"
+    (extraction_dir / "ips.txt").write_text(test_ip)
+
+    monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
+
+    mock_details = unittest.mock.MagicMock()
+    mock_details.details = details
+
+    mock_handler = unittest.mock.MagicMock()
+    mock_handler.getDetails.return_value = mock_details
+
+    with unittest.mock.patch("ipinfo.getHandler", return_value=mock_handler):
+        with unittest.mock.patch(
+            "s3_log_extraction.ip_utils._update_ip_to_region_codes._get_cidr_address_ranges_and_subregions",
+            return_value=[],
+        ):
+            s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
+
+    ip_to_region_file = tmp_path / "ips" / "ip_to_region.yaml"
+    ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
+    assert ip_to_region[test_ip] == expected_region
+
+
+@pytest.mark.ai_generated
 def test_refresh_ip_to_region_codes_handles_ipinfo_quota_exceeded(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
