@@ -1,5 +1,6 @@
 import os
 import pathlib
+import warnings
 
 import natsort
 import tqdm
@@ -67,6 +68,10 @@ def update_region_code_coordinates(
     ip_to_region = load_ip_cache(
         cache_type="ip_to_region", cache_directory=cache_directory, use_encryption=use_encryption
     )
+    quota_exceeded_exceptions = (
+        ipinfo.exceptions.RequestQuotaExceededError,
+        opencage.geocoder.RateLimitExceededError,
+    )
     region_codes_to_update = set(ip_to_region.values()) - set(region_codes_to_coordinates.keys())
     opencage_failures = []
     for country_and_region_code in tqdm.tqdm(
@@ -80,13 +85,24 @@ def update_region_code_coordinates(
         if country_and_region_code == "bogon":
             continue
 
-        coordinates = _get_coordinates_from_region_code(
-            country_and_region_code=country_and_region_code,
-            ipinfo_client=ipinfo_client,
-            opencage_client=opencage_client,
-            service_coordinates=service_coordinates,
-            opencage_failures=opencage_failures,
-        )
+        try:
+            coordinates = _get_coordinates_from_region_code(
+                country_and_region_code=country_and_region_code,
+                ipinfo_client=ipinfo_client,
+                opencage_client=opencage_client,
+                service_coordinates=service_coordinates,
+                opencage_failures=opencage_failures,
+            )
+        except quota_exceeded_exceptions:
+            warnings.warn(
+                message=(
+                    "API request quota exceeded. Halting the coordinates update early; "
+                    "progress so far is saved and remaining region codes will be retried on the next run."
+                ),
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+            break
 
         if coordinates is not None:
             region_codes_to_coordinates[country_and_region_code] = coordinates

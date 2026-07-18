@@ -2,6 +2,7 @@ import datetime
 import math
 import os
 import pathlib
+import warnings
 
 import yaml
 
@@ -75,7 +76,18 @@ def refresh_ip_to_region_codes(
     changes: dict[str, dict[str, str]] = {}
     for ip_address in ips_to_refresh:
         old_region = ip_to_region[ip_address]
-        new_region = _get_region_code_from_ip_address(ip_address=ip_address, ipinfo_handler=ipinfo_handler)
+        try:
+            new_region = _get_region_code_from_ip_address(ip_address=ip_address, ipinfo_handler=ipinfo_handler)
+        except ipinfo.exceptions.RequestQuotaExceededError:
+            warnings.warn(
+                message=(
+                    "IPInfo API request quota exceeded. Halting the refresh early; "
+                    "existing cache entries are left unchanged."
+                ),
+                category=RuntimeWarning,
+                stacklevel=2,
+            )
+            break
         if new_region != old_region:
             changes[ip_address] = {"old": old_region, "new": new_region}
             ip_to_region[ip_address] = new_region

@@ -2,6 +2,10 @@
 
 ## Upcoming
 
+### 🐛 Bug Fix
+
+- Fixed the daily IP cache update workflows so that an exhausted IPInfo (or OpenCage) API quota no longer wastes hours on doomed requests or crashes the run. `update ip regions` now halts at the first quota error and leaves unprocessed IPs uncached for retry on the next run, instead of permanently caching them as `undetermined`. `update ip coordinates` now saves partial progress and exits cleanly instead of raising an unhandled `RequestQuotaExceededError`. `update ip refresh` now halts early without overwriting existing cache entries. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
+
 ## v1.10.8
 
 ### 🚀 Enhancement
