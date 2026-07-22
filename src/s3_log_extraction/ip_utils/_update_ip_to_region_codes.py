@@ -92,7 +92,18 @@ def update_ip_to_region_codes(
             position=1,
             leave=False,
         ):
-            region_code = _get_region_code_from_ip_address(ip_address=ip_address, ipinfo_handler=ipinfo_handler)
+            try:
+                region_code = _get_region_code_from_ip_address(ip_address=ip_address, ipinfo_handler=ipinfo_handler)
+            except ipinfo.exceptions.RequestQuotaExceededError:
+                warnings.warn(
+                    message=(
+                        "IPInfo API request quota exceeded. Halting the update early; "
+                        "IP addresses not yet processed will be retried on the next run."
+                    ),
+                    category=RuntimeWarning,
+                    stacklevel=2,
+                )
+                return
             ip_to_region[ip_address] = region_code
 
             write_ip_cache(
@@ -106,9 +117,7 @@ def update_ip_to_region_codes(
 def _get_region_code_from_ip_address(
     ip_address: str,
     ipinfo_handler: "ipinfo.Handler",
-) -> str | typing.Literal["undetermined", "bogon"]:
-    import ipinfo
-
+) -> str | typing.Literal["bogon"] | None:
     # Determine if the IP address belongs to GitHub, AWS, Google, or known VPNs
     # Azure not yet easily doable; keep an eye on
     # https://learn.microsoft.com/en-us/answers/questions/1410071/up-to-date-azure-public-api-to-get-azure-ip-ranges
@@ -133,31 +142,22 @@ def _get_region_code_from_ip_address(
             return region_service_string
 
     # TODO: add batching support to ipinfo requests
-    # Lines cannot be covered without testing on a real IP
-    try:  # pragma: no cover
-        timeout_in_seconds = 30
-        details = ipinfo_handler.getDetails(ip_address=ip_address, timeout=timeout_in_seconds)
+    # A quota exceeded error (`ipinfo.exceptions.RequestQuotaExceededError`) propagates to the caller,
+    # which should halt further requests since none can succeed until the quota resets.
+    timeout_in_seconds = 30
+    details = ipinfo_handler.getDetails(ip_address=ip_address, timeout=timeout_in_seconds)
 
-        country = details.details.get("country", None)
-        region = details.details.get("region", None)
+    country = details.details.get("country", None)
+    region = details.details.get("region", None)
 
-        match (country is None, region is None):
-            case (True, True):
-                region_string = "bogon" if details.details.get("bogon", False) is True else None
-            case (True, False):
-                region_string = region
-            case (False, True):
-                region_string = country
-            case (False, False):
-                region_string = f"{country}/{region}"
+    match (country is None, region is None):
+        case (True, True):
+            region_string = "bogon" if details.details.get("bogon", False) is True else None
+        case (True, False):
+            region_string = region
+        case (False, True):
+            region_string = country
+        case (False, False):
+            region_string = f"{country}/{region}"
 
-        return region_string
-    except ipinfo.exceptions.RequestQuotaExceededError:  # pragma: no cover
-        warnings.warn(
-            message="IPInfo API request quota exceeded. Returning 'undetermined' value.",
-            category=RuntimeWarning,
-            stacklevel=2,
-        )
-        return "undetermined"
-
-    return "unknown"
+    return region_string

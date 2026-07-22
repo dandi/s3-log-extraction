@@ -8,6 +8,7 @@ remote-testing CI workflow, which supplies valid ``IPINFO_API_KEY`` and
 
 import os
 import pathlib
+import warnings
 
 import pytest
 import yaml
@@ -21,6 +22,17 @@ def _is_auth_error(exc: Exception) -> bool:
     """Return True if *exc* looks like an API authentication/authorization failure."""
     exc_str = str(exc).lower()
     return any(pattern.lower() in exc_str for pattern in _AUTH_ERROR_PATTERNS)
+
+
+def _skip_if_quota_exceeded(captured_warnings: list[warnings.WarningMessage]) -> None:
+    """Skip the current test if a quota-exceeded warning was emitted during the update call.
+
+    The update functions halt early with a ``RuntimeWarning`` when an API quota is exhausted.
+    That is an expected transient state of the shared API accounts, not a code or token failure,
+    so the live-lookup assertions cannot be validated and the test is skipped.
+    """
+    if any("quota exceeded" in str(captured_warning.message).lower() for captured_warning in captured_warnings):
+        pytest.skip("API request quota is currently exhausted; cannot validate live lookups.")
 
 
 @pytest.mark.remote
@@ -48,16 +60,19 @@ def test_update_ip_to_region_codes_remote(tmp_path: pathlib.Path) -> None:
     extraction_dir.mkdir(parents=True)
     (extraction_dir / "ips.txt").write_text(test_ip)
 
-    try:
-        s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
-    except Exception as exc:
-        if _is_auth_error(exc):
-            pytest.fail(
-                f"IPINFO_API_KEY is set but the token was rejected by the IPInfo API ({exc}). "
-                "Please verify that the IPINFO_API_KEY GitHub secret contains a valid token "
-                "from https://ipinfo.io/account/token"
-            )
-        raise
+    with warnings.catch_warnings(record=True) as captured_warnings:
+        warnings.simplefilter("always")
+        try:
+            s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
+        except Exception as exc:
+            if _is_auth_error(exc):
+                pytest.fail(
+                    f"IPINFO_API_KEY is set but the token was rejected by the IPInfo API ({exc}). "
+                    "Please verify that the IPINFO_API_KEY GitHub secret contains a valid token "
+                    "from https://ipinfo.io/account/token"
+                )
+            raise
+    _skip_if_quota_exceeded(captured_warnings)
 
     ip_cache_dir = tmp_path / "ips"
     ip_to_region_file = ip_cache_dir / "ip_to_region.yaml"
@@ -98,16 +113,19 @@ def test_update_region_code_coordinates_remote(tmp_path: pathlib.Path) -> None:
     ip_to_region_file = ip_cache_dir / "ip_to_region.yaml"
     ip_to_region_file.write_text(yaml.dump({"4.4.4.4": region_code}))
 
-    try:
-        s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)
-    except Exception as exc:
-        if _is_auth_error(exc):
-            pytest.fail(
-                f"OPENCAGE_API_KEY is set but was rejected by the OpenCage API ({exc}). "
-                "Please verify that the OPENCAGE_API_KEY GitHub secret contains a valid key "
-                "from https://opencagedata.com/dashboard#api-keys"
-            )
-        raise
+    with warnings.catch_warnings(record=True) as captured_warnings:
+        warnings.simplefilter("always")
+        try:
+            s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)
+        except Exception as exc:
+            if _is_auth_error(exc):
+                pytest.fail(
+                    f"OPENCAGE_API_KEY is set but was rejected by the OpenCage API ({exc}). "
+                    "Please verify that the OPENCAGE_API_KEY GitHub secret contains a valid key "
+                    "from https://opencagedata.com/dashboard#api-keys"
+                )
+            raise
+    _skip_if_quota_exceeded(captured_warnings)
 
     coordinates_file = ip_cache_dir / "region_codes_to_coordinates.yaml"
     assert coordinates_file.exists(), "region_codes_to_coordinates.yaml was not created"

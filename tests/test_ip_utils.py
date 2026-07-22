@@ -4,6 +4,7 @@ import shutil
 import unittest.mock
 
 import ipinfo
+import opencage.geocoder
 import py
 import pytest
 import yaml
@@ -165,10 +166,10 @@ def test_update_ip_to_region_codes_handles_ipinfo_quota_exceeded(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """update_ip_to_region_codes stores ``undetermined`` when IPInfo quota is exhausted."""
+    """update_ip_to_region_codes halts early on quota exhaustion and leaves unprocessed IPs uncached."""
     extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
     extraction_dir.mkdir(parents=True)
-    test_ip = "4.4.4.4"
+    test_ip = "192.0.2.1"
     (extraction_dir / "ips.txt").write_text(test_ip)
 
     monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
@@ -177,9 +178,160 @@ def test_update_ip_to_region_codes_handles_ipinfo_quota_exceeded(
     mock_handler.getDetails.side_effect = ipinfo.exceptions.RequestQuotaExceededError()
 
     with unittest.mock.patch("ipinfo.getHandler", return_value=mock_handler):
-        with pytest.warns(RuntimeWarning, match="IPInfo API request quota exceeded"):
+        with unittest.mock.patch(
+            "s3_log_extraction.ip_utils._update_ip_to_region_codes._get_cidr_address_ranges_and_subregions",
+            return_value=[],
+        ):
+            with pytest.warns(RuntimeWarning, match="IPInfo API request quota exceeded"):
+                s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
+
+    # Only one request should have been attempted; the rest of the run is skipped
+    assert mock_handler.getDetails.call_count == 1
+
+    # The IP must not be cached (e.g., as "undetermined") so that it is retried on the next run
+    ip_to_region_file = tmp_path / "ips" / "ip_to_region.yaml"
+    ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) if ip_to_region_file.exists() else {}
+    assert test_ip not in (ip_to_region or {})
+
+
+@pytest.mark.ai_generated
+def test_update_ip_to_region_codes_saves_progress_before_quota_exceeded(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """IPs resolved before the quota is exhausted are kept in the cache."""
+    extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
+    extraction_dir.mkdir(parents=True)
+    test_ips = ["192.0.2.1", "192.0.2.2"]
+    (extraction_dir / "ips.txt").write_text("\n".join(test_ips))
+
+    monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
+
+    success_details = unittest.mock.MagicMock()
+    success_details.details = {"country": "US", "region": "California"}
+
+    mock_handler = unittest.mock.MagicMock()
+    mock_handler.getDetails.side_effect = [success_details, ipinfo.exceptions.RequestQuotaExceededError()]
+
+    with unittest.mock.patch("ipinfo.getHandler", return_value=mock_handler):
+        with unittest.mock.patch(
+            "s3_log_extraction.ip_utils._update_ip_to_region_codes._get_cidr_address_ranges_and_subregions",
+            return_value=[],
+        ):
+            with pytest.warns(RuntimeWarning, match="IPInfo API request quota exceeded"):
+                s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
+
+    ip_to_region_file = tmp_path / "ips" / "ip_to_region.yaml"
+    ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
+    assert len(ip_to_region) == 1
+    assert next(iter(ip_to_region.values())) == "US/California"
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("details", "expected_region"),
+    [
+        ({"country": "US", "region": "California"}, "US/California"),
+        ({"country": "US"}, "US"),
+        ({"region": "California"}, "California"),
+        ({"bogon": True}, "bogon"),
+        ({}, None),
+    ],
+)
+def test_update_ip_to_region_codes_detail_combinations(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    details: dict,
+    expected_region: str | None,
+) -> None:
+    """Each combination of country/region/bogon in the IPInfo response maps to the expected region code."""
+    extraction_dir = tmp_path / "extraction" / "test_dataset" / "test_asset"
+    extraction_dir.mkdir(parents=True)
+    test_ip = "192.0.2.1"
+    (extraction_dir / "ips.txt").write_text(test_ip)
+
+    monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
+
+    mock_details = unittest.mock.MagicMock()
+    mock_details.details = details
+
+    mock_handler = unittest.mock.MagicMock()
+    mock_handler.getDetails.return_value = mock_details
+
+    with unittest.mock.patch("ipinfo.getHandler", return_value=mock_handler):
+        with unittest.mock.patch(
+            "s3_log_extraction.ip_utils._update_ip_to_region_codes._get_cidr_address_ranges_and_subregions",
+            return_value=[],
+        ):
             s3_log_extraction.ip_utils.update_ip_to_region_codes(cache_directory=tmp_path, use_encryption=False)
 
     ip_to_region_file = tmp_path / "ips" / "ip_to_region.yaml"
     ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
-    assert ip_to_region[test_ip] == "undetermined"
+    assert ip_to_region[test_ip] == expected_region
+
+
+@pytest.mark.ai_generated
+def test_refresh_ip_to_region_codes_handles_ipinfo_quota_exceeded(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """refresh_ip_to_region_codes halts early on quota exhaustion without overwriting existing entries."""
+    test_ips_dir = tmp_path / "ips"
+    test_ips_dir.mkdir(parents=True)
+
+    initial_ip_to_region = {"192.0.2.1": "US/California"}
+    ip_to_region_file = test_ips_dir / "ip_to_region.yaml"
+    ip_to_region_file.write_text(yaml.dump(initial_ip_to_region))
+
+    monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
+
+    fixed_ordinal_base = datetime.date(2000, 1, 1).toordinal()
+    offset = (-fixed_ordinal_base) % 90
+    fixed_date = datetime.date.fromordinal(fixed_ordinal_base + offset)
+
+    def mock_raise_quota_exceeded(ip_address: str, ipinfo_handler: object) -> str:
+        raise ipinfo.exceptions.RequestQuotaExceededError()
+
+    with unittest.mock.patch(
+        "s3_log_extraction.ip_utils._refresh_ip_to_region_codes._get_region_code_from_ip_address",
+        mock_raise_quota_exceeded,
+    ):
+        with unittest.mock.patch("ipinfo.getHandler"):
+            with pytest.warns(RuntimeWarning, match="IPInfo API request quota exceeded"):
+                s3_log_extraction.ip_utils.refresh_ip_to_region_codes(
+                    cache_directory=tmp_path,
+                    use_encryption=False,
+                    _today=fixed_date,
+                )
+
+    # Existing cache entries must remain untouched
+    updated_ip_to_region = yaml.safe_load(ip_to_region_file.read_text()) or {}
+    assert updated_ip_to_region == initial_ip_to_region
+
+
+@pytest.mark.ai_generated
+def test_update_region_code_coordinates_handles_ipinfo_quota_exceeded(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """update_region_code_coordinates saves partial progress instead of crashing when the quota is exhausted."""
+    test_ips_dir = tmp_path / "ips"
+    test_ips_dir.mkdir(parents=True)
+    (test_ips_dir / "ip_to_region.yaml").write_text(yaml.dump({"192.0.2.1": "US/California"}))
+
+    monkeypatch.setenv("IPINFO_API_KEY", "test-key-non-remote")
+    monkeypatch.setenv("OPENCAGE_API_KEY", "test-key-non-remote")
+
+    mock_geocoder = unittest.mock.MagicMock()
+    mock_geocoder.geocode.side_effect = opencage.geocoder.RateLimitExceededError()
+
+    with unittest.mock.patch("opencage.geocoder.OpenCageGeocode", return_value=mock_geocoder):
+        with unittest.mock.patch("ipinfo.getHandler"):
+            with pytest.warns(RuntimeWarning, match="quota exceeded"):
+                s3_log_extraction.ip_utils.update_region_code_coordinates(
+                    cache_directory=tmp_path, use_encryption=False
+                )
+
+    # The run must complete and write the (partial) coordinates cache
+    coordinates_file = test_ips_dir / "region_codes_to_coordinates.yaml"
+    assert coordinates_file.exists()
