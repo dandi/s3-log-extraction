@@ -2,14 +2,26 @@
 
 ## Upcoming
 
+### 🏠 Internal
+
+- Added a `Version Check` CI workflow that fails pull requests which modify `src/` or `pyproject.toml` without bumping the package version. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
+
+### 🐛 Bug Fix
+
+- Fixed the daily IP cache update workflows so that an exhausted IPInfo (or OpenCage) API quota no longer wastes hours on doomed requests or crashes the run. `update ip regions` now halts at the first quota error and leaves unprocessed IPs uncached for retry on the next run, instead of permanently caching them as `undetermined`. `update ip coordinates` now saves partial progress and exits cleanly instead of raising an unhandled `RequestQuotaExceededError`. `update ip refresh` now halts early without overwriting existing cache entries. The daily remote tests skip (rather than fail) when the quota is exhausted, since live lookups cannot be validated in that state. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
+
+## v1.10.8
+
 ### 🚀 Enhancement
 
+- Excluded known cloud service and VPN IPs (GitHub, AWS, GCP, VPN) from the `number_of_requesters` count reported in per-dataset, archive, and total summaries. ([#291](https://github.com/dandi/s3-log-extraction/pull/291))
 - Strengthened encryption key derivation. The `S3_LOG_EXTRACTION_PASSWORD` value now passes through PBKDF2-HMAC-SHA256 instead of a single SHA-256 pass, which resists brute-force attacks. Weak passwords are also rejected before any encryption runs. A public `validate_password_strength` helper was added. ([#283](https://github.com/dandi/s3-log-extraction/pull/283))
 - Added the `s3logextraction stats` CLI command and the `get_log_bucket_stats` API helper for summarizing S3 inventory. ([#224](https://github.com/dandi/s3-log-extraction/pull/224))
 - Extended the `s3logextraction stats` command and added a `get_ip_stats` API helper to report IP address classification statistics from the IP cache. Every cached IP is binned into one of seven categories (determined, missing, unknown, bogon, VPN, cloud service, GitHub) with counts and percentages. The command also gains `--cache` and `--encryption` flags. ([#274](https://github.com/dandi/s3-log-extraction/pull/274))
 
 ### 🐛 Bug Fix
 
+- Narrowed `is_cloud_service_or_vpn_label` to only match genuine cloud/VPN service labels (`"GitHub"`, `"VPN"`, `"AWS/…"`, `"GCP/…"`). It previously also matched unresolved-location labels (`"unknown"`, `"undetermined"`, `"missing"`, `"bogon"`), which caused real requesters whose IPs could not be geolocated to be silently dropped from `number_of_requesters`. ([#291](https://github.com/dandi/s3-log-extraction/pull/291))
 - Fixed the IPInfo quota-exceeded fallback so daily remote tests return `undetermined` instead of crashing on Python 3.14 when a warning is emitted. ([#273](https://github.com/dandi/s3-log-extraction/pull/273))
 
 

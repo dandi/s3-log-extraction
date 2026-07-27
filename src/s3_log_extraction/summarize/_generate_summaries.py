@@ -7,6 +7,7 @@ import tqdm
 
 from ..config import get_cache_directory, get_cache_subdirectory
 from ..ip_utils import load_ip_cache
+from ..ip_utils._globals import is_cloud_service_or_vpn_label
 from ..ip_utils._ip_utils import _read_ips_from_file
 
 
@@ -49,7 +50,11 @@ def _privacy_round_request_download_columns(
     return summary_table
 
 
-def _collect_unique_ips(asset_directories: list[pathlib.Path], use_encryption: bool = True) -> set[str]:
+def _collect_unique_ips(
+    asset_directories: list[pathlib.Path],
+    use_encryption: bool = True,
+    ip_to_region: dict[str, str] | None = None,
+) -> set[str]:
     """
     Collect all unique IP addresses across the given asset directories.
 
@@ -60,18 +65,25 @@ def _collect_unique_ips(asset_directories: list[pathlib.Path], use_encryption: b
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
+    ip_to_region : dict of str to str, optional
+        Mapping of IP address to region/service label, used to exclude known cloud
+        service IPs (e.g. GitHub, AWS, GCP, VPN) from the collected set. If not
+        provided, no exclusion is applied.
 
     Returns
     -------
     set of str
-        The set of unique IP addresses found across all ``ips.txt`` files.
+        The set of unique IP addresses found across all ``ips.txt`` files, excluding
+        any IPs classified as a known cloud service or VPN.
     """
+    ip_to_region = ip_to_region or {}
     unique_ips: set[str] = set()
     for asset_directory in asset_directories:
         full_ips_file_path = asset_directory / "ips.txt"
         if not full_ips_file_path.exists():
             continue
-        unique_ips.update(_read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption))
+        ips = _read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption)
+        unique_ips.update(ip for ip in ips if not is_cloud_service_or_vpn_label(ip_to_region.get(ip, "")))
     return unique_ips
 
 
@@ -79,6 +91,7 @@ def _summarize_dataset_requester_count(
     *,
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
+    ip_to_region: dict[str, str],
     modulo: int = 20,
     minimum: int = 50,
     use_encryption: bool = True,
@@ -87,8 +100,9 @@ def _summarize_dataset_requester_count(
     Compute and save the privacy-rounded unique requester count for a dataset.
 
     Reads all ``ips.txt`` files from the given asset directories, counts the
-    number of unique IP addresses across the entire dataset, rounds the result via
-    :func:`_round_requester_count`, and writes the value to ``summary_file_path``.
+    number of unique IP addresses across the entire dataset (excluding known cloud
+    service and VPN IPs), rounds the result via :func:`_round_requester_count`, and
+    writes the value to ``summary_file_path``.
 
     Parameters
     ----------
@@ -96,6 +110,9 @@ def _summarize_dataset_requester_count(
         Paths to the per-asset extraction directories containing ``ips.txt`` files.
     summary_file_path : pathlib.Path
         Destination file where the rounded count (as a string) will be written.
+    ip_to_region : dict of str to str
+        Mapping of IP address to region/service label, used to exclude known cloud
+        service IPs (e.g. GitHub, AWS, GCP, VPN) from the requester count.
     modulo : int, optional
         Granularity for rounding.  Default is ``20``.
     minimum : int, optional
@@ -105,7 +122,9 @@ def _summarize_dataset_requester_count(
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
     """
-    unique_ips = _collect_unique_ips(asset_directories=asset_directories, use_encryption=use_encryption)
+    unique_ips = _collect_unique_ips(
+        asset_directories=asset_directories, use_encryption=use_encryption, ip_to_region=ip_to_region
+    )
 
     if not unique_ips:
         return
@@ -184,7 +203,9 @@ def generate_summaries(
         )
 
         all_archive_unique_ips.update(
-            _collect_unique_ips(asset_directories=asset_directories, use_encryption=use_encryption)
+            _collect_unique_ips(
+                asset_directories=asset_directories, use_encryption=use_encryption, ip_to_region=ip_to_region
+            )
         )
     if all_archive_unique_ips:
         archive_directory = summary_directory / "archive"
@@ -224,6 +245,7 @@ def _summarize_dataset(
     _summarize_dataset_requester_count(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
+        ip_to_region=ip_to_region,
         minimum=privacy_threshold_minimum,
         use_encryption=use_encryption,
     )

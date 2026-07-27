@@ -1,0 +1,33 @@
+name: Version Check
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+
+permissions: {}
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check version bump
+        run: |
+          git show origin/${{ github.base_ref }}:pyproject.toml > /tmp/base_pyproject.toml
+          PR_VERSION=$(python3 -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          BASE_VERSION=$(python3 -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('/tmp/base_pyproject.toml').read_text())['project']['version'])")
+          echo "Base version: $BASE_VERSION"
+          echo "PR version:   $PR_VERSION"
+          if [ "$PR_VERSION" = "$BASE_VERSION" ]; then
+            echo "::error::Version has not been bumped. Please update the version in pyproject.toml."
+            exit 1
+          fi
+          echo "Version bumped from $BASE_VERSION to $PR_VERSION ✓"
