@@ -128,7 +128,8 @@ index saturates toward 0 as files grow. They measure complexity, not access.*
 > accrue depth and climb toward 0), which is another way of seeing that Sackin here
 > is effectively a nonlinear restatement of file size rather than an independent
 > axis. A "proper" $[0, 1]$ score would require re-deriving $S_{\min}$ for
-> arbitrary-degree trees.
+> arbitrary-degree trees — see `SUPPLEMENT_tree_metrics.md` for why the binary
+> baseline is inappropriate and which alternative metrics suit NWB hierarchies.
 
 Dividing a view count by a quantity that is uncorrelated with genuine interest does
 not remove a confound — it **injects noise** and arbitrarily penalizes or rewards
