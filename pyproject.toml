@@ -147,3 +147,7 @@ markers = [
 env = [
     "S3_LOG_EXTRACTION_PASSWORD=test",
 ]
+
+[tool.codespell]
+# "sackin" is the proper name of the Sackin tree-imbalance index, not a typo.
+ignore-words-list = "sackin"
