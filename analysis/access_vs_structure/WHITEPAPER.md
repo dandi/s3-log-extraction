@@ -114,6 +114,22 @@ asset is accessed**: their rank correlation with streaming volume is only
 *Figure 1. The three structural metrics are strongly monotonically related; Sackin
 index saturates toward 0 as files grow. They measure complexity, not access.*
 
+> **Note — why every Sackin index is negative.** The index is min-max normalized as
+> $S_{\text{norm}} = (S - S_{\min}) / (S_{\max} - S_{\min})$, where $S$ is the sum of
+> leaf depths, $S_{\max}$ is the maximally-imbalanced *caterpillar* tree, and
+> $S_{\min} = n\lceil\log_2 n\rceil$ is a balanced *binary* tree. That $S_{\min}$
+> reference assumes a binary tree, but NWB/HDF5 hierarchies are **high-fan-out**: a
+> group holds many datasets as direct children, so leaves sit at depth ~2–3
+> regardless of count. Their true leaf-depth sum therefore falls *below* the binary
+> minimum, making $S - S_{\min} < 0$ and the normalized value negative. A negative
+> value thus means the file is **flatter/bushier than a balanced binary tree** — as
+> broad-and-shallow scientific containers should be — not that it is unusual. The
+> magnitude tracks size (small files are flattest, so most negative; larger files
+> accrue depth and climb toward 0), which is another way of seeing that Sackin here
+> is effectively a nonlinear restatement of file size rather than an independent
+> axis. A "proper" $[0, 1]$ score would require re-deriving $S_{\min}$ for
+> arbitrary-degree trees.
+
 Dividing a view count by a quantity that is uncorrelated with genuine interest does
 not remove a confound — it **injects noise** and arbitrarily penalizes or rewards
 assets for internal structure that has nothing to do with why people look at them.
