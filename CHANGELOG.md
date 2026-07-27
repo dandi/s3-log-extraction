@@ -5,7 +5,7 @@
 ### 🏠 Internal
 
 - Added a `Version Check` CI workflow that fails pull requests which modify `src/` or `pyproject.toml` without bumping the package version. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
-- Added exploratory analysis scripts under `scripts/` for assessing streaming "view session" separability and relating NWB structural metrics and asset size to web access counts. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
+- Added exploratory analysis scripts under `analysis/` for assessing streaming "view session" separability and relating NWB structural metrics and asset size to web access counts. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
 ### 🐛 Bug Fix
 

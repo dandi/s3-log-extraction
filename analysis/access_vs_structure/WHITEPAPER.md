@@ -88,7 +88,7 @@ intervals (e.g., every ~30 min or ~24 h), which injects artificial mid-range gap
 and pollutes the boundary analysis. These are identifiable — their gaps are
 near-100 % *same-asset* (one IP hitting one asset on a clockwork period) and
 concentrate on a handful of blobs — and are excluded up front (see
-`scripts/testing_blobs.txt`). Excluding them tightened the within-session tail
+`analysis/testing_blobs.txt`). Excluding them tightened the within-session tail
 (99th percentile 149 s → 18 s) and removed a spurious ~1-hour spike, revealing the
 clean 5–9 h valley described above.
 
@@ -182,10 +182,10 @@ normalized away.
 
 ## 5. Methods and reproducibility
 
-- **Sessionization** — `scripts/assess_streaming_sessions.py` computes
+- **Sessionization** — `analysis/assess_streaming_sessions.py` computes
   inter-request intervals per IP over the extraction cache, the minimum-density
   valley, the guard-band ambiguity sweep, and per-candidate bot attribution.
-- **Access vs. structure** — `scripts/access_vs_structure/build_dataset.py` joins
+- **Access vs. structure** — `analysis/access_vs_structure/build_dataset.py` joins
   the `dandi-cache` structural caches (groups, datasets, Sackin index, keyed by
   content ID) → `content-id-to-nwb-file` → `dandi/access-summaries` request/download
   counts, and reads asset sizes via S3 `HEAD`. `plot_relationships.py` renders
