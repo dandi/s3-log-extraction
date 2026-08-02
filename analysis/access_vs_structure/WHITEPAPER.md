@@ -92,6 +92,43 @@ concentrate on a handful of blobs — and are excluded up front (see
 (99th percentile 149 s → 18 s) and removed a spurious ~1-hour spike, revealing the
 clean 5–9 h valley described above.
 
+### 2.2 What the logs can (and cannot) tell us about access method
+
+The only ground-truth calibration we have is a controlled experiment
+([issue #74](https://github.com/dandi/s3-log-extraction/issues/74)): one 14 MiB
+NWB asset was accessed on 2025-04-29 by four methods, and the resulting S3 log
+lines were inspected directly. The summary:
+
+| Method | Status | Bytes-sent pattern | # requests | User-Agent | Our label |
+|---|---|---|---|---|---|
+| Web download | `200` | full object, one shot | 1 | browser | download |
+| DANDI API (`dandi` client) | `200` | full object, one shot | 1 | `dandi/…` | download |
+| ROS3 (`pynwb` driver) | `200` HEAD + `206` GETs | mixed, incl. a **whole-file** `206`; ~2× volume (no caching) | several | `-` (empty) | streaming |
+| Neurosift | `206` GETs | many partial, **none equal to full size** | many | browser | streaming |
+
+Three consequences for our meta-statistics:
+
+1. **The operation type never identifies the method.** All four log as
+   `REST.GET.OBJECT`; the client is invisible except through weak, unreliable hints
+   (User-Agent is empty for ROS3 and an identical browser string covers both web
+   download and Neurosift). We therefore **cannot partition any statistic by access
+   method** — every number in this paper is a method-blended average.
+2. **The `200`/`206` → download/stream split is a good approximation, not a
+   perfect one.** It is method- and size-dependent: a small file is often sent whole
+   in a single `200` regardless of tool, and ROS3 issued a full-object `206` that is
+   really a download mislabeled as a stream. These edge cases are rare but nonzero.
+3. **Streaming-request *volume* conflates interest with client mechanics.** How many
+   `206`s a single viewing produces depends on the client's chunk size and caching —
+   ROS3 roughly doubled its requests for lack of a cache; Neurosift emits many small
+   ranges; `fsspec`/`remfile` differ again. This is a large part of *why* raw
+   streaming-request counts scale with file size, and it is exactly why we count
+   **sessions, not requests**: collapsing a burst of `206`s into one view absorbs
+   most of this client-dependent inflation. It does not absorb all of it — an
+   uncached re-read or a client re-opening a file still registers as activity — and
+   because the method is unknowable, such inflation cannot be subtracted. A shift in
+   the community's tooling mix (more Neurosift, better caching) would move these
+   numbers with no change in underlying interest.
+
 ---
 
 ## 3. Why not normalize by a file property?
@@ -212,4 +249,7 @@ on *sessions*; the claim that sessions neutralize the size confound is argued
 mechanistically and should be confirmed by recomputing size correlation against
 per-asset **session** counts once those are materialized. (ii) The
 content-ID→asset mapping is 1:1, so a deduplicated blob shared by several assets is
-scored by one representative asset's counts.
+scored by one representative asset's counts. (iii) The logs cannot identify the
+access method (§2.2), so all statistics blend web/API/ROS3/`fsspec`/Neurosift
+traffic and would shift with the community's tooling mix even absent any change in
+real interest.
