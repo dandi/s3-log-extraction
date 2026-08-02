@@ -9,7 +9,7 @@ a burst of partial (range) requests from a single IP address, bounded by gaps of
 more than **8 hours**. We motivate the 8-hour threshold empirically from the
 distribution of inter-request intervals in the S3 access logs, and we show — by
 joining structural-complexity metrics, asset size, and web-access counts across
-~1,800 valid NWB files — that normalizing view counts by file size, group/dataset
+~4,500 valid NWB files — that normalizing view counts by file size, group/dataset
 count, or a tree-balance index would not be *fair*: those quantities either
 do not predict genuine interest at all, or predict only the mechanical volume of
 requests that the session definition is specifically designed to absorb.
@@ -136,7 +136,7 @@ Three consequences for our meta-statistics:
 A recurring proposal is to normalize access counts by some intrinsic file
 property — size, structural complexity (group/dataset counts), or a tree-balance
 index — to "level the playing field" between assets. We joined all of these to
-per-asset access counts (~1,829 files across ~200 dandisets; methods in §5) and
+per-asset access counts (~4,493 files across ~253 dandisets; methods in §5) and
 find that such normalization would be **unfair** for two distinct reasons.
 
 ### 3.1 Structural complexity does not predict interest
@@ -167,7 +167,7 @@ popular file would be suppressed. That is the opposite of fair.
 
 What complexity *does* predict is **consumption mode, not volume** (Figure 2): the
 fraction of accesses that are full downloads falls with complexity (Spearman
-≈ −0.30). Complex files are explored via partial reads ("scrubbed"); simple files
+≈ −0.37). Complex files are explored via partial reads ("scrubbed"); simple files
 are grabbed whole. This is exactly why the view definition is built on streaming
 sessions — but it is not a basis for normalizing counts.
 
@@ -178,8 +178,8 @@ not how much.*
 ### 3.2 Size predicts request volume — but the session definition already absorbs it
 
 Asset **size** is a genuinely strong predictor of streaming *requests* (Spearman
-**+0.74**; Figure 3) — far stronger than any structural metric, and nearly
-independent of them (size and complexity are orthogonal, r ≈ −0.07).
+**+0.75**; Figure 3) — far stronger than any structural metric, and nearly
+independent of them (size and complexity are orthogonal, r ≈ −0.11).
 
 ![Size vs streaming](figures/size_vs_streaming.png)
 *Figure 3. Asset size dominates streaming-request volume; structural complexity is

@@ -43,21 +43,21 @@ size_bytes, number_of_requests, number_of_downloads, requests_censored`
 values reported as `"<N"` are decoded to `N/2` and marked in `requests_censored`.
 Streaming is derived as `number_of_requests - number_of_downloads`.
 
-## Findings (snapshot, ~1,829 files across ~200 dandisets)
+## Findings (snapshot, ~4,493 files across ~253 dandisets)
 
 - **The structural metrics are one axis.** Groups, datasets, and the total
   cophenetic index are rank-correlated 0.82–0.95; the cophenetic index is a
   nonlinear restatement of object count (see `SUPPLEMENT_tree_metrics.md` for why
   it replaces the binary-baseline Sackin index used by the source cache).
 - **Structural complexity barely predicts access volume** (Spearman ≈ 0.10–0.19
-  vs. total or streaming requests; log-log ≈ 0.37–0.44). It is a poor
+  vs. total or streaming requests; log-log ≈ 0.37–0.42). It is a poor
   access-normalizer.
 - **Complexity predicts consumption *mode*, not volume.** The download *fraction*
-  falls with complexity (Spearman ≈ −0.30): complex files are read via partial
+  falls with complexity (Spearman ≈ −0.37): complex files are read via partial
   range requests ("scrubbed"), simple files are downloaded whole.
-- **Asset size is the dominant predictor of streaming** (Spearman ≈ +0.74,
-  log-log ≈ +0.67) — far stronger than any structural metric.
-- **Size and structural complexity are nearly orthogonal** (Spearman ≈ −0.07),
+- **Asset size is the dominant predictor of streaming** (Spearman ≈ +0.75,
+  log-log ≈ +0.70) — far stronger than any structural metric.
+- **Size and structural complexity are nearly orthogonal** (Spearman ≈ −0.11),
   and complexity still adds an independent signal after controlling for size
   (partial r ≈ +0.49): at equal size, more complex files are streamed more.
 

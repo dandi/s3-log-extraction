@@ -88,33 +88,33 @@ tool. We suggest:
 We computed the **total cophenetic index** and **out-degree statistics** over the
 same file set (via the `dandi-cache/valid-nwb-file-to-cophenetic-index` and
 `…-to-out-degrees` caches) and joined them to asset size and streaming-request
-counts (1,829 files with all quantities present). The point of the exercise was to
+counts (4,493 files with all quantities present). The point of the exercise was to
 test whether the binary-baseline critique of the Sackin index was the reason
 structural complexity failed to predict access. It was not.
 
 | predictor | Spearman with streaming | log-log |
 |---|---|---|
-| asset size | **+0.74** | +0.67 |
-| n_internal_nodes | +0.18 | +0.43 |
-| total cophenetic index | +0.14 | +0.41 |
-| max out-degree | −0.04 | +0.22 |
-| mean out-degree | +0.05 | +0.13 |
-| variance out-degree | −0.07 | +0.12 |
+| asset size | **+0.75** | +0.70 |
+| n_internal_nodes | +0.18 | +0.42 |
+| total cophenetic index | +0.14 | +0.39 |
+| max out-degree | −0.06 | +0.19 |
+| mean out-degree | +0.04 | +0.11 |
+| variance out-degree | −0.08 | +0.09 |
 
 Findings:
 
 - **The "fair" metric matches the "unfair" one.** The total cophenetic index
-  correlates with streaming at +0.14 — the same as the binary-baseline Sackin index
-  (+0.12) and the raw datasets count (+0.14). Fixing the baseline changes nothing:
-  structural complexity genuinely does not drive access, however correctly it is
-  measured.
-- **The cophenetic index is complexity/size restated.** It is rank-correlated 0.88
-  with internal-node count and near-orthogonal to byte-size (−0.10), and adds the
+  correlates with streaming at +0.14 — the same as the raw datasets count (+0.16)
+  and the binary-baseline Sackin index (≈+0.12 in an earlier run). Fixing the
+  baseline changes nothing: structural complexity genuinely does not drive access,
+  however correctly it is measured.
+- **The cophenetic index is complexity/size restated.** It is rank-correlated 0.86
+  with internal-node count and near-orthogonal to byte-size (−0.11), and adds the
   same size-controlled partial signal (partial $r \approx 0.49$) that the dataset
   count did — no new axis.
 - **Out-degree is even weaker.** The NWB-native breadth axis (mean/max/variance of
-  children per group) is essentially uncorrelated with access (all $|\rho| < 0.08$).
-  Interestingly, max out-degree is *negatively* related to size (−0.29) — bushier
+  children per group) is essentially uncorrelated with access (all $|\rho| \le 0.08$).
+  Interestingly, max out-degree is *negatively* related to size (−0.30) — bushier
   files tend to be smaller — but neither predicts who accesses them.
 
 This closes the loop the main paper opened: **none of the degree-appropriate

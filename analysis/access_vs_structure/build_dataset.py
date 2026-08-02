@@ -47,6 +47,31 @@ import pathlib
 
 import requests
 import tqdm
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+def _make_session() -> requests.Session:
+    """A requests Session that retries transient network/5xx errors with backoff."""
+    session = requests.Session()
+    retry = Retry(
+        total=5,
+        connect=5,
+        read=5,
+        status=5,
+        backoff_factor=1.0,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET", "HEAD"}),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_maxsize=64)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+# Shared session (thread-safe for GET/HEAD) used by all fetch helpers.
+SESSION = _make_session()
 
 RAW = "https://raw.githubusercontent.com"
 CACHE_ORG = "dandi-cache"
@@ -68,7 +93,7 @@ MAP_REPO = ("content-id-to-nwb-file", "content_id_to_nwb_file")
 
 def _fetch_jsonl_gz(url: str) -> list[dict]:
     """Download a gzipped JSON Lines file and return the parsed objects."""
-    response = requests.get(url, timeout=120)
+    response = SESSION.get(url, timeout=120)
     response.raise_for_status()
     text = gzip.decompress(response.content).decode("utf-8")
     return [json.loads(line) for line in text.splitlines() if line.strip()]
@@ -76,7 +101,7 @@ def _fetch_jsonl_gz(url: str) -> list[dict]:
 
 def _fetch_jsonl_plain(url: str) -> list[dict]:
     """Download a plain (uncompressed) JSON Lines file and return the parsed objects."""
-    response = requests.get(url, timeout=120)
+    response = SESSION.get(url, timeout=120)
     response.raise_for_status()
     return [json.loads(line) for line in response.text.splitlines() if line.strip()]
 
@@ -129,7 +154,7 @@ def load_access_counts(dandiset_ids: set[str], workers: int) -> dict[tuple[str, 
 
     def _one(dandiset_id: str) -> list[tuple[tuple[str, str], tuple[float, float, bool]]]:
         url = f"{SUMMARIES}/{dandiset_id}/by_asset.tsv"
-        response = requests.get(url, timeout=60)
+        response = SESSION.get(url, timeout=60)
         if response.status_code == 404:
             return []
         response.raise_for_status()
@@ -159,7 +184,7 @@ def load_sizes(content_ids: list[str], workers: int) -> dict[str, int]:
 
     def _one(content_id: str) -> tuple[str, int | None]:
         key = f"blobs/{content_id[:3]}/{content_id[3:6]}/{content_id}"
-        response = requests.head(f"{S3_BUCKET}/{key}", allow_redirects=True, timeout=60)
+        response = SESSION.head(f"{S3_BUCKET}/{key}", allow_redirects=True, timeout=60)
         length = response.headers.get("Content-Length")
         return content_id, int(length) if length is not None else None
 
