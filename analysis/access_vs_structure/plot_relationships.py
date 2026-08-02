@@ -4,8 +4,8 @@ Plot the relationships between NWB structure, asset size, and web access.
 Consumes the CSV produced by ``build_dataset.py`` and emits three figures plus a
 printed correlation summary:
 
-  1. ``structure_relationships.png`` — pairwise relationships among the three
-     structural metrics (groups, datasets, Sackin index).
+  1. ``structure_relationships.png`` — pairwise relationships among the structural
+     metrics (groups, datasets, total cophenetic index).
   2. ``consumption_mode.png`` — streaming vs. full downloads vs. download fraction
      as a function of structural complexity (the "scrub vs. download whole" split).
   3. ``size_vs_streaming.png`` — asset size as the dominant predictor of streaming,
@@ -96,7 +96,8 @@ def _annotate(ax, text):
 
 
 def plot_structure(df: pd.DataFrame, out: pathlib.Path) -> None:
-    g, d, s = df["groups"].to_numpy(float), df["datasets"].to_numpy(float), df["sackin_index"].to_numpy(float)
+    g, d = df["groups"].to_numpy(float), df["datasets"].to_numpy(float)
+    c = df["cophenetic_index"].to_numpy(float)
     fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.2))
     fig.suptitle(f"Structural metrics across {len(df):,} valid NWB files", fontsize=13, fontweight="bold")
     hb = _hexbin(
@@ -115,28 +116,28 @@ def plot_structure(df: pd.DataFrame, out: pathlib.Path) -> None:
     hb = _hexbin(
         axes[1],
         d,
-        s,
+        c,
         xlog=True,
-        ylog=False,
+        ylog=True,
         cmap="viridis",
         xlabel="HDF5 datasets",
-        ylabel="Sackin index",
-        title="Datasets vs. Sackin index",
+        ylabel="total cophenetic index",
+        title="Datasets vs. cophenetic index",
     )
-    _annotate(axes[1], f"Pearson {_pearson(d, s):+.2f}\nSpearman {_spearman(d, s):+.2f}")
+    _annotate(axes[1], f"Pearson {_pearson(d, c):+.2f}\nSpearman {_spearman(d, c):+.2f}")
     fig.colorbar(hb, ax=axes[1], label="file count (log)", pad=0.01)
     hb = _hexbin(
         axes[2],
         g,
-        s,
+        c,
         xlog=True,
-        ylog=False,
+        ylog=True,
         cmap="viridis",
         xlabel="HDF5 groups",
-        ylabel="Sackin index",
-        title="Groups vs. Sackin index",
+        ylabel="total cophenetic index",
+        title="Groups vs. cophenetic index",
     )
-    _annotate(axes[2], f"Pearson {_pearson(g, s):+.2f}\nSpearman {_spearman(g, s):+.2f}")
+    _annotate(axes[2], f"Pearson {_pearson(g, c):+.2f}\nSpearman {_spearman(g, c):+.2f}")
     fig.colorbar(hb, ax=axes[2], label="file count (log)", pad=0.01)
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -210,7 +211,8 @@ def plot_consumption_mode(df: pd.DataFrame, out: pathlib.Path) -> None:
 
 def plot_size_vs_streaming(df: pd.DataFrame, out: pathlib.Path) -> None:
     size = df["size_bytes"].to_numpy(float)
-    g, d, s = df["groups"].to_numpy(float), df["datasets"].to_numpy(float), df["sackin_index"].to_numpy(float)
+    g, d = df["groups"].to_numpy(float), df["datasets"].to_numpy(float)
+    c = df["cophenetic_index"].to_numpy(float)
     streaming = np.maximum(df["number_of_requests"].to_numpy(float) - df["number_of_downloads"].to_numpy(float), 0.0)
     fig = plt.figure(figsize=(16.5, 5.4))
     fig.suptitle(
@@ -236,8 +238,8 @@ def plot_size_vs_streaming(df: pd.DataFrame, out: pathlib.Path) -> None:
     fig.colorbar(hb, ax=ax, label="file count (log)", pad=0.01)
 
     ax = fig.add_subplot(gs[0, 1])
-    names = ["asset size", "groups", "datasets", "Sackin idx"]
-    vals = [_spearman(size, streaming), _spearman(g, streaming), _spearman(d, streaming), _spearman(s, streaming)]
+    names = ["asset size", "groups", "datasets", "cophenetic"]
+    vals = [_spearman(size, streaming), _spearman(g, streaming), _spearman(d, streaming), _spearman(c, streaming)]
     order = np.argsort(vals)
     ax.barh(range(len(vals)), [vals[i] for i in order], color="#4c78a8", height=0.62)
     ax.set_yticks(range(len(vals)))
@@ -283,16 +285,16 @@ def plot_size_vs_streaming(df: pd.DataFrame, out: pathlib.Path) -> None:
 
 def print_summary(df: pd.DataFrame) -> None:
     size = df["size_bytes"].to_numpy(float)
-    g, d, s = df["groups"].to_numpy(float), df["datasets"].to_numpy(float), df["sackin_index"].to_numpy(float)
+    g, d = df["groups"].to_numpy(float), df["datasets"].to_numpy(float)
+    c = df["cophenetic_index"].to_numpy(float)
     requests = df["number_of_requests"].to_numpy(float)
     downloads = df["number_of_downloads"].to_numpy(float)
     streaming = np.maximum(requests - downloads, 0.0)
     print(f"\n--- Correlation summary ({len(df):,} files) ---")
     print(f"{'predictor':>12} {'target':>16} {'Spearman':>9} {'log-log':>8}")
     for target, tname in [(streaming, "streaming"), (requests, "total requests"), (downloads, "downloads")]:
-        for x, xname in [(size, "asset size"), (d, "datasets"), (g, "groups"), (s, "sackin")]:
-            ll = _loglog(x, target) if xname != "sackin" else float("nan")
-            print(f"{xname:>12} {tname:>16} {_spearman(x, target):+9.3f} {ll:+8.3f}")
+        for x, xname in [(size, "asset size"), (d, "datasets"), (g, "groups"), (c, "cophenetic")]:
+            print(f"{xname:>12} {tname:>16} {_spearman(x, target):+9.3f} {_loglog(x, target):+8.3f}")
 
 
 def main() -> None:

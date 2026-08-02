@@ -4,8 +4,9 @@ Build a joined table of NWB structural metrics, asset size, and access counts.
 For every valid NWB file in the DANDI ``dandi-cache`` structural caches, this
 collects four things and joins them into a single CSV:
 
-  * structural metrics  — number of HDF5 groups, number of HDF5 datasets, and
-    normalized Sackin index (tree imbalance), keyed by content ID;
+  * structural metrics  — number of HDF5 groups, number of HDF5 datasets, the total
+    cophenetic index (tree balance, defined for arbitrary-degree trees), and
+    out-degree statistics, keyed by content ID;
   * asset size (bytes)  — read from an S3 ``HEAD`` on the blob;
   * access counts       — ``number_of_requests`` / ``number_of_downloads`` from
     the published ``dandi/access-summaries`` per-dandiset ``by_asset.tsv``.
@@ -16,7 +17,8 @@ The join key chain is:
     content_id  --(S3 HEAD on blobs/<...>/<content_id>)-->  size in bytes
 
 Output columns (one row per content ID that resolves through the whole chain):
-    content_id, dandiset_id, asset_path, groups, datasets, sackin_index,
+    content_id, dandiset_id, asset_path, groups, datasets, cophenetic_index,
+    mean_out_degree, max_out_degree, variance_out_degree, n_internal_nodes,
     size_bytes, number_of_requests, number_of_downloads, requests_censored
 
 ``number_of_requests`` / ``number_of_downloads`` are privacy-rounded in the
@@ -51,12 +53,16 @@ CACHE_ORG = "dandi-cache"
 SUMMARIES = f"{RAW}/dandi/access-summaries/main/content/summaries"
 S3_BUCKET = "https://dandiarchive.s3.amazonaws.com"
 
-# dandi-cache repos (repo name, derivatives file stem) for the three structural metrics
+# Scalar structural caches published as gzipped JSON Lines on the `dist` branch.
 STRUCTURAL = {
     "groups": ("valid-nwb-file-to-number-of-groups", "valid_nwb_file_to_number_of_groups"),
     "datasets": ("valid-nwb-file-to-number-of-datasets", "valid_nwb_file_to_number_of_datasets"),
-    "sackin_index": ("valid-nwb-file-to-sackin-index", "valid_nwb_file_to_sackin_index"),
 }
+# Newer caches published as plain JSON Lines on the `derivatives` branch under
+# derivatives/derivatives/. `cophenetic_index` is a scalar; `out_degrees` is a dict
+# {n_internal_nodes, mean_out_degree, max_out_degree, variance_out_degree, median_out_degree}.
+COPHENETIC_REPO = ("valid-nwb-file-to-cophenetic-index", "valid_nwb_file_to_cophenetic_index")
+OUT_DEGREES_REPO = ("valid-nwb-file-to-out-degrees", "valid_nwb_file_to_out_degrees")
 MAP_REPO = ("content-id-to-nwb-file", "content_id_to_nwb_file")
 
 
@@ -66,6 +72,22 @@ def _fetch_jsonl_gz(url: str) -> list[dict]:
     response.raise_for_status()
     text = gzip.decompress(response.content).decode("utf-8")
     return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def _fetch_jsonl_plain(url: str) -> list[dict]:
+    """Download a plain (uncompressed) JSON Lines file and return the parsed objects."""
+    response = requests.get(url, timeout=120)
+    response.raise_for_status()
+    return [json.loads(line) for line in response.text.splitlines() if line.strip()]
+
+
+def load_derivatives_metric(repo: str, stem: str) -> dict[str, object]:
+    """Return ``{content_id: value}`` for a cache on the ``derivatives`` branch."""
+    url = f"{RAW}/{CACHE_ORG}/{repo}/derivatives/derivatives/{stem}.jsonl"
+    out: dict[str, object] = {}
+    for obj in _fetch_jsonl_plain(url):
+        out.update(obj)
+    return out
 
 
 def load_structural_metric(repo: str, stem: str) -> dict[str, float]:
@@ -159,9 +181,10 @@ def main() -> None:
     print("Loading structural metrics...")
     groups = load_structural_metric(*STRUCTURAL["groups"])
     datasets = load_structural_metric(*STRUCTURAL["datasets"])
-    sackin = load_structural_metric(*STRUCTURAL["sackin_index"])
-    content_ids = sorted(set(groups) & set(datasets) & set(sackin))
-    print(f"  {len(content_ids):,} content IDs with all three metrics")
+    cophenetic = load_derivatives_metric(*COPHENETIC_REPO)
+    out_degrees = load_derivatives_metric(*OUT_DEGREES_REPO)
+    content_ids = sorted(set(groups) & set(datasets) & set(cophenetic) & set(out_degrees))
+    print(f"  {len(content_ids):,} content IDs with all structural metrics")
 
     print("Loading content-id -> (dandiset, asset_path) map...")
     id_map = load_content_id_map(*MAP_REPO)
@@ -183,7 +206,11 @@ def main() -> None:
                 "asset_path",
                 "groups",
                 "datasets",
-                "sackin_index",
+                "cophenetic_index",
+                "mean_out_degree",
+                "max_out_degree",
+                "variance_out_degree",
+                "n_internal_nodes",
                 "size_bytes",
                 "number_of_requests",
                 "number_of_downloads",
@@ -197,6 +224,7 @@ def main() -> None:
             if access is None or size is None:
                 continue
             requests_value, downloads_value, censored = access
+            out_degree = out_degrees[content_id]
             writer.writerow(
                 [
                     content_id,
@@ -204,7 +232,11 @@ def main() -> None:
                     asset_path,
                     int(groups[content_id]),
                     int(datasets[content_id]),
-                    sackin[content_id],
+                    cophenetic[content_id],
+                    out_degree["mean_out_degree"],
+                    out_degree["max_out_degree"],
+                    out_degree["variance_out_degree"],
+                    out_degree["n_internal_nodes"],
                     size,
                     requests_value,
                     downloads_value,

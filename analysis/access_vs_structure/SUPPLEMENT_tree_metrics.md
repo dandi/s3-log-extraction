@@ -23,8 +23,17 @@ Under these conditions the Sackin min-max normalization,
 $S_{\text{norm}} = (S - S_{\min})/(S_{\max} - S_{\min})$ with
 $S_{\min} = n\lceil\log_2 n\rceil$ (a balanced **binary** tree), compares each file
 to a minimum it **cannot reach** — a binary tree is the wrong null for a fan-out
-format. That is why every observed value is negative (see the note in §3.1 of the
-white paper). The reference, not the data, is the anomaly.
+format. The reference, not the data, is the anomaly.
+
+**Why every published Sackin value is negative.** Because NWB groups hold many
+datasets as direct children, leaves sit at depth ~2–3 regardless of count, so the
+true leaf-depth sum $S$ falls *below* the binary minimum $S_{\min}$, making
+$S - S_{\min} < 0$ and the normalized index negative. A negative value therefore
+means the file is **flatter/bushier than a balanced binary tree** — as broad-and-
+shallow scientific containers should be — not that it is unusual. The magnitude
+tracks size (small files are flattest, so most negative; larger files accrue depth
+and climb toward 0), i.e. the Sackin value is effectively a nonlinear restatement of
+file size rather than an independent axis.
 
 **Two principled fixes** (either removes the negativity and the binary bias):
 
@@ -74,7 +83,45 @@ tool. We suggest:
   **not** normalizing view counts. None of them rescues structural complexity as an
   access-normalizer.
 
-## 4. Caveats
+## 4. Empirical check: the corrected metrics behave identically
+
+We computed the **total cophenetic index** and **out-degree statistics** over the
+same file set (via the `dandi-cache/valid-nwb-file-to-cophenetic-index` and
+`…-to-out-degrees` caches) and joined them to asset size and streaming-request
+counts (1,829 files with all quantities present). The point of the exercise was to
+test whether the binary-baseline critique of the Sackin index was the reason
+structural complexity failed to predict access. It was not.
+
+| predictor | Spearman with streaming | log-log |
+|---|---|---|
+| asset size | **+0.74** | +0.67 |
+| n_internal_nodes | +0.18 | +0.43 |
+| total cophenetic index | +0.14 | +0.41 |
+| max out-degree | −0.04 | +0.22 |
+| mean out-degree | +0.05 | +0.13 |
+| variance out-degree | −0.07 | +0.12 |
+
+Findings:
+
+- **The "fair" metric matches the "unfair" one.** The total cophenetic index
+  correlates with streaming at +0.14 — the same as the binary-baseline Sackin index
+  (+0.12) and the raw datasets count (+0.14). Fixing the baseline changes nothing:
+  structural complexity genuinely does not drive access, however correctly it is
+  measured.
+- **The cophenetic index is complexity/size restated.** It is rank-correlated 0.88
+  with internal-node count and near-orthogonal to byte-size (−0.10), and adds the
+  same size-controlled partial signal (partial $r \approx 0.49$) that the dataset
+  count did — no new axis.
+- **Out-degree is even weaker.** The NWB-native breadth axis (mean/max/variance of
+  children per group) is essentially uncorrelated with access (all $|\rho| < 0.08$).
+  Interestingly, max out-degree is *negatively* related to size (−0.29) — bushier
+  files tend to be smaller — but neither predicts who accesses them.
+
+This closes the loop the main paper opened: **none of the degree-appropriate
+metrics rescues structural complexity as an access-normalizer.** Size remains the
+only real predictor, so the recommendation stands unchanged.
+
+## 5. Caveats
 
 - The metrics above treat the hierarchy as an unlabeled rooted tree; they ignore
   dataset *shapes*, dtypes, and chunking, which may matter more than tree shape for

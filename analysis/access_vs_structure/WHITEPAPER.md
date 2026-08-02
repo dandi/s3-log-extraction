@@ -9,8 +9,8 @@ a burst of partial (range) requests from a single IP address, bounded by gaps of
 more than **8 hours**. We motivate the 8-hour threshold empirically from the
 distribution of inter-request intervals in the S3 access logs, and we show — by
 joining structural-complexity metrics, asset size, and web-access counts across
-~5,000 valid NWB files — that normalizing view counts by file size, group/dataset
-count, or tree-balance (Sackin) index would not be *fair*: those quantities either
+~1,800 valid NWB files — that normalizing view counts by file size, group/dataset
+count, or a tree-balance index would not be *fair*: those quantities either
 do not predict genuine interest at all, or predict only the mechanical volume of
 requests that the session definition is specifically designed to absorb.
 
@@ -97,39 +97,30 @@ clean 5–9 h valley described above.
 ## 3. Why not normalize by a file property?
 
 A recurring proposal is to normalize access counts by some intrinsic file
-property — size, structural complexity (group/dataset counts), or the Sackin
-tree-imbalance index — to "level the playing field" between assets. We joined all
-of these to per-asset access counts (~4,965 files across ~265 dandisets; methods in
-§5) and find that such normalization would be **unfair** for two distinct reasons.
+property — size, structural complexity (group/dataset counts), or a tree-balance
+index — to "level the playing field" between assets. We joined all of these to
+per-asset access counts (~1,829 files across ~200 dandisets; methods in §5) and
+find that such normalization would be **unfair** for two distinct reasons.
 
 ### 3.1 Structural complexity does not predict interest
 
-The three structural metrics are really one axis — group count, dataset count, and
-Sackin index are rank-correlated 0.83–0.94, with Sackin a nonlinear restatement of
-object count (Figure 1). More importantly, **none of them predicts how much an
-asset is accessed**: their rank correlation with streaming volume is only
-0.08–0.18.
+The structural metrics are really one axis — group count, dataset count, and the
+**total cophenetic index** (a tree-balance metric defined for arbitrary-degree
+trees; see the supplement) are rank-correlated 0.82–0.95, with the cophenetic index
+essentially a nonlinear restatement of object count (Figure 1). More importantly,
+**none of them predicts how much an asset is accessed**: their rank correlation with
+streaming volume is only 0.14–0.19.
 
 ![Structural metrics are one axis](figures/structure_relationships.png)
-*Figure 1. The three structural metrics are strongly monotonically related; Sackin
-index saturates toward 0 as files grow. They measure complexity, not access.*
+*Figure 1. The structural metrics are strongly monotonically related; the total
+cophenetic index grows as a near power-law in object count. They measure
+complexity, not access.*
 
-> **Note — why every Sackin index is negative.** The index is min-max normalized as
-> $S_{\text{norm}} = (S - S_{\min}) / (S_{\max} - S_{\min})$, where $S$ is the sum of
-> leaf depths, $S_{\max}$ is the maximally-imbalanced *caterpillar* tree, and
-> $S_{\min} = n\lceil\log_2 n\rceil$ is a balanced *binary* tree. That $S_{\min}$
-> reference assumes a binary tree, but NWB/HDF5 hierarchies are **high-fan-out**: a
-> group holds many datasets as direct children, so leaves sit at depth ~2–3
-> regardless of count. Their true leaf-depth sum therefore falls *below* the binary
-> minimum, making $S - S_{\min} < 0$ and the normalized value negative. A negative
-> value thus means the file is **flatter/bushier than a balanced binary tree** — as
-> broad-and-shallow scientific containers should be — not that it is unusual. The
-> magnitude tracks size (small files are flattest, so most negative; larger files
-> accrue depth and climb toward 0), which is another way of seeing that Sackin here
-> is effectively a nonlinear restatement of file size rather than an independent
-> axis. A "proper" $[0, 1]$ score would require re-deriving $S_{\min}$ for
-> arbitrary-degree trees — see `SUPPLEMENT_tree_metrics.md` for why the binary
-> baseline is inappropriate and which alternative metrics suit NWB hierarchies.
+> We use the **total cophenetic index** here rather than the Sackin index reported
+> by the source cache, because the Sackin normalization assumes a binary tree and is
+> inappropriate for high-fan-out NWB hierarchies (it is why every published Sackin
+> value is negative). That critique — and an empirical check confirming the two give
+> the *same* weak access correlation — is in `SUPPLEMENT_tree_metrics.md`.
 
 Dividing a view count by a quantity that is uncorrelated with genuine interest does
 not remove a confound — it **injects noise** and arbitrarily penalizes or rewards
@@ -186,7 +177,7 @@ normalized away.
 
 1. **Report views as streaming sessions** with an 8-hour inactivity boundary,
    per (IP, asset). Count full downloads as a separate quantity.
-2. **Do not normalize view counts by size, group/dataset count, or Sackin index.**
+2. **Do not normalize view counts by size, group/dataset count, or any tree-shape index.**
    Complexity is uncorrelated with interest; size correlates only through a
    mechanical request-inflation effect that the session definition already
    removes. Any such normalizer would either add noise (complexity) or
@@ -203,8 +194,9 @@ normalized away.
   inter-request intervals per IP over the extraction cache, the minimum-density
   valley, the guard-band ambiguity sweep, and per-candidate bot attribution.
 - **Access vs. structure** — `analysis/access_vs_structure/build_dataset.py` joins
-  the `dandi-cache` structural caches (groups, datasets, Sackin index, keyed by
-  content ID) → `content-id-to-nwb-file` → `dandi/access-summaries` request/download
+  the `dandi-cache` structural caches (groups, datasets, total cophenetic index,
+  out-degree stats; keyed by content ID) → `content-id-to-nwb-file` →
+  `dandi/access-summaries` request/download
   counts, and reads asset sizes via S3 `HEAD`. `plot_relationships.py` renders
   Figures 1–3 and prints the correlation table.
 
