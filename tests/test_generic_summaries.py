@@ -1,3 +1,4 @@
+import datetime
 import json
 import pathlib
 import secrets
@@ -559,24 +560,26 @@ def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpd
         ),
     ],
 )
-def test_count_asset_views(
+def test_asset_view_sessionization(
     tmpdir: py.path.local, requests: list[tuple[str, int, str]], expected_number_of_views: int
 ) -> None:
     """Streaming sessions are counted per IP, split only by gaps of more than 8 hours."""
-    from s3_log_extraction.summarize._generate_summaries import _count_asset_views
+    from s3_log_extraction.summarize._generate_summaries import _summarize_asset_access
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(asset_directory=asset_directory, requests=requests)
 
-    number_of_views = _count_asset_views(asset_directory=asset_directory, use_encryption=False)
+    asset_summary = _summarize_asset_access(
+        asset_directory=asset_directory, ip_to_region={}, window_start=0.0, use_encryption=False
+    )
 
-    assert number_of_views == expected_number_of_views
+    assert asset_summary.number_of_views == expected_number_of_views
 
 
 @pytest.mark.ai_generated
-def test_count_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
+def test_asset_view_sessionization_respects_custom_timeout(tmpdir: py.path.local) -> None:
     """The session timeout is configurable, and the default of 8 hours is applied when it is not overridden."""
-    from s3_log_extraction.summarize._generate_summaries import _count_asset_views
+    from s3_log_extraction.summarize._generate_summaries import _summarize_asset_access
     from s3_log_extraction.summarize._globals import SESSION_TIMEOUT_SECONDS
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
@@ -585,15 +588,24 @@ def test_count_asset_views_respects_custom_session_timeout(tmpdir: py.path.local
         requests=[("250101000000", _STREAMING, "192.0.2.0"), ("250101040000", _STREAMING, "192.0.2.0")],
     )
 
+    def count_views(session_timeout_seconds: int) -> int:
+        return _summarize_asset_access(
+            asset_directory=asset_directory,
+            ip_to_region={},
+            window_start=0.0,
+            use_encryption=False,
+            session_timeout_seconds=session_timeout_seconds,
+        ).number_of_views
+
     assert SESSION_TIMEOUT_SECONDS == 28_800
-    assert _count_asset_views(asset_directory=asset_directory, use_encryption=False) == 1
-    assert _count_asset_views(asset_directory=asset_directory, use_encryption=False, session_timeout_seconds=3_600) == 2
+    assert count_views(session_timeout_seconds=SESSION_TIMEOUT_SECONDS) == 1
+    assert count_views(session_timeout_seconds=3_600) == 2
 
 
 @pytest.mark.ai_generated
-def test_count_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) -> None:
-    """Per-asset files that are not line-aligned cannot be sessionized, so they are skipped with a warning."""
-    from s3_log_extraction.summarize._generate_summaries import _count_asset_views
+def test_summarize_asset_access_warns_on_misaligned_files(tmpdir: py.path.local) -> None:
+    """Per-asset files that are not line-aligned cannot be sessionized, so views are skipped with a warning."""
+    from s3_log_extraction.summarize._generate_summaries import _summarize_asset_access
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(
@@ -603,66 +615,253 @@ def test_count_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) -> N
     (asset_directory / "download.txt").write_text("0\n")
 
     with pytest.warns(UserWarning, match="mismatched line counts"):
-        number_of_views = _count_asset_views(asset_directory=asset_directory, use_encryption=False)
+        asset_summary = _summarize_asset_access(
+            asset_directory=asset_directory, ip_to_region={}, window_start=0.0, use_encryption=False
+        )
 
-    assert number_of_views == 0
+    assert asset_summary.number_of_views == 0
+    assert asset_summary.number_of_requests == 2
 
 
 @pytest.mark.ai_generated
-def test_summaries_privacy_round_number_of_views(tmpdir: py.path.local) -> None:
-    """Per-asset view counts are privacy-rounded exactly like the request and download counts."""
+@pytest.mark.parametrize(
+    ("region_labels", "expected_release"),
+    [
+        # More than three genuine geographic regions releases the update
+        (["US/California", "DE/Berlin", "JP/Tokyo", "BR/Sao Paulo"], True),
+        (["US/California", "DE/Berlin", "JP/Tokyo", "BR/Sao Paulo", "FR/Paris"], True),
+        # Exactly three, or fewer, withholds it
+        (["US/California", "DE/Berlin", "JP/Tokyo"], False),
+        (["US/California"], False),
+        # Repeats of one region are still one region
+        (["US/California", "US/California", "US/California", "US/California"], False),
+        # Cloud service and VPN traffic is not evidence of a diverse requester population
+        (["AWS/us-east-1", "GCP/us-central1", "GitHub", "VPN"], False),
+        # Neither are IPs whose location could not be resolved
+        (["missing", "unknown", "undetermined", "bogon"], False),
+        # Genuine regions still count when mixed with excluded ones
+        (["US/California", "DE/Berlin", "JP/Tokyo", "BR/Sao Paulo", "VPN", "missing"], True),
+        (["US/California", "DE/Berlin", "VPN", "missing", "AWS/us-east-1"], False),
+    ],
+)
+def test_asset_row_released_only_above_region_threshold(
+    tmpdir: py.path.local, region_labels: list[str], expected_release: bool
+) -> None:
+    """An asset's exact row is released only when more than three genuine geographic regions accessed it."""
+    from s3_log_extraction.summarize._generate_summaries import _release_asset_row, _summarize_asset_access
+
+    asset_directory = pathlib.Path(tmpdir) / "asset"
+    ips = [f"192.0.2.{index}" for index in range(len(region_labels))]
+    _write_asset(
+        asset_directory=asset_directory,
+        requests=[(f"2501010000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
+    )
+    ip_to_region = dict(zip(ips, region_labels))
+
+    asset_summary = _summarize_asset_access(
+        asset_directory=asset_directory, ip_to_region=ip_to_region, window_start=0.0, use_encryption=False
+    )
+
+    assert _release_asset_row(asset_summary.recent_regions) == expected_release
+
+
+@pytest.mark.ai_generated
+def test_only_activity_inside_the_reporting_week_counts_toward_the_threshold(tmpdir: py.path.local) -> None:
+    """Regions that accessed the asset before the reporting week do not unlock this week's release."""
+    from s3_log_extraction.summarize._generate_summaries import _release_asset_row, _summarize_asset_access
+
+    asset_directory = pathlib.Path(tmpdir) / "asset"
+    ips = [f"192.0.2.{index}" for index in range(4)]
+    _write_asset(
+        asset_directory=asset_directory,
+        requests=[(f"2501010000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
+    )
+    ip_to_region = dict(zip(ips, ["US/California", "DE/Berlin", "JP/Tokyo", "BR/Sao Paulo"]))
+
+    window_start_before = datetime.datetime(2024, 12, 31, tzinfo=datetime.timezone.utc).timestamp()
+    window_start_after = datetime.datetime(2025, 1, 2, tzinfo=datetime.timezone.utc).timestamp()
+
+    def released(window_start: float) -> bool:
+        asset_summary = _summarize_asset_access(
+            asset_directory=asset_directory,
+            ip_to_region=ip_to_region,
+            window_start=window_start,
+            use_encryption=False,
+        )
+        return _release_asset_row(asset_summary.recent_regions)
+
+    assert released(window_start=window_start_before) is True
+    assert released(window_start=window_start_after) is False
+
+
+def _write_ip_to_region(*, test_dir: pathlib.Path, ip_to_region: dict[str, str], use_encryption: bool = False) -> None:
+    """Seed the IP-to-region cache that the disclosure gate reads."""
+    ip_cache_directory = test_dir / "ips"
+    ip_cache_directory.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(f"{ip}: {region}" for ip, region in ip_to_region.items()) + "\n"
+    s3_log_extraction.utils.write_text_to_file(
+        file_path=ip_cache_directory / "ip_to_region.yaml", text=text, use_encryption=use_encryption
+    )
+
+
+_FOUR_REGIONS = ("US/California", "DE/Berlin", "JP/Tokyo", "BR/Sao Paulo")
+_RELEASE_DATETIME = datetime.datetime(2025, 1, 8, tzinfo=datetime.timezone.utc)
+
+
+@pytest.mark.ai_generated
+def test_summaries_release_exact_values_above_region_threshold(tmpdir: py.path.local) -> None:
+    """An asset accessed by more than three regions this week has its exact row released."""
     test_dir = pathlib.Path(tmpdir)
-    dataset_directory = test_dir / "extraction" / "ds001"
 
-    # One view from each of sixty distinct requesters, which survives the disclosure threshold
+    ips = [f"192.0.2.{index}" for index in range(4)]
     _write_asset(
-        asset_directory=dataset_directory / "popular.nwb",
-        requests=[(f"2501010000{index:02d}", _STREAMING, f"192.0.2.{index}") for index in range(60)],
+        asset_directory=test_dir / "extraction" / "ds001" / "popular.nwb",
+        requests=[(f"2501070000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
     )
-    # Three views from a single requester, which is censored
-    _write_asset(
-        asset_directory=dataset_directory / "quiet.nwb",
-        requests=[
-            ("250101000000", _STREAMING, "198.51.100.0"),
-            ("250102000000", _STREAMING, "198.51.100.0"),
-            ("250103000000", _STREAMING, "198.51.100.0"),
-        ],
-    )
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS)))
 
-    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, reference_datetime=_RELEASE_DATETIME
+    )
 
     by_asset = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_asset.tsv", index_col=0)
-    assert by_asset.columns.tolist() == ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
-    assert by_asset.loc["popular.nwb", "number_of_views"] == "60"
+    assert by_asset.loc["popular.nwb", "number_of_requests"] == 4
+    assert by_asset.loc["popular.nwb", "number_of_downloads"] == 0
+    assert by_asset.loc["popular.nwb", "number_of_views"] == 4
+    assert (test_dir / "summaries" / "ds001" / "view_count.tsv").read_text().strip() == "4"
+
+
+@pytest.mark.ai_generated
+def test_summaries_withhold_exact_values_below_region_threshold(tmpdir: py.path.local) -> None:
+    """An asset accessed by only three regions is published with conservatively rounded values instead."""
+    test_dir = pathlib.Path(tmpdir)
+
+    ips = [f"192.0.2.{index}" for index in range(3)]
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "quiet.nwb",
+        requests=[(f"2501070000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
+    )
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS[:3])))
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, reference_datetime=_RELEASE_DATETIME
+    )
+
+    by_asset = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_asset.tsv", index_col=0)
+    assert by_asset.loc["quiet.nwb", "number_of_requests"] == "<50"
     assert by_asset.loc["quiet.nwb", "number_of_views"] == "<50"
 
 
 @pytest.mark.ai_generated
+def test_withheld_asset_keeps_the_values_of_its_previous_release(tmpdir: py.path.local) -> None:
+    """A week of activity too sparse to release leaves the published row byte-for-byte unchanged."""
+    test_dir = pathlib.Path(tmpdir)
+    asset_directory = test_dir / "extraction" / "ds001" / "popular.nwb"
+    summary_file_path = test_dir / "summaries" / "ds001" / "by_asset.tsv"
+
+    ips = [f"192.0.2.{index}" for index in range(4)]
+    diverse_requests = [(f"2501070000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)]
+    _write_asset(asset_directory=asset_directory, requests=diverse_requests)
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS)))
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, reference_datetime=_RELEASE_DATETIME
+    )
+    first_release = summary_file_path.read_text()
+
+    # A second week in which a single requester from one region streamed the asset many more times
+    quiet_requests = [(f"2501150000{index:02d}", _STREAMING, ips[0]) for index in range(30)]
+    _write_asset(asset_directory=asset_directory, requests=diverse_requests + quiet_requests)
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir,
+        use_encryption=False,
+        reference_datetime=_RELEASE_DATETIME + datetime.timedelta(days=8),
+    )
+
+    assert summary_file_path.read_text() == first_release
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("days_later", [0, 1, 6])
+def test_summaries_raise_inside_the_update_interval(tmpdir: py.path.local, days_later: int) -> None:
+    """Releasing the summaries again before a full week has passed is refused."""
+    test_dir = pathlib.Path(tmpdir)
+
+    ips = [f"192.0.2.{index}" for index in range(4)]
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "popular.nwb",
+        requests=[(f"2501070000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
+    )
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS)))
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, reference_datetime=_RELEASE_DATETIME
+    )
+
+    with pytest.raises(RuntimeError, match="may not be released again"):
+        s3_log_extraction.summarize.generate_summaries(
+            cache_directory=test_dir,
+            use_encryption=False,
+            reference_datetime=_RELEASE_DATETIME + datetime.timedelta(days=days_later),
+        )
+
+
+@pytest.mark.ai_generated
+def test_summaries_release_again_after_the_update_interval(tmpdir: py.path.local) -> None:
+    """Once a full week has passed the summaries may be released again."""
+    test_dir = pathlib.Path(tmpdir)
+
+    ips = [f"192.0.2.{index}" for index in range(4)]
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "popular.nwb",
+        requests=[(f"2501070000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
+    )
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS)))
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, reference_datetime=_RELEASE_DATETIME
+    )
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir,
+        use_encryption=False,
+        reference_datetime=_RELEASE_DATETIME + datetime.timedelta(days=7),
+    )
+
+    assert (test_dir / "summaries" / "ds001" / "by_asset.tsv").exists() is True
+
+
+@pytest.mark.ai_generated
 def test_summaries_count_views_with_encryption(tmpdir: py.path.local, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Views are counted from encrypted IP files, which is how the extraction cache stores them by default."""
+    """Views and regions are read from encrypted IP files, which is how the extraction cache stores them."""
     monkeypatch.setenv("S3_LOG_EXTRACTION_PASSWORD", secrets.token_urlsafe(32))
 
     test_dir = pathlib.Path(tmpdir)
-    asset_directory = test_dir / "extraction" / "ds001" / "encrypted.nwb"
+    ips = [f"192.0.2.{index}" for index in range(4)]
 
-    # Two views for each of thirty requesters, split by a gap of more than 8 hours
+    # Two views for each of the four requesters, split by a gap of more than 8 hours, plus a full download
     requests = []
-    for index in range(30):
-        ip = f"192.0.2.{index}"
+    for index, ip in enumerate(ips):
         requests.extend(
             [
-                (f"2501010000{index:02d}", _STREAMING, ip),
-                (f"2501011200{index:02d}", _STREAMING, ip),
-                (f"2501011200{index:02d}", _DOWNLOAD, ip),
+                (f"2501070000{index:02d}", _STREAMING, ip),
+                (f"2501071200{index:02d}", _STREAMING, ip),
+                (f"2501071200{index:02d}", _DOWNLOAD, ip),
             ]
         )
-    _write_asset(asset_directory=asset_directory, requests=requests, use_encryption=True)
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "encrypted.nwb", requests=requests, use_encryption=True
+    )
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS)), use_encryption=True)
 
-    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=True)
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=True, reference_datetime=_RELEASE_DATETIME
+    )
 
     by_asset = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_asset.tsv", index_col=0)
-    assert by_asset.loc["encrypted.nwb", "number_of_views"] == 60
-    assert (test_dir / "summaries" / "ds001" / "view_count.tsv").read_text().strip() == "60"
+    assert by_asset.loc["encrypted.nwb", "number_of_views"] == 8
+    assert by_asset.loc["encrypted.nwb", "number_of_downloads"] == 4
+    assert (test_dir / "summaries" / "ds001" / "view_count.tsv").read_text().strip() == "8"
 
 
 @pytest.mark.ai_generated
@@ -671,39 +870,41 @@ def test_view_counts_roll_up_to_dataset_and_archive_totals(tmpdir: py.path.local
     test_dir = pathlib.Path(tmpdir)
     extraction_directory = test_dir / "extraction"
 
-    # ds001: forty views on one asset and twenty on another, for a dataset total of sixty
-    _write_asset(
-        asset_directory=extraction_directory / "ds001" / "first.nwb",
-        requests=[(f"2501010000{index:02d}", _STREAMING, f"192.0.2.{index}") for index in range(40)],
-    )
-    _write_asset(
-        asset_directory=extraction_directory / "ds001" / "second.nwb",
-        requests=[(f"2501010000{index:02d}", _STREAMING, f"198.51.100.{index}") for index in range(20)],
-    )
-    # ds002: eighty views on a single asset
+    ips = [f"192.0.2.{index}" for index in range(4)]
+    _write_ip_to_region(test_dir=test_dir, ip_to_region=dict(zip(ips, _FOUR_REGIONS)))
+
+    # ds001: four views on one asset and four on another, for a dataset total of eight
+    for asset_name in ("first.nwb", "second.nwb"):
+        _write_asset(
+            asset_directory=extraction_directory / "ds001" / asset_name,
+            requests=[(f"2501070000{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips)],
+        )
+    # ds002: two views for each of the four requesters on a single asset
     _write_asset(
         asset_directory=extraction_directory / "ds002" / "third.nwb",
         requests=[
-            (f"250101{index // 60:02d}{index % 60:02d}00", _STREAMING, f"192.0.2.{index}") for index in range(80)
+            (f"250107{hour:02d}00{index:02d}", _STREAMING, ip) for index, ip in enumerate(ips) for hour in (0, 12)
         ],
     )
 
-    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, reference_datetime=_RELEASE_DATETIME
+    )
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
     s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
     s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
 
     summary_directory = test_dir / "summaries"
-    assert (summary_directory / "ds001" / "view_count.tsv").read_text().strip() == "60"
-    assert (summary_directory / "ds002" / "view_count.tsv").read_text().strip() == "80"
-    assert (summary_directory / "archive" / "view_count.tsv").read_text().strip() == "140"
+    assert (summary_directory / "ds001" / "view_count.tsv").read_text().strip() == "8"
+    assert (summary_directory / "ds002" / "view_count.tsv").read_text().strip() == "8"
+    assert (summary_directory / "archive" / "view_count.tsv").read_text().strip() == "16"
 
     totals = json.loads((summary_directory / "totals.json").read_text())
-    assert totals["ds001"]["total_number_of_views"] == 60
-    assert totals["ds002"]["total_number_of_views"] == 80
+    assert totals["ds001"]["total_number_of_views"] == 8
+    assert totals["ds002"]["total_number_of_views"] == 8
 
     archive_totals = json.loads((summary_directory / "archive_totals.json").read_text())
-    assert archive_totals["total_number_of_views"] == 140
+    assert archive_totals["total_number_of_views"] == 16
 
 
 @pytest.mark.ai_generated
