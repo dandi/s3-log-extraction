@@ -3,7 +3,7 @@ import pathlib
 
 import pandas
 
-from ._generate_summaries import _round_requester_count
+from ._generate_summaries import _read_privacy_rounded_count, _round_requester_count
 from ..config import get_cache_subdirectory
 from ..ip_utils._globals import EXCLUDED_REGION_LABELS
 
@@ -63,6 +63,11 @@ def generate_all_dataset_totals(
         if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
             number_of_requesters = int(number_of_requesters)
 
+        number_of_views = _read_privacy_rounded_count(
+            summary_file_path=summary_directory / dataset_id / "view_count.tsv",
+            privacy_threshold_minimum=privacy_threshold_minimum,
+        )
+
         all_dataset_totals[dataset_id] = {
             "total_bytes_sent": int(summary["bytes_sent"].sum()),
             "number_of_unique_regions": number_of_unique_regions,
@@ -74,6 +79,7 @@ def generate_all_dataset_totals(
                 count=int(summary["number_of_downloads"].sum()), modulo=20, minimum=privacy_threshold_minimum
             ),
             "number_of_requesters": number_of_requesters,
+            "total_number_of_views": number_of_views,
         }
 
     top_level_summary_file_path = summary_directory / "totals.json"

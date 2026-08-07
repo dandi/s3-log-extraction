@@ -114,6 +114,22 @@ def generate_archive_summaries(
     archive_requester_count_file_path = archive_directory / "requester_count.tsv"
     archive_requester_count_file_path.write_text(archive_requester_count)
 
+    # View count (aggregated from dataset view_count.tsv files)
+    # Views are streaming sessions of a single requester on a single asset, so they sum exactly across
+    # datasets. Datasets whose own total was censored below the threshold cannot contribute, however.
+    view_counts: list[int] = [
+        int(value)
+        for summary_file_path in summary_directory.rglob(pattern="view_count.tsv")
+        if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
+    ]
+    total_view_count: int = sum(view_counts)
+    archive_view_count: str = (
+        f"<{privacy_threshold_minimum}" if total_view_count < privacy_threshold_minimum else str(total_view_count)
+    )
+
+    archive_view_count_file_path = archive_directory / "view_count.tsv"
+    archive_view_count_file_path.write_text(archive_view_count)
+
     # Optional by_asset_type_per_week aggregation
     all_dataset_summaries_by_asset_type_per_week = [
         pandas.read_table(filepath_or_buffer=summary_file_path)

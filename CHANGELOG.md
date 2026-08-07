@@ -2,7 +2,13 @@
 
 ## Upcoming
 
+### 🚀 Enhancement
+
+- Added a `number_of_views` column to the per-dataset `by_asset.tsv` summaries. A view is a streaming session rather than a request, defined as a maximal run of streaming (HTTP 206) requests from one IP address to one asset in which no two consecutive requests are more than 8 hours apart. Full downloads (HTTP 200) are never views and continue to be reported by `number_of_downloads`. The threshold is the `SESSION_TIMEOUT_SECONDS` constant. Each dataset also gains a `view_count.tsv` holding its total, which is aggregated into `archive/view_count.tsv` and reported as `total_number_of_views` in `totals.json` and `archive_totals.json`. All view counts are privacy-rounded on the same modulo and minimum disclosure threshold as the request and download counts. ([#293](https://github.com/dandi/s3-log-extraction/pull/293))
+
 ### 🏠 Internal
+
+- Added a `summarize` globals module holding `SESSION_TIMEOUT_SECONDS`, the request timestamp format, and the list of privacy-protected summary columns. ([#293](https://github.com/dandi/s3-log-extraction/pull/293))
 
 - Added a `Version Check` CI workflow that fails pull requests which modify `src/` or `pyproject.toml` without bumping the package version. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
 
