@@ -6,11 +6,23 @@ import warnings
 import pandas
 import tqdm
 
-from ._globals import PRIVACY_PROTECTED_COLUMN_NAMES, SESSION_TIMEOUT_SECONDS, TIMESTAMP_FORMAT
 from ..config import get_cache_directory, get_cache_subdirectory
 from ..ip_utils import load_ip_cache
 from ..ip_utils._globals import is_cloud_service_or_vpn_label
 from ..ip_utils._ip_utils import _read_ips_from_file
+
+# A view of an asset is a streaming session: a maximal run of streaming (HTTP 206) requests from one IP
+# address to that asset in which no two consecutive requests are more than this many seconds apart.
+# Eight hours sits in the empirical minimum-density valley of the observed inter-request gaps. Pauses
+# within a session are essentially all under two hours and returning visits cluster after about 21 hours,
+# so only about 1 gap in 60,000 is ambiguous and the counts are insensitive to any cutoff from 2 to 8 hours.
+SESSION_TIMEOUT_SECONDS = 28_800
+
+# Format of the per-request timestamps written to `timestamps.txt` during extraction
+TIMESTAMP_FORMAT = "%y%m%d%H%M%S"
+
+# Summary columns that are derived from per-requester behavior and must be privacy-rounded
+PRIVACY_PROTECTED_COLUMN_NAMES = ("number_of_requests", "number_of_downloads", "number_of_views")
 
 
 def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
@@ -42,30 +54,14 @@ def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     return round(count / modulo) * modulo
 
 
-def _read_privacy_rounded_count(*, summary_file_path: pathlib.Path, privacy_threshold_minimum: int = 50) -> str | int:
-    """
-    Read a single already privacy-rounded count from a summary file.
-
-    Returns the censored sentinel when the file is missing, which is how a cache summarized by an older
-    version of this package reports a count it never generated.
-    """
-    if not summary_file_path.exists():
-        return f"<{privacy_threshold_minimum}"
-
-    value = summary_file_path.read_text().strip()
-    return value if value.startswith("<") else int(value)
-
-
 def _privacy_round_request_download_columns(
     summary_table: pandas.DataFrame, *, modulo: int = 20, minimum: int = 50
 ) -> pandas.DataFrame:
     """
     Apply privacy rounding to every access count column present in the summary table.
 
-    Columns listed in ``PRIVACY_PROTECTED_COLUMN_NAMES`` are rounded when present. Not every summary
-    carries every column, so absent columns are skipped. For example, ``number_of_views`` is only
-    reported per asset, since a streaming session is defined per requester and asset and therefore
-    cannot be attributed to a single day or region.
+    Columns listed in ``PRIVACY_PROTECTED_COLUMN_NAMES`` are rounded when present. Absent columns are
+    skipped so that summaries written before a column existed can still be rounded and rolled up.
     """
     for column_name in PRIVACY_PROTECTED_COLUMN_NAMES:
         if column_name not in summary_table.columns:
@@ -77,14 +73,14 @@ def _privacy_round_request_download_columns(
     return summary_table
 
 
-def _count_asset_views(
+def _collect_asset_views(
     *,
     asset_directory: pathlib.Path,
     use_encryption: bool = True,
     session_timeout_seconds: int = SESSION_TIMEOUT_SECONDS,
-) -> int:
+) -> list[tuple[str, str]]:
     """
-    Count the number of views of a single asset.
+    Collect the views of a single asset.
 
     A view is a streaming session, not a request. One person exploring one file over a remote connection
     emits hundreds to thousands of partial range requests, so raw request counts measure a mix of interest
@@ -95,6 +91,10 @@ def _count_asset_views(
     consecutive requests are more than ``session_timeout_seconds`` apart. Only streaming requests count,
     which the extraction cache marks with a ``0`` in ``download.txt``. Full downloads are reported
     separately by ``number_of_downloads``.
+
+    Each view is returned with the date it began and the IP that made it, so that a view can be attributed
+    to a single day and a single region. A session spans requests and can straddle midnight, so it is
+    counted on the day of its first request.
 
     Parameters
     ----------
@@ -110,14 +110,14 @@ def _count_asset_views(
 
     Returns
     -------
-    int
-        The total number of streaming sessions across all IP addresses that streamed this asset.
+    list of tuple of str
+        One ``(date, ip)`` pair per view, where ``date`` is the ``YYYY-MM-DD`` day the session began.
     """
     timestamps_file_path = asset_directory / "timestamps.txt"
     download_file_path = asset_directory / "download.txt"
     ips_file_path = asset_directory / "ips.txt"
     if not (timestamps_file_path.exists() and download_file_path.exists() and ips_file_path.exists()):
-        return 0
+        return []
 
     timestamps = [stripped for line in timestamps_file_path.read_text().splitlines() if (stripped := line.strip())]
     downloads = [stripped for line in download_file_path.read_text().splitlines() if (stripped := line.strip())]
@@ -129,25 +129,27 @@ def _count_asset_views(
             f"(timestamps: {len(timestamps)}, downloads: {len(downloads)}, IPs: {len(ips)}).\n"
         )
         warnings.warn(message=message, stacklevel=2)
-        return 0
+        return []
 
-    epoch_seconds_per_ip = collections.defaultdict(list)
+    parsed_timestamps_per_ip = collections.defaultdict(list)
     for timestamp, download, ip in zip(timestamps, downloads, ips):
         if download != "0":  # Full downloads are not views
             continue
 
-        parsed_timestamp = datetime.datetime.strptime(timestamp, TIMESTAMP_FORMAT).replace(tzinfo=datetime.timezone.utc)
-        epoch_seconds_per_ip[ip].append(parsed_timestamp.timestamp())
-
-    number_of_views = 0
-    for epoch_seconds in epoch_seconds_per_ip.values():
-        epoch_seconds.sort()
-        number_of_views += 1 + sum(
-            1
-            for previous, current in zip(epoch_seconds, epoch_seconds[1:])
-            if current - previous > session_timeout_seconds
+        parsed_timestamps_per_ip[ip].append(
+            datetime.datetime.strptime(timestamp, TIMESTAMP_FORMAT).replace(tzinfo=datetime.timezone.utc)
         )
-    return number_of_views
+
+    views = []
+    for ip, parsed_timestamps in parsed_timestamps_per_ip.items():
+        parsed_timestamps.sort()
+        session_starts = [parsed_timestamps[0]] + [
+            current
+            for previous, current in zip(parsed_timestamps, parsed_timestamps[1:])
+            if (current - previous).total_seconds() > session_timeout_seconds
+        ]
+        views.extend((session_start.strftime(format="%Y-%m-%d"), ip) for session_start in session_starts)
+    return views
 
 
 def _collect_unique_ips(
@@ -325,26 +327,29 @@ def _summarize_dataset(
     use_encryption: bool = True,
     privacy_threshold_minimum: int = 50,
 ) -> None:
+    # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries
+    views_by_asset_directory = {
+        asset_directory: _collect_asset_views(asset_directory=asset_directory, use_encryption=use_encryption)
+        for asset_directory in asset_directories
+    }
+
     _summarize_dataset_by_day(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_day.tsv",
+        views_by_asset_directory=views_by_asset_directory,
         privacy_threshold_minimum=privacy_threshold_minimum,
     )
-    total_number_of_views = _summarize_dataset_by_asset(
+    _summarize_dataset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_asset.tsv",
-        use_encryption=use_encryption,
+        views_by_asset_directory=views_by_asset_directory,
         privacy_threshold_minimum=privacy_threshold_minimum,
-    )
-    _write_dataset_view_count(
-        total_number_of_views=total_number_of_views,
-        summary_file_path=summary_directory / dataset_id / "view_count.tsv",
-        minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
         ip_to_region=ip_to_region,
+        views_by_asset_directory=views_by_asset_directory,
         use_encryption=use_encryption,
         privacy_threshold_minimum=privacy_threshold_minimum,
     )
@@ -358,12 +363,20 @@ def _summarize_dataset(
 
 
 def _summarize_dataset_by_day(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, privacy_threshold_minimum: int = 50
+    *,
+    asset_directories: list[pathlib.Path],
+    summary_file_path: pathlib.Path,
+    views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     all_dates = []
     all_bytes_sent = []
     all_downloads = []
+    number_of_views_by_day = collections.defaultdict(int)
     for asset_directory in asset_directories:
+        for view_date, _ in views_by_asset_directory.get(asset_directory, []):
+            number_of_views_by_day[view_date] += 1
+
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
 
@@ -408,6 +421,7 @@ def _summarize_dataset_by_day(
             "bytes_sent": list(summarized_activity_by_day.values()),
             "number_of_requests": [number_of_requests_by_day[date] for date in all_dates_ordered],
             "number_of_downloads": [number_of_downloads_by_day[date] for date in all_dates_ordered],
+            "number_of_views": [number_of_views_by_day[date] for date in all_dates_ordered],
         }
     )
     summary_table.sort_values(by="date", inplace=True)
@@ -418,35 +432,13 @@ def _summarize_dataset_by_day(
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
-def _write_dataset_view_count(
-    *, total_number_of_views: int, summary_file_path: pathlib.Path, modulo: int = 20, minimum: int = 50
-) -> None:
-    """
-    Save the privacy-rounded total number of views across all assets of a dataset.
-
-    The per-asset view counts in ``by_asset.tsv`` are individually rounded and censored, so they cannot be
-    summed into a meaningful dataset total. This rounds the exact total instead, mirroring how the unique
-    requester count is reported.
-    """
-    rounded_count = _round_requester_count(count=total_number_of_views, modulo=modulo, minimum=minimum)
-    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_file_path.write_text(str(rounded_count))
-
-
 def _summarize_dataset_by_asset(
     *,
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
-    use_encryption: bool = True,
+    views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
     privacy_threshold_minimum: int = 50,
-) -> int:
-    """
-    Summarize per-asset activity for a dataset and return the exact total number of views.
-
-    The returned total is not privacy-rounded, unlike the per-asset values written to the summary file.
-    It is intended only as the input to the dataset-level rounding performed by
-    :func:`_write_dataset_view_count`.
-    """
+) -> None:
     dataset_id = summary_file_path.parent.name
     extraction_base_path = summary_file_path.parent.parent.parent / "extraction" / dataset_id  # Assumes same cache dir
 
@@ -475,13 +467,10 @@ def _summarize_dataset_by_asset(
         else:
             number_of_downloads_by_asset[asset_path] += 0
 
-        number_of_views_by_asset[asset_path] += _count_asset_views(
-            asset_directory=asset_directory, use_encryption=use_encryption
-        )
+        number_of_views_by_asset[asset_path] += len(views_by_asset_directory.get(asset_directory, []))
 
-    total_number_of_views = sum(number_of_views_by_asset.values())
     if len(summarized_activity_by_asset) == 0:
-        return total_number_of_views
+        return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     all_asset_paths = list(summarized_activity_by_asset.keys())
@@ -499,21 +488,24 @@ def _summarize_dataset_by_asset(
     )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
-    return total_number_of_views
-
 
 def _summarize_dataset_by_region(
     *,
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     ip_to_region: dict[str, str],
+    views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
     use_encryption: bool = True,
     privacy_threshold_minimum: int = 50,
 ) -> None:
     all_regions = []
     all_bytes_sent = []
     all_downloads = []
+    number_of_views_by_region = collections.defaultdict(int)
     for asset_directory in asset_directories:
+        for _, view_ip in views_by_asset_directory.get(asset_directory, []):
+            number_of_views_by_region[ip_to_region.get(view_ip, "missing")] += 1
+
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
         full_ips_file_path = asset_directory / "ips.txt"
@@ -555,6 +547,7 @@ def _summarize_dataset_by_region(
             "bytes_sent": list(summarized_activity_by_region.values()),
             "number_of_requests": [number_of_requests_by_region[region] for region in all_regions_ordered],
             "number_of_downloads": [number_of_downloads_by_region[region] for region in all_regions_ordered],
+            "number_of_views": [number_of_views_by_region[region] for region in all_regions_ordered],
         }
     )
     summary_table = _privacy_round_request_download_columns(

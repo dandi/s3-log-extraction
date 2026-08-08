@@ -3,7 +3,7 @@ import pathlib
 
 import pandas
 
-from ._generate_summaries import _read_privacy_rounded_count, _round_requester_count
+from ._generate_summaries import _round_requester_count
 from ..config import get_cache_subdirectory
 from ..ip_utils._globals import EXCLUDED_REGION_LABELS
 
@@ -39,7 +39,9 @@ def generate_all_dataset_totals(
         if not summary_file_path.exists():
             continue
         summary = pandas.read_table(filepath_or_buffer=summary_file_path)
-        for column_name in ("number_of_requests", "number_of_downloads"):
+        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
+            if column_name not in summary.columns:  # Summarized before views were reported
+                summary[column_name] = 0
             summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
 
         unique_countries: set[str] = set()
@@ -63,11 +65,6 @@ def generate_all_dataset_totals(
         if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
             number_of_requesters = int(number_of_requesters)
 
-        number_of_views = _read_privacy_rounded_count(
-            summary_file_path=summary_directory / dataset_id / "view_count.tsv",
-            privacy_threshold_minimum=privacy_threshold_minimum,
-        )
-
         all_dataset_totals[dataset_id] = {
             "total_bytes_sent": int(summary["bytes_sent"].sum()),
             "number_of_unique_regions": number_of_unique_regions,
@@ -79,7 +76,9 @@ def generate_all_dataset_totals(
                 count=int(summary["number_of_downloads"].sum()), modulo=20, minimum=privacy_threshold_minimum
             ),
             "number_of_requesters": number_of_requesters,
-            "total_number_of_views": number_of_views,
+            "total_number_of_views": _round_requester_count(
+                count=int(summary["number_of_views"].sum()), modulo=20, minimum=privacy_threshold_minimum
+            ),
         }
 
     top_level_summary_file_path = summary_directory / "totals.json"

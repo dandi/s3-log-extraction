@@ -559,25 +559,24 @@ def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpd
         ),
     ],
 )
-def test_count_asset_views(
+def test_collect_asset_views(
     tmpdir: py.path.local, requests: list[tuple[str, int, str]], expected_number_of_views: int
 ) -> None:
     """Streaming sessions are counted per IP, split only by gaps of more than 8 hours."""
-    from s3_log_extraction.summarize._generate_summaries import _count_asset_views
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(asset_directory=asset_directory, requests=requests)
 
-    number_of_views = _count_asset_views(asset_directory=asset_directory, use_encryption=False)
+    views = _collect_asset_views(asset_directory=asset_directory, use_encryption=False)
 
-    assert number_of_views == expected_number_of_views
+    assert len(views) == expected_number_of_views
 
 
 @pytest.mark.ai_generated
-def test_count_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
+def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
     """The session timeout is configurable, and the default of 8 hours is applied when it is not overridden."""
-    from s3_log_extraction.summarize._generate_summaries import _count_asset_views
-    from s3_log_extraction.summarize._globals import SESSION_TIMEOUT_SECONDS
+    from s3_log_extraction.summarize._generate_summaries import SESSION_TIMEOUT_SECONDS, _collect_asset_views
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(
@@ -586,14 +585,17 @@ def test_count_asset_views_respects_custom_session_timeout(tmpdir: py.path.local
     )
 
     assert SESSION_TIMEOUT_SECONDS == 28_800
-    assert _count_asset_views(asset_directory=asset_directory, use_encryption=False) == 1
-    assert _count_asset_views(asset_directory=asset_directory, use_encryption=False, session_timeout_seconds=3_600) == 2
+    assert len(_collect_asset_views(asset_directory=asset_directory, use_encryption=False)) == 1
+    assert (
+        len(_collect_asset_views(asset_directory=asset_directory, use_encryption=False, session_timeout_seconds=3_600))
+        == 2
+    )
 
 
 @pytest.mark.ai_generated
-def test_count_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) -> None:
+def test_collect_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) -> None:
     """Per-asset files that are not line-aligned cannot be sessionized, so they are skipped with a warning."""
-    from s3_log_extraction.summarize._generate_summaries import _count_asset_views
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(
@@ -603,9 +605,9 @@ def test_count_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) -> N
     (asset_directory / "download.txt").write_text("0\n")
 
     with pytest.warns(UserWarning, match="mismatched line counts"):
-        number_of_views = _count_asset_views(asset_directory=asset_directory, use_encryption=False)
+        views = _collect_asset_views(asset_directory=asset_directory, use_encryption=False)
 
-    assert number_of_views == 0
+    assert views == []
 
 
 @pytest.mark.ai_generated
@@ -662,7 +664,6 @@ def test_summaries_count_views_with_encryption(tmpdir: py.path.local, monkeypatc
 
     by_asset = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_asset.tsv", index_col=0)
     assert by_asset.loc["encrypted.nwb", "number_of_views"] == 60
-    assert (test_dir / "summaries" / "ds001" / "view_count.tsv").read_text().strip() == "60"
 
 
 @pytest.mark.ai_generated
@@ -671,22 +672,17 @@ def test_view_counts_roll_up_to_dataset_and_archive_totals(tmpdir: py.path.local
     test_dir = pathlib.Path(tmpdir)
     extraction_directory = test_dir / "extraction"
 
-    # ds001: forty views on one asset and twenty on another, for a dataset total of sixty
-    _write_asset(
-        asset_directory=extraction_directory / "ds001" / "first.nwb",
-        requests=[(f"2501010000{index:02d}", _STREAMING, f"192.0.2.{index}") for index in range(40)],
-    )
-    _write_asset(
-        asset_directory=extraction_directory / "ds001" / "second.nwb",
-        requests=[(f"2501010000{index:02d}", _STREAMING, f"198.51.100.{index}") for index in range(20)],
-    )
-    # ds002: eighty views on a single asset
-    _write_asset(
-        asset_directory=extraction_directory / "ds002" / "third.nwb",
-        requests=[
-            (f"250101{index // 60:02d}{index % 60:02d}00", _STREAMING, f"192.0.2.{index}") for index in range(80)
-        ],
-    )
+    # Sixty views on each asset, one from each of sixty distinct requesters, so that every published
+    # value clears the disclosure threshold and the tables can be compared against each other directly
+    for dataset_id, asset_name, subnet in (
+        ("ds001", "first.nwb", "192.0.2"),
+        ("ds001", "second.nwb", "198.51.100"),
+        ("ds002", "third.nwb", "203.0.113"),
+    ):
+        _write_asset(
+            asset_directory=extraction_directory / dataset_id / asset_name,
+            requests=[(f"2501010000{index:02d}", _STREAMING, f"{subnet}.{index}") for index in range(60)],
+        )
 
     s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
@@ -694,16 +690,79 @@ def test_view_counts_roll_up_to_dataset_and_archive_totals(tmpdir: py.path.local
     s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
 
     summary_directory = test_dir / "summaries"
-    assert (summary_directory / "ds001" / "view_count.tsv").read_text().strip() == "60"
-    assert (summary_directory / "ds002" / "view_count.tsv").read_text().strip() == "80"
-    assert (summary_directory / "archive" / "view_count.tsv").read_text().strip() == "140"
+
+    # Every table of a dataset accounts for the same views
+    for dataset_id, expected_number_of_views in (("ds001", 120), ("ds002", 60)):
+        for summary_file_name in ("by_asset.tsv", "by_day.tsv", "by_region.tsv"):
+            summary = pandas.read_table(filepath_or_buffer=summary_directory / dataset_id / summary_file_name)
+            assert summary["number_of_views"].sum() == expected_number_of_views, summary_file_name
+
+    # And the archive accounts for both datasets
+    for summary_file_name in ("by_day.tsv", "by_region.tsv"):
+        summary = pandas.read_table(filepath_or_buffer=summary_directory / "archive" / summary_file_name)
+        assert summary["number_of_views"].sum() == 180, summary_file_name
 
     totals = json.loads((summary_directory / "totals.json").read_text())
-    assert totals["ds001"]["total_number_of_views"] == 60
-    assert totals["ds002"]["total_number_of_views"] == 80
+    assert totals["ds001"]["total_number_of_views"] == 120
+    assert totals["ds002"]["total_number_of_views"] == 60
 
     archive_totals = json.loads((summary_directory / "archive_totals.json").read_text())
-    assert archive_totals["total_number_of_views"] == 140
+    assert archive_totals["total_number_of_views"] == 180
+
+
+@pytest.mark.ai_generated
+def test_views_are_counted_on_the_day_the_session_began(tmpdir: py.path.local) -> None:
+    """A session that straddles midnight counts once, on the date of its first request."""
+    test_dir = pathlib.Path(tmpdir)
+
+    # Each requester streams just before midnight and again just after, which is one session spanning
+    # two dates, plus a second session a full day later
+    requests = []
+    for index in range(60):
+        ip = f"192.0.2.{index}"
+        requests.extend(
+            [
+                (f"2501012359{index % 60:02d}", _STREAMING, ip),
+                (f"2501020001{index % 60:02d}", _STREAMING, ip),
+                (f"2501032359{index % 60:02d}", _STREAMING, ip),
+            ]
+        )
+    _write_asset(asset_directory=test_dir / "extraction" / "ds001" / "straddling.nwb", requests=requests)
+
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    by_day = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_day.tsv", index_col=0)
+    assert by_day.loc["2025-01-01", "number_of_views"] == "60"
+    assert by_day.loc["2025-01-02", "number_of_views"] == "<50"  # Continuation of the session begun on the 1st
+    assert by_day.loc["2025-01-03", "number_of_views"] == "60"
+
+
+@pytest.mark.ai_generated
+def test_views_are_attributed_to_the_region_of_their_requester(tmpdir: py.path.local) -> None:
+    """Each view is attributed to the region of the single IP that made it."""
+    test_dir = pathlib.Path(tmpdir)
+
+    californian_ips = [f"192.0.2.{index}" for index in range(60)]
+    berliner_ips = [f"198.51.100.{index}" for index in range(80)]
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "international.nwb",
+        requests=[
+            (f"2501010000{index % 60:02d}", _STREAMING, ip) for index, ip in enumerate(californian_ips + berliner_ips)
+        ],
+    )
+
+    ip_cache_directory = test_dir / "ips"
+    ip_cache_directory.mkdir(parents=True)
+    (ip_cache_directory / "ip_to_region.yaml").write_text(
+        "\n".join([f"{ip}: US/California" for ip in californian_ips] + [f"{ip}: DE/Berlin" for ip in berliner_ips])
+        + "\n"
+    )
+
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    by_region = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_region.tsv", index_col=0)
+    assert by_region.loc["US/California", "number_of_views"] == 60
+    assert by_region.loc["DE/Berlin", "number_of_views"] == 80
 
 
 @pytest.mark.ai_generated
