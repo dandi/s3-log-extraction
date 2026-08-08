@@ -116,16 +116,16 @@ def generate_archive_summaries(
 
     # View count (aggregated from dataset view_count.tsv files)
     # Views are streaming sessions of a single requester on a single asset, so they sum exactly across
-    # datasets. Each dataset total was already cleared for release by the region-diversity gate, so the
-    # sum needs no further threshold. Datasets still withheld by that gate cannot contribute.
+    # datasets. Datasets whose own total was censored below the threshold cannot contribute, however.
     view_counts: list[int] = [
         int(value)
         for summary_file_path in summary_directory.rglob(pattern="view_count.tsv")
         if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
     ]
-
-    # With no dataset cleared for release there is nothing to total, which is not the same as zero views
-    archive_view_count: str = str(sum(view_counts)) if view_counts else f"<{privacy_threshold_minimum}"
+    total_view_count: int = sum(view_counts)
+    archive_view_count: str = (
+        f"<{privacy_threshold_minimum}" if total_view_count < privacy_threshold_minimum else str(total_view_count)
+    )
 
     archive_view_count_file_path = archive_directory / "view_count.tsv"
     archive_view_count_file_path.write_text(archive_view_count)

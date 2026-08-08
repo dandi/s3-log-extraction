@@ -16,32 +16,5 @@ insensitive to any choice between roughly 2 and 8 hours.
 TIMESTAMP_FORMAT = "%y%m%d%H%M%S"
 """Format of the per-request timestamps written to ``timestamps.txt`` during extraction."""
 
-SUMMARY_UPDATE_INTERVAL_DAYS = 7
-"""
-Minimum number of days between two publications of the per-asset summaries.
-
-Access counts are only safe to publish as an aggregate over a period of activity. Republishing them
-more often lets an observer difference two consecutive releases and recover the behavior of the handful
-of requesters active in between, so the summaries refuse to regenerate inside this interval.
-"""
-
-MINIMUM_REGIONS_FOR_DISCLOSURE = 3
-"""
-Number of distinct geographic regions that must be exceeded for an asset's row to be republished.
-
-An update is only released for an asset when *more than* this many genuine geographic regions accessed
-it during the reporting week. Cloud service, VPN, and unresolved region labels do not count, since they
-are not evidence of a diverse requester population.
-"""
-
-PRIVACY_ROUNDED_COLUMN_NAMES = ("number_of_requests", "number_of_downloads")
-"""
-Columns of the by-day and by-region summaries that are rounded to a modulo and censored below a minimum.
-
-The per-asset summaries are protected by the region-diversity gate instead, which releases exact values
-only for assets with a demonstrably diverse requester population. That gate cannot apply to a by-region
-row, which covers exactly one region by construction, nor to a by-day row, which has no asset.
-"""
-
-ASSET_METRIC_COLUMN_NAMES = ("bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
-"""Per-asset access metrics, all released or withheld together as a single row."""
+PRIVACY_PROTECTED_COLUMN_NAMES = ("number_of_requests", "number_of_downloads", "number_of_views")
+"""Summary columns that are derived from per-requester behavior and must be privacy-rounded."""
