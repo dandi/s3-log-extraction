@@ -12,9 +12,7 @@ from ..ip_utils._ip_utils import _read_ips_from_file
 
 # A view of an asset is a streaming session: a maximal run of streaming (HTTP 206) requests from one IP
 # address to that asset in which no two consecutive requests are more than this many seconds apart.
-# Eight hours sits in the empirical minimum-density valley of the observed inter-request gaps. Pauses
-# within a session are essentially all under two hours and returning visits cluster after about 21 hours,
-# so only about 1 gap in 60,000 is ambiguous and the counts are insensitive to any cutoff from 2 to 8 hours.
+# Eight hours sits in an empirical minimum-density valley of the observed inter-request gaps.
 SESSION_TIMEOUT_IN_SECONDS = 28_800
 
 # Format of the per-request timestamps written to `timestamps.txt` during extraction
