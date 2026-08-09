@@ -115,14 +115,27 @@ def _collect_asset_views(
     Raises
     ------
     RuntimeError
-        If the per-request files are not line-aligned, which means the extraction cache is either
-        incompatible (extracted before ``download.txt`` was introduced) or corrupted.
+        If any per-request file is missing, or if they are not line-aligned. Either means the extraction
+        cache is incompatible (extracted before ``download.txt`` was introduced) or corrupted.
     """
     timestamps_file_path = asset_directory / "timestamps.txt"
     download_file_path = asset_directory / "download.txt"
     ips_file_path = asset_directory / "ips.txt"
-    if not (timestamps_file_path.exists() and download_file_path.exists() and ips_file_path.exists()):
-        return []
+    missing_file_names = [
+        file_path.name
+        for file_path in (timestamps_file_path, download_file_path, ips_file_path)
+        if not file_path.exists()
+    ]
+    if missing_file_names:
+        message = (
+            f"\n\nThe extracted files for '{asset_directory}' are incomplete: "
+            f"{', '.join(missing_file_names)} not found.\n"
+            "Extraction writes every per-request file of an asset together, so none of them should be absent.\n\n"
+            "A missing 'download.txt' means the asset was extracted before that file was introduced, which makes "
+            "the extraction cache incompatible. Re-extract the asset to resolve it.\n"
+            "Any other missing file means the extraction cache is corrupted.\n\n"
+        )
+        raise RuntimeError(message)
 
     timestamps = [stripped for line in timestamps_file_path.read_text().splitlines() if (stripped := line.strip())]
     downloads = [stripped for line in download_file_path.read_text().splitlines() if (stripped := line.strip())]
@@ -405,10 +418,7 @@ def _summarize_dataset_by_day(
         all_bytes_sent.extend(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        if download_file_path.exists():
-            downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
-        else:
-            downloads = [0] * len(dates)
+        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
         all_downloads.extend(downloads)
 
     summarized_activity_by_day = collections.defaultdict(int)
@@ -470,11 +480,8 @@ def _summarize_dataset_by_asset(
         number_of_requests_by_asset[asset_path] += len(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        if download_file_path.exists():
-            downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
-            number_of_downloads_by_asset[asset_path] += sum(downloads)
-        else:
-            number_of_downloads_by_asset[asset_path] += 0
+        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
+        number_of_downloads_by_asset[asset_path] += sum(downloads)
 
         number_of_views_by_asset[asset_path] += len(views_by_asset_directory.get(asset_directory, []))
 
@@ -531,10 +538,7 @@ def _summarize_dataset_by_region(
         all_bytes_sent.extend(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        if download_file_path.exists():
-            downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
-        else:
-            downloads = [0] * len(regions)
+        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
         all_downloads.extend(downloads)
 
     summarized_activity_by_region = collections.defaultdict(int)

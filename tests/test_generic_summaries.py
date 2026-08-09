@@ -593,6 +593,23 @@ def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.loc
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize("missing_file_name", ["timestamps.txt", "download.txt", "ips.txt"])
+def test_collect_asset_views_raises_on_missing_files(tmpdir: py.path.local, missing_file_name: str) -> None:
+    """Extraction writes every per-request file together, so an absent one is an unusable cache."""
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
+
+    asset_directory = pathlib.Path(tmpdir) / "asset"
+    _write_asset(
+        asset_directory=asset_directory,
+        requests=[("250101000000", _STREAMING, "192.0.2.0"), ("250101000001", _STREAMING, "192.0.2.0")],
+    )
+    (asset_directory / missing_file_name).unlink()
+
+    with pytest.raises(RuntimeError, match="are incomplete"):
+        _collect_asset_views(asset_directory=asset_directory, use_encryption=False)
+
+
+@pytest.mark.ai_generated
 def test_collect_asset_views_raises_on_misaligned_files(tmpdir: py.path.local) -> None:
     """Per-asset files that are not line-aligned cannot be sessionized, so they are refused outright."""
     from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
