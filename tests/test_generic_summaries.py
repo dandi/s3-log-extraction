@@ -78,6 +78,9 @@ def test_generic_summaries(tmpdir: py.path.local):
     test_extraction_dir = test_dir / "extraction"
     test_summary_dir = test_dir / "summaries"
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
+    # Every requester of the example logs is a documentation-range address, which a real geolocation resolves
+    # to `bogon`; the mocked cache stands in for one so that the summaries have regions to report
+    shutil.copytree(src=base_tests_dir / "mocked_ips", dst=test_dir / "ips")
 
     s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
@@ -436,9 +439,9 @@ def test_generate_archive_summaries_accepts_custom_asset_type_order(tmpdir: py.p
 )
 def test_is_resolved_region(region_label: str, expected: bool) -> None:
     """Only labels that name a place, which is to say the ones carrying a slash, are resolved regions."""
-    from s3_log_extraction.ip_utils import is_resolved_region
+    from s3_log_extraction.ip_utils._globals import _is_resolved_region
 
-    assert is_resolved_region(region_label) == expected
+    assert _is_resolved_region(region_label) == expected
 
 
 @pytest.mark.ai_generated

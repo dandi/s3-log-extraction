@@ -88,6 +88,9 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
     test_extraction_dir = test_dir / "extraction"
     test_summary_dir = test_dir / "summaries"
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
+    # Every requester of the example logs is a documentation-range address, which a real geolocation resolves
+    # to `bogon`; the mocked cache stands in for one so that the summaries have regions to report
+    shutil.copytree(src=base_tests_dir / "mocked_ips", dst=test_dir / "ips")
 
     runner = CliRunner()
 

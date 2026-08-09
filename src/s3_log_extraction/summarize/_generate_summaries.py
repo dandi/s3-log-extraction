@@ -13,7 +13,7 @@ from ._globals import (
 )
 from ..config import get_cache_directory, get_cache_subdirectory
 from ..ip_utils import load_ip_cache
-from ..ip_utils._globals import is_cloud_service_or_vpn_label, is_resolved_region
+from ..ip_utils._globals import _is_resolved_region, is_cloud_service_or_vpn_label
 from ..ip_utils._ip_utils import _read_ips_from_file
 
 
@@ -39,7 +39,7 @@ def _collect_resolved_region_values(summary_table: pandas.DataFrame, /) -> dict[
     values_by_region: dict[str, list[int]] = {}
     for _, row in summary_table.iterrows():
         region = str(row["region"])
-        if not is_resolved_region(region):
+        if not _is_resolved_region(region):
             continue
 
         values = values_by_region.setdefault(region, [0] * len(REGION_VALUE_COLUMN_NAMES))
@@ -122,7 +122,7 @@ def _count_regions_and_countries(summary_file_path: pathlib.Path, /) -> tuple[in
 
     unique_countries: set[str] = set()
     for region in regions:
-        if not is_resolved_region(region):
+        if not _is_resolved_region(region):
             continue
 
         country_code, region_name = region.split("/", 1)

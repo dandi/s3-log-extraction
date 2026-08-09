@@ -18,7 +18,7 @@ def is_cloud_service_or_vpn_label(region_label: str) -> bool:
     )
 
 
-def is_resolved_region(region_label: str, /) -> bool:
+def _is_resolved_region(region_label: str, /) -> bool:
     """
     Determine whether a region/service label (as produced by ``ip_to_region``) names an actual place.
 
