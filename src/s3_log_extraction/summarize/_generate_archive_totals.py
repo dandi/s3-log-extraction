@@ -32,7 +32,9 @@ def generate_archive_totals(
 
     summary_file_path = archive_directory / "by_region.tsv"
     summary = pandas.read_table(filepath_or_buffer=summary_file_path)
-    for column_name in ("number_of_requests", "number_of_downloads"):
+    for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
+        if column_name not in summary.columns:  # Summarized before views were reported
+            summary[column_name] = 0
         summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
 
     unique_countries: set[str] = set()
@@ -74,6 +76,9 @@ def generate_archive_totals(
             count=int(summary["number_of_downloads"].sum()), modulo=20, minimum=privacy_threshold_minimum
         ),
         "number_of_requesters": number_of_requesters,
+        "total_number_of_views": _round_requester_count(
+            count=int(summary["number_of_views"].sum()), modulo=20, minimum=privacy_threshold_minimum
+        ),
     }
 
     archive_totals_file_path = summary_directory / "archive_totals.json"
