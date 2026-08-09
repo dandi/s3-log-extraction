@@ -439,9 +439,9 @@ def test_generate_archive_summaries_accepts_custom_asset_type_order(tmpdir: py.p
 )
 def test_is_resolved_region(region_label: str, expected: bool) -> None:
     """Only labels that name a place, which is to say the ones carrying a slash, are resolved regions."""
-    from s3_log_extraction.ip_utils._globals import _is_resolved_region
+    from s3_log_extraction.ip_utils import is_resolved_region
 
-    assert _is_resolved_region(region_label) == expected
+    assert is_resolved_region(region_label) == expected
 
 
 @pytest.mark.ai_generated
@@ -465,9 +465,9 @@ def test_is_resolved_region(region_label: str, expected: bool) -> None:
 )
 def test_is_cloud_service_or_vpn_label(region_label: str, expected: bool) -> None:
     """Only genuine cloud/VPN service labels are excluded; unresolved-location labels are not."""
-    from s3_log_extraction.ip_utils._globals import _is_cloud_service_or_vpn_label
+    from s3_log_extraction.ip_utils import is_cloud_service_or_vpn_label
 
-    assert _is_cloud_service_or_vpn_label(region_label) == expected
+    assert is_cloud_service_or_vpn_label(region_label) == expected
 
 
 @pytest.mark.ai_generated
@@ -614,7 +614,7 @@ def test_collect_asset_views(
 def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
     """The session timeout is configurable, and the default of 8 hours is applied when it is not overridden."""
     from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
-    from s3_log_extraction.summarize._globals import SESSION_TIMEOUT_IN_SECONDS
+    from s3_log_extraction.summarize.globals import SESSION_TIMEOUT_IN_SECONDS
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(

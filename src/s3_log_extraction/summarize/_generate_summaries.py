@@ -5,15 +5,14 @@ import pathlib
 import pandas
 import tqdm
 
-from ._globals import (
+from .globals import (
     REGION_DISCLOSURE_THRESHOLD,
     REGION_VALUE_COLUMN_NAMES,
     SESSION_TIMEOUT_IN_SECONDS,
     TIMESTAMP_FORMAT,
 )
 from ..config import get_cache_directory, get_cache_subdirectory
-from ..ip_utils import load_ip_cache
-from ..ip_utils._globals import _is_cloud_service_or_vpn_label, _is_resolved_region
+from ..ip_utils import is_cloud_service_or_vpn_label, is_resolved_region, load_ip_cache
 from ..ip_utils._ip_utils import _read_ips_from_file
 
 
@@ -39,7 +38,7 @@ def _collect_resolved_region_values(summary_table: pandas.DataFrame, /) -> dict[
     values_by_region: dict[str, list[int]] = {}
     for _, row in summary_table.iterrows():
         region = str(row["region"])
-        if not _is_resolved_region(region):
+        if not is_resolved_region(region):
             continue
 
         values = values_by_region.setdefault(region, [0] * len(REGION_VALUE_COLUMN_NAMES))
@@ -122,7 +121,7 @@ def _count_regions_and_countries(summary_file_path: pathlib.Path, /) -> tuple[in
 
     unique_countries: set[str] = set()
     for region in regions:
-        if not _is_resolved_region(region):
+        if not is_resolved_region(region):
             continue
 
         country_code, region_name = region.split("/", 1)
@@ -268,7 +267,7 @@ def _collect_unique_ips(
         if not full_ips_file_path.exists():
             continue
         ips = _read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption)
-        unique_ips.update(ip for ip in ips if not _is_cloud_service_or_vpn_label(ip_to_region.get(ip, "")))
+        unique_ips.update(ip for ip in ips if not is_cloud_service_or_vpn_label(ip_to_region.get(ip, "")))
     return unique_ips
 
 

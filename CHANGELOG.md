@@ -6,6 +6,8 @@
 
 - Reworked privacy protection around the `by_region.tsv` summaries. Individual values are no longer censored below a disclosure threshold or rounded to a modulo, so every summary now reports its true values. Protection instead gates the publication of `by_region.tsv`, which is the only summary that pairs activity with requester location. That file is written only when the update it carries moves more than `region_disclosure_threshold` (default `5`) resolved regions at once, and it is created for the first time only when its first update spans that many. A resolved region is any label naming a physical place, such as `US/California` or `AWS/us-east-1`. Labels such as `missing`, `undetermined`, `GitHub`, and `VPN` name no place and do not count towards privacy calculations. The consequence is that the totals of a `by_region.tsv` drift out of step with the other summaries between publications. The `privacy_threshold_minimum` argument of `generate_summaries`, `generate_archive_summaries`, `generate_all_dataset_totals`, and `generate_archive_totals` is replaced by `region_disclosure_threshold` on the first two and removed from the last two. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
 
+- Added a public `is_resolved_region` helper to `ip_utils`, alongside the existing `is_cloud_service_or_vpn_label`, so that region labels can be classified from outside the summaries on the same terms the summaries use. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
+
 - Added a `--threshold` flag to `s3logextraction update summaries`, in both the default and the `archive` mode, which sets the `region_disclosure_threshold` the by-region summaries are published under. It defaults to `5`. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
 
 - `totals.json` and `archive_totals.json` now read their activity totals from the by-day summaries rather than the by-region summaries, so that they stay true and in step with `by_day.tsv` and `by_asset.tsv` even while a `by_region.tsv` is withheld. Only `number_of_unique_regions` and `number_of_unique_countries` still come from the by-region summary, and both report `0` while it is withheld. `generate_archive_totals` raises a `FileNotFoundError` naming the archive by-day summary when it has not been generated. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
@@ -16,9 +18,7 @@
 
 ### 🏠 Internal
 
-- Consolidated the module-level constants of the `summarize` submodule into a `_globals.py`, matching the layout of the `config`, `extractors`, and `ip_utils` submodules. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
-
-- Made the region label helpers of the `ip_utils` submodule private. `is_cloud_service_or_vpn_label` is renamed to `_is_cloud_service_or_vpn_label` and is no longer exported, since classifying a label is an implementation detail of the summaries rather than something to call from outside. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
+- Consolidated the module-level constants of the `summarize` submodule into a `globals.py`, which is public so that the disclosure threshold and the session timeout can be read from outside. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
 
 - Added a third example log collection of repeated access from several documentation-range requesters, along with a mocked `ip_to_region` cache that stands in for a geolocation of them. The integration tests now cover a published `by_region.tsv` and summary values that accumulate over more than one request per asset, per day, and per region. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
 

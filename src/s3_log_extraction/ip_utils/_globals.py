@@ -3,7 +3,7 @@ _KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "VPN")  # Azure has problems; see _ip
 EXCLUDED_REGION_LABELS = frozenset(["VPN", "GitHub", "unknown", "undetermined", "missing", "bogon"])
 
 
-def _is_cloud_service_or_vpn_label(region_label: str, /) -> bool:
+def is_cloud_service_or_vpn_label(region_label: str, /) -> bool:
     """
     Determine whether a region/service label (as produced by ``ip_to_region``) refers to a
     known cloud service or VPN provider (e.g. ``"GitHub"``, ``"AWS/us-east-1"``, ``"GCP/us-central1"``,
@@ -18,7 +18,7 @@ def _is_cloud_service_or_vpn_label(region_label: str, /) -> bool:
     )
 
 
-def _is_resolved_region(region_label: str, /) -> bool:
+def is_resolved_region(region_label: str, /) -> bool:
     """
     Determine whether a region/service label (as produced by ``ip_to_region``) names an actual place.
 

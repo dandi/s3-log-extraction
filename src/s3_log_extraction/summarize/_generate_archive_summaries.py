@@ -5,7 +5,7 @@ import natsort
 import pandas
 
 from ._generate_summaries import _write_summary_by_region
-from ._globals import REGION_DISCLOSURE_THRESHOLD
+from .globals import REGION_DISCLOSURE_THRESHOLD
 from ..config import get_cache_subdirectory
 
 

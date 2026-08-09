@@ -19,7 +19,7 @@ from ..summarize import (
     generate_archive_totals,
     generate_summaries,
 )
-from ..summarize._globals import REGION_DISCLOSURE_THRESHOLD
+from ..summarize.globals import REGION_DISCLOSURE_THRESHOLD
 from ..testing import generate_benchmark
 from ..utils import IpCategoryCount, get_extraction_completion, get_ip_stats, get_log_bucket_stats
 from ..validate import (
