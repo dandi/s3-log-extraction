@@ -465,9 +465,9 @@ def test_is_resolved_region(region_label: str, expected: bool) -> None:
 )
 def test_is_cloud_service_or_vpn_label(region_label: str, expected: bool) -> None:
     """Only genuine cloud/VPN service labels are excluded; unresolved-location labels are not."""
-    from s3_log_extraction.ip_utils import is_cloud_service_or_vpn_label
+    from s3_log_extraction.ip_utils._globals import _is_cloud_service_or_vpn_label
 
-    assert is_cloud_service_or_vpn_label(region_label) == expected
+    assert _is_cloud_service_or_vpn_label(region_label) == expected
 
 
 @pytest.mark.ai_generated

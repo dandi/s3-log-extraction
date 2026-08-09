@@ -16,6 +16,8 @@
 
 - Consolidated the module-level constants of the `summarize` submodule into a `_globals.py`, matching the layout of the `config`, `extractors`, and `ip_utils` submodules. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
 
+- Made the region label helpers of the `ip_utils` submodule private. `is_cloud_service_or_vpn_label` is renamed to `_is_cloud_service_or_vpn_label` and is no longer exported, since classifying a label is an implementation detail of the summaries rather than something to call from outside. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
+
 - Added a third example log collection of repeated access from several documentation-range requesters, along with a mocked `ip_to_region` cache that stands in for a geolocation of them. The integration tests now cover a published `by_region.tsv` and summary values that accumulate over more than one request per asset, per day, and per region. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
 
 - Sessionized each asset once per dataset summary and shared the result across the by-asset, by-day, and by-region tables, so `ips.txt` is decrypted no more often than before. ([#293](https://github.com/dandi/s3-log-extraction/pull/293))
