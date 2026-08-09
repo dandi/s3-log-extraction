@@ -10,6 +10,17 @@ from ..ip_utils import load_ip_cache
 from ..ip_utils._globals import is_cloud_service_or_vpn_label
 from ..ip_utils._ip_utils import _read_ips_from_file
 
+# A view of an asset is a streaming session: a maximal run of streaming (HTTP 206) requests from one IP
+# address to that asset in which no two consecutive requests are more than this many seconds apart.
+# Eight hours sits in an empirical minimum-density valley of the observed inter-request gaps.
+SESSION_TIMEOUT_IN_SECONDS = 28_800
+
+# Format of the per-request timestamps written to `timestamps.txt` during extraction
+TIMESTAMP_FORMAT = "%y%m%d%H%M%S"
+
+# Summary columns that are derived from per-requester behavior and must be privacy-rounded
+PRIVACY_PROTECTED_COLUMN_NAMES = ("number_of_requests", "number_of_downloads", "number_of_views")
+
 
 def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
     """
@@ -43,11 +54,122 @@ def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
 def _privacy_round_request_download_columns(
     summary_table: pandas.DataFrame, *, modulo: int = 20, minimum: int = 50
 ) -> pandas.DataFrame:
-    for column_name in ("number_of_requests", "number_of_downloads"):
+    """
+    Apply privacy rounding to every access count column present in the summary table.
+
+    Columns listed in ``PRIVACY_PROTECTED_COLUMN_NAMES`` are rounded when present. Absent columns are
+    skipped so that summaries written before a column existed can still be rounded and rolled up.
+    """
+    for column_name in PRIVACY_PROTECTED_COLUMN_NAMES:
+        if column_name not in summary_table.columns:
+            continue
+
         summary_table[column_name] = summary_table[column_name].map(
             lambda count: _round_requester_count(count=int(count), modulo=modulo, minimum=minimum)
         )
     return summary_table
+
+
+def _collect_asset_views(
+    *,
+    asset_directory: pathlib.Path,
+    use_encryption: bool = True,
+    session_timeout_in_seconds: int = SESSION_TIMEOUT_IN_SECONDS,
+) -> list[tuple[str, str]]:
+    """
+    Collect the views of a single asset.
+
+    A view is a streaming session, not a request. One person exploring one file over a remote connection
+    emits hundreds to thousands of partial range requests, so raw request counts measure a mix of interest
+    and the mechanical cost of reading the file. Collapsing each burst of requests into a single countable
+    unit is the fair measure of interest.
+
+    A session is a maximal run of streaming requests from one IP address to this asset in which no two
+    consecutive requests are more than ``session_timeout_in_seconds`` apart. Only streaming requests count,
+    which the extraction cache marks with a ``0`` in ``download.txt``. Full downloads are reported
+    separately by ``number_of_downloads``.
+
+    Each view is returned with the date it began and the IP that made it, so that a view can be attributed
+    to a single day and a single region. A session spans requests and can straddle midnight, so it is
+    counted on the day of its first request.
+
+    Parameters
+    ----------
+    asset_directory : pathlib.Path
+        Path to a per-asset extraction directory containing the line-aligned ``timestamps.txt``,
+        ``download.txt``, and ``ips.txt`` files.
+    use_encryption : bool
+        If ``True`` (default), ``ips.txt`` is decrypted before reading.
+        If ``False``, the file is read as plaintext.
+    session_timeout_in_seconds : int
+        Maximum gap between two consecutive streaming requests of the same session.
+        Defaults to ``SESSION_TIMEOUT_IN_SECONDS`` (8 hours).
+
+    Returns
+    -------
+    list of tuple of str
+        One ``(date, ip)`` pair per view, where ``date`` is the ``YYYY-MM-DD`` day the session began.
+
+    Raises
+    ------
+    RuntimeError
+        If any per-request file is missing, or if they are not line-aligned. Either means the extraction
+        cache is incompatible (extracted before ``download.txt`` was introduced) or corrupted.
+    """
+    timestamps_file_path = asset_directory / "timestamps.txt"
+    download_file_path = asset_directory / "download.txt"
+    ips_file_path = asset_directory / "ips.txt"
+    missing_file_names = [
+        file_path.name
+        for file_path in (timestamps_file_path, download_file_path, ips_file_path)
+        if not file_path.exists()
+    ]
+    if missing_file_names:
+        message = (
+            f"\n\nThe extracted files for '{asset_directory}' are incomplete: "
+            f"{', '.join(missing_file_names)} not found.\n"
+            "Extraction writes every per-request file of an asset together, so none of them should be absent.\n\n"
+            "A missing 'download.txt' means the asset was extracted before that file was introduced, which makes "
+            "the extraction cache incompatible. Re-extract the asset to resolve it.\n"
+            "Any other missing file means the extraction cache is corrupted.\n\n"
+        )
+        raise RuntimeError(message)
+
+    timestamps = [stripped for line in timestamps_file_path.read_text().splitlines() if (stripped := line.strip())]
+    downloads = [stripped for line in download_file_path.read_text().splitlines() if (stripped := line.strip())]
+    ips = _read_ips_from_file(file_path=ips_file_path, use_encryption=use_encryption)
+
+    if not len(timestamps) == len(downloads) == len(ips):
+        message = (
+            f"\n\nThe extracted files for '{asset_directory}' are not line-aligned "
+            f"(timestamps: {len(timestamps)}, downloads: {len(downloads)}, IPs: {len(ips)}).\n"
+            "Line N of each file must describe the same request for views to be counted.\n\n"
+            "A short 'download.txt' means the asset was extracted before that file was introduced, which makes "
+            "the extraction cache incompatible. Re-extract the asset to resolve it.\n"
+            "Any other mismatch means the extraction cache is corrupted, most often by an extraction that was "
+            "interrupted partway through writing these files.\n\n"
+        )
+        raise RuntimeError(message)
+
+    parsed_timestamps_per_ip = collections.defaultdict(list)
+    for timestamp, download, ip in zip(timestamps, downloads, ips):
+        if download != "0":  # Full downloads are not views
+            continue
+
+        parsed_timestamps_per_ip[ip].append(
+            datetime.datetime.strptime(timestamp, TIMESTAMP_FORMAT).replace(tzinfo=datetime.timezone.utc)
+        )
+
+    views = []
+    for ip, parsed_timestamps in parsed_timestamps_per_ip.items():
+        parsed_timestamps.sort()
+        session_starts = [parsed_timestamps[0]] + [
+            current
+            for previous, current in zip(parsed_timestamps, parsed_timestamps[1:])
+            if (current - previous).total_seconds() > session_timeout_in_seconds
+        ]
+        views.extend((session_start.strftime(format="%Y-%m-%d"), ip) for session_start in session_starts)
+    return views
 
 
 def _collect_unique_ips(
@@ -225,20 +347,29 @@ def _summarize_dataset(
     use_encryption: bool = True,
     privacy_threshold_minimum: int = 50,
 ) -> None:
+    # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries
+    views_by_asset_directory = {
+        asset_directory: _collect_asset_views(asset_directory=asset_directory, use_encryption=use_encryption)
+        for asset_directory in asset_directories
+    }
+
     _summarize_dataset_by_day(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_day.tsv",
+        views_by_asset_directory=views_by_asset_directory,
         privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_asset.tsv",
+        views_by_asset_directory=views_by_asset_directory,
         privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_region(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
         ip_to_region=ip_to_region,
+        views_by_asset_directory=views_by_asset_directory,
         use_encryption=use_encryption,
         privacy_threshold_minimum=privacy_threshold_minimum,
     )
@@ -252,12 +383,20 @@ def _summarize_dataset(
 
 
 def _summarize_dataset_by_day(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, privacy_threshold_minimum: int = 50
+    *,
+    asset_directories: list[pathlib.Path],
+    summary_file_path: pathlib.Path,
+    views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     all_dates = []
     all_bytes_sent = []
     all_downloads = []
+    number_of_views_by_day = collections.defaultdict(int)
     for asset_directory in asset_directories:
+        for view_date, _ in views_by_asset_directory.get(asset_directory, []):
+            number_of_views_by_day[view_date] += 1
+
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
 
@@ -277,10 +416,7 @@ def _summarize_dataset_by_day(
         all_bytes_sent.extend(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        if download_file_path.exists():
-            downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
-        else:
-            downloads = [0] * len(dates)
+        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
         all_downloads.extend(downloads)
 
     summarized_activity_by_day = collections.defaultdict(int)
@@ -302,6 +438,7 @@ def _summarize_dataset_by_day(
             "bytes_sent": list(summarized_activity_by_day.values()),
             "number_of_requests": [number_of_requests_by_day[date] for date in all_dates_ordered],
             "number_of_downloads": [number_of_downloads_by_day[date] for date in all_dates_ordered],
+            "number_of_views": [number_of_views_by_day[date] for date in all_dates_ordered],
         }
     )
     summary_table.sort_values(by="date", inplace=True)
@@ -313,7 +450,11 @@ def _summarize_dataset_by_day(
 
 
 def _summarize_dataset_by_asset(
-    *, asset_directories: list[pathlib.Path], summary_file_path: pathlib.Path, privacy_threshold_minimum: int = 50
+    *,
+    asset_directories: list[pathlib.Path],
+    summary_file_path: pathlib.Path,
+    views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    privacy_threshold_minimum: int = 50,
 ) -> None:
     dataset_id = summary_file_path.parent.name
     extraction_base_path = summary_file_path.parent.parent.parent / "extraction" / dataset_id  # Assumes same cache dir
@@ -321,6 +462,7 @@ def _summarize_dataset_by_asset(
     summarized_activity_by_asset = collections.defaultdict(int)
     number_of_requests_by_asset = collections.defaultdict(int)
     number_of_downloads_by_asset = collections.defaultdict(int)
+    number_of_views_by_asset = collections.defaultdict(int)
     for asset_directory in asset_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
@@ -336,11 +478,10 @@ def _summarize_dataset_by_asset(
         number_of_requests_by_asset[asset_path] += len(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        if download_file_path.exists():
-            downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
-            number_of_downloads_by_asset[asset_path] += sum(downloads)
-        else:
-            number_of_downloads_by_asset[asset_path] += 0
+        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
+        number_of_downloads_by_asset[asset_path] += sum(downloads)
+
+        number_of_views_by_asset[asset_path] += len(views_by_asset_directory.get(asset_directory, []))
 
     if len(summarized_activity_by_asset) == 0:
         return
@@ -353,6 +494,7 @@ def _summarize_dataset_by_asset(
             "bytes_sent": list(summarized_activity_by_asset.values()),
             "number_of_requests": [number_of_requests_by_asset[path] for path in all_asset_paths],
             "number_of_downloads": [number_of_downloads_by_asset[path] for path in all_asset_paths],
+            "number_of_views": [number_of_views_by_asset[path] for path in all_asset_paths],
         }
     )
     summary_table = _privacy_round_request_download_columns(
@@ -366,13 +508,18 @@ def _summarize_dataset_by_region(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     ip_to_region: dict[str, str],
+    views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
     use_encryption: bool = True,
     privacy_threshold_minimum: int = 50,
 ) -> None:
     all_regions = []
     all_bytes_sent = []
     all_downloads = []
+    number_of_views_by_region = collections.defaultdict(int)
     for asset_directory in asset_directories:
+        for _, view_ip in views_by_asset_directory.get(asset_directory, []):
+            number_of_views_by_region[ip_to_region.get(view_ip, "missing")] += 1
+
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
         full_ips_file_path = asset_directory / "ips.txt"
@@ -389,10 +536,7 @@ def _summarize_dataset_by_region(
         all_bytes_sent.extend(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        if download_file_path.exists():
-            downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
-        else:
-            downloads = [0] * len(regions)
+        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
         all_downloads.extend(downloads)
 
     summarized_activity_by_region = collections.defaultdict(int)
@@ -414,6 +558,7 @@ def _summarize_dataset_by_region(
             "bytes_sent": list(summarized_activity_by_region.values()),
             "number_of_requests": [number_of_requests_by_region[region] for region in all_regions_ordered],
             "number_of_downloads": [number_of_downloads_by_region[region] for region in all_regions_ordered],
+            "number_of_views": [number_of_views_by_region[region] for region in all_regions_ordered],
         }
     )
     summary_table = _privacy_round_request_download_columns(

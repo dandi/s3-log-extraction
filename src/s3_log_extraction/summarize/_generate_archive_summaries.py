@@ -43,20 +43,27 @@ def generate_archive_summaries(
         if dataset_by_day_summary_file_path.parent.name != "archive"
     ]
     for summary in all_dataset_summaries_by_day:
-        for column_name in ("number_of_requests", "number_of_downloads"):
+        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
+            if column_name not in summary.columns:  # Summarized before views were reported
+                summary[column_name] = 0
             summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
     aggregated_dataset_summaries_by_day = pandas.concat(objs=all_dataset_summaries_by_day, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_day.groupby(by="date", as_index=False)[
-        ["bytes_sent", "number_of_requests", "number_of_downloads"]
+        ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
     ].sum()
     pre_aggregated.sort_values(by="date", key=natsort.natsort_keygen(), inplace=True)
 
     aggregated_activity_by_day = pre_aggregated.reindex(
-        columns=("date", "bytes_sent", "number_of_requests", "number_of_downloads")
+        columns=("date", "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
     )
     aggregated_activity_by_day = aggregated_activity_by_day.astype(
-        dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
+        dtype={
+            "bytes_sent": "int64",
+            "number_of_requests": "int64",
+            "number_of_downloads": "int64",
+            "number_of_views": "int64",
+        }
     )
     aggregated_activity_by_day = _privacy_round_request_download_columns(
         summary_table=aggregated_activity_by_day, minimum=privacy_threshold_minimum
@@ -74,20 +81,27 @@ def generate_archive_summaries(
         if dataset_by_region_summary_file_path.parent.name != "archive"
     ]
     for summary in all_dataset_summaries_by_region:
-        for column_name in ("number_of_requests", "number_of_downloads"):
+        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
+            if column_name not in summary.columns:  # Summarized before views were reported
+                summary[column_name] = 0
             summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
     aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)[
-        ["bytes_sent", "number_of_requests", "number_of_downloads"]
+        ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
     ].sum()
     pre_aggregated.sort_values(by="region", key=natsort.natsort_keygen(), inplace=True)
 
     aggregated_activity_by_region = pre_aggregated.reindex(
-        columns=("region", "bytes_sent", "number_of_requests", "number_of_downloads")
+        columns=("region", "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
     )
     aggregated_activity_by_region = aggregated_activity_by_region.astype(
-        dtype={"bytes_sent": "int64", "number_of_requests": "int64", "number_of_downloads": "int64"}
+        dtype={
+            "bytes_sent": "int64",
+            "number_of_requests": "int64",
+            "number_of_downloads": "int64",
+            "number_of_views": "int64",
+        }
     )
     aggregated_activity_by_region = _privacy_round_request_download_columns(
         summary_table=aggregated_activity_by_region, minimum=privacy_threshold_minimum
