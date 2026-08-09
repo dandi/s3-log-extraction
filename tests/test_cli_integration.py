@@ -5,6 +5,7 @@ import shutil
 
 import pandas
 import py
+import pytest
 from click.testing import CliRunner
 
 import s3_log_extraction
@@ -137,3 +138,33 @@ def test_cli_generic_summaries(tmpdir: py.path.local) -> None:
                 f"{str(exception)}\n\n"
             )
             raise AssertionError(message)
+
+
+@pytest.mark.ai_generated
+def test_cli_summaries_region_disclosure_threshold(tmpdir: py.path.local) -> None:
+    """The disclosure threshold of the by-region summaries is settable from the command line."""
+    test_dir = pathlib.Path(tmpdir)
+
+    base_tests_dir = pathlib.Path(__file__).parent
+    shutil.copytree(src=base_tests_dir / "expected_output" / "extraction", dst=test_dir / "extraction")
+    shutil.copytree(src=base_tests_dir / "mocked_ips", dst=test_dir / "ips")
+
+    runner = CliRunner()
+
+    # The example logs span six resolved regions, which does not clear a threshold of six
+    result = runner.invoke(
+        s3_log_extraction.s3logextraction_cli,
+        ["update", "summaries", "--cache", str(test_dir), "--encryption", "false", "--threshold", "6"],
+    )
+    assert result.exit_code == 0, f"Failed to generate summaries: {result.output}"
+    assert not (test_dir / "summaries" / "ds001161" / "by_region.tsv").exists()
+
+    # But it does clear a threshold of five, which is the default
+    result = runner.invoke(
+        s3_log_extraction.s3logextraction_cli,
+        ["update", "summaries", "--cache", str(test_dir), "--encryption", "false", "--threshold", "5"],
+    )
+    assert result.exit_code == 0, f"Failed to generate summaries: {result.output}"
+
+    by_region = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001161" / "by_region.tsv")
+    assert len(by_region) == 7  # Six resolved regions, plus the requester that could not be geolocated
