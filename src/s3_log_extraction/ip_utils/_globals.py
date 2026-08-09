@@ -18,6 +18,21 @@ def is_cloud_service_or_vpn_label(region_label: str) -> bool:
     )
 
 
+def is_resolved_region(region_label: str, /) -> bool:
+    """
+    Determine whether a region/service label (as produced by ``ip_to_region``) names an actual place.
+
+    A resolved label always pairs a top-level code with a subdivision of it, written as ``"US/California"``
+    for a geographic location or as ``"AWS/us-east-1"`` for a cloud service region. The slash is what makes
+    the label resolved.
+
+    Labels without a slash name no location. Some of them are unresolved outcomes of geolocation
+    (``"unknown"``, ``"undetermined"``, ``"missing"``, ``"bogon"``) and others are services whose region
+    was never reported (``"GitHub"``, ``"VPN"``).
+    """
+    return "/" in region_label
+
+
 _DEFAULT_REGION_CODES_TO_COORDINATES = {
     # Included for testing/demo purposes
     "AWS/us-east-2": {"latitude": 39.9612, "longitude": -82.9988},
