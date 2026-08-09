@@ -14,6 +14,8 @@
 
 ### 🏠 Internal
 
+- Consolidated the module-level constants of the `summarize` submodule into a `_globals.py`, matching the layout of the `config`, `extractors`, and `ip_utils` submodules. ([#294](https://github.com/dandi/s3-log-extraction/pull/294))
+
 - Sessionized each asset once per dataset summary and shared the result across the by-asset, by-day, and by-region tables, so `ips.txt` is decrypted no more often than before. ([#293](https://github.com/dandi/s3-log-extraction/pull/293))
 
 - Added a `Version Check` CI workflow that fails pull requests which modify `src/` or `pyproject.toml` without bumping the package version. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))

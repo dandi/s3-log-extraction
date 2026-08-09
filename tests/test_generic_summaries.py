@@ -610,7 +610,8 @@ def test_collect_asset_views(
 @pytest.mark.ai_generated
 def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
     """The session timeout is configurable, and the default of 8 hours is applied when it is not overridden."""
-    from s3_log_extraction.summarize._generate_summaries import SESSION_TIMEOUT_IN_SECONDS, _collect_asset_views
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
+    from s3_log_extraction.summarize._globals import SESSION_TIMEOUT_IN_SECONDS
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(
