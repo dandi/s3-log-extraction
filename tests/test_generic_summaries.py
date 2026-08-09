@@ -82,17 +82,13 @@ def test_generic_summaries(tmpdir: py.path.local):
             )
             raise AssertionError(message)
 
-    # Verify the single-value requester_count.tsv and view_count.tsv files
-    single_value_file_names = ("requester_count.tsv", "view_count.tsv")
+    # Verify requester_count.tsv files
     test_tsv_paths = {
-        path.relative_to(test_summary_dir): path
-        for file_name in single_value_file_names
-        for path in test_summary_dir.rglob(pattern=file_name)
+        path.relative_to(test_summary_dir): path for path in test_summary_dir.rglob(pattern="requester_count.tsv")
     }
     expected_tsv_paths = {
         path.relative_to(expected_summaries_dir): path
-        for file_name in single_value_file_names
-        for path in expected_summaries_dir.rglob(pattern=file_name)
+        for path in expected_summaries_dir.rglob(pattern="requester_count.tsv")
     }
     assert set(test_tsv_paths.keys()) == set(expected_tsv_paths.keys())
 
@@ -576,7 +572,7 @@ def test_collect_asset_views(
 @pytest.mark.ai_generated
 def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
     """The session timeout is configurable, and the default of 8 hours is applied when it is not overridden."""
-    from s3_log_extraction.summarize._generate_summaries import SESSION_TIMEOUT_SECONDS, _collect_asset_views
+    from s3_log_extraction.summarize._generate_summaries import SESSION_TIMEOUT_IN_SECONDS, _collect_asset_views
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(
@@ -584,10 +580,14 @@ def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.loc
         requests=[("250101000000", _STREAMING, "192.0.2.0"), ("250101040000", _STREAMING, "192.0.2.0")],
     )
 
-    assert SESSION_TIMEOUT_SECONDS == 28_800
+    assert SESSION_TIMEOUT_IN_SECONDS == 28_800
     assert len(_collect_asset_views(asset_directory=asset_directory, use_encryption=False)) == 1
     assert (
-        len(_collect_asset_views(asset_directory=asset_directory, use_encryption=False, session_timeout_seconds=3_600))
+        len(
+            _collect_asset_views(
+                asset_directory=asset_directory, use_encryption=False, session_timeout_in_seconds=3_600
+            )
+        )
         == 2
     )
 

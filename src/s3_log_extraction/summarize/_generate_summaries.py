@@ -16,7 +16,7 @@ from ..ip_utils._ip_utils import _read_ips_from_file
 # Eight hours sits in the empirical minimum-density valley of the observed inter-request gaps. Pauses
 # within a session are essentially all under two hours and returning visits cluster after about 21 hours,
 # so only about 1 gap in 60,000 is ambiguous and the counts are insensitive to any cutoff from 2 to 8 hours.
-SESSION_TIMEOUT_SECONDS = 28_800
+SESSION_TIMEOUT_IN_SECONDS = 28_800
 
 # Format of the per-request timestamps written to `timestamps.txt` during extraction
 TIMESTAMP_FORMAT = "%y%m%d%H%M%S"
@@ -77,7 +77,7 @@ def _collect_asset_views(
     *,
     asset_directory: pathlib.Path,
     use_encryption: bool = True,
-    session_timeout_seconds: int = SESSION_TIMEOUT_SECONDS,
+    session_timeout_in_seconds: int = SESSION_TIMEOUT_IN_SECONDS,
 ) -> list[tuple[str, str]]:
     """
     Collect the views of a single asset.
@@ -88,7 +88,7 @@ def _collect_asset_views(
     unit is the fair measure of interest.
 
     A session is a maximal run of streaming requests from one IP address to this asset in which no two
-    consecutive requests are more than ``session_timeout_seconds`` apart. Only streaming requests count,
+    consecutive requests are more than ``session_timeout_in_seconds`` apart. Only streaming requests count,
     which the extraction cache marks with a ``0`` in ``download.txt``. Full downloads are reported
     separately by ``number_of_downloads``.
 
@@ -104,9 +104,9 @@ def _collect_asset_views(
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` is decrypted before reading.
         If ``False``, the file is read as plaintext.
-    session_timeout_seconds : int
+    session_timeout_in_seconds : int
         Maximum gap between two consecutive streaming requests of the same session.
-        Defaults to ``SESSION_TIMEOUT_SECONDS`` (8 hours).
+        Defaults to ``SESSION_TIMEOUT_IN_SECONDS`` (8 hours).
 
     Returns
     -------
@@ -146,7 +146,7 @@ def _collect_asset_views(
         session_starts = [parsed_timestamps[0]] + [
             current
             for previous, current in zip(parsed_timestamps, parsed_timestamps[1:])
-            if (current - previous).total_seconds() > session_timeout_seconds
+            if (current - previous).total_seconds() > session_timeout_in_seconds
         ]
         views.extend((session_start.strftime(format="%Y-%m-%d"), ip) for session_start in session_starts)
     return views
