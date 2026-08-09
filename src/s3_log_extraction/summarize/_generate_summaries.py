@@ -1,7 +1,6 @@
 import collections
 import datetime
 import pathlib
-import warnings
 
 import pandas
 import tqdm
@@ -112,6 +111,12 @@ def _collect_asset_views(
     -------
     list of tuple of str
         One ``(date, ip)`` pair per view, where ``date`` is the ``YYYY-MM-DD`` day the session began.
+
+    Raises
+    ------
+    RuntimeError
+        If the per-request files are not line-aligned, which means the extraction cache is either
+        incompatible (extracted before ``download.txt`` was introduced) or corrupted.
     """
     timestamps_file_path = asset_directory / "timestamps.txt"
     download_file_path = asset_directory / "download.txt"
@@ -125,11 +130,15 @@ def _collect_asset_views(
 
     if not len(timestamps) == len(downloads) == len(ips):
         message = (
-            f"\nSkipping view counting for '{asset_directory}' due to mismatched line counts "
+            f"\n\nThe extracted files for '{asset_directory}' are not line-aligned "
             f"(timestamps: {len(timestamps)}, downloads: {len(downloads)}, IPs: {len(ips)}).\n"
+            "Line N of each file must describe the same request for views to be counted.\n\n"
+            "A short 'download.txt' means the asset was extracted before that file was introduced, which makes "
+            "the extraction cache incompatible. Re-extract the asset to resolve it.\n"
+            "Any other mismatch means the extraction cache is corrupted, most often by an extraction that was "
+            "interrupted partway through writing these files.\n\n"
         )
-        warnings.warn(message=message, stacklevel=2)
-        return []
+        raise RuntimeError(message)
 
     parsed_timestamps_per_ip = collections.defaultdict(list)
     for timestamp, download, ip in zip(timestamps, downloads, ips):

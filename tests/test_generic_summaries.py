@@ -593,8 +593,8 @@ def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.loc
 
 
 @pytest.mark.ai_generated
-def test_collect_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) -> None:
-    """Per-asset files that are not line-aligned cannot be sessionized, so they are skipped with a warning."""
+def test_collect_asset_views_raises_on_misaligned_files(tmpdir: py.path.local) -> None:
+    """Per-asset files that are not line-aligned cannot be sessionized, so they are refused outright."""
     from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
@@ -604,10 +604,8 @@ def test_collect_asset_views_warns_on_misaligned_files(tmpdir: py.path.local) ->
     )
     (asset_directory / "download.txt").write_text("0\n")
 
-    with pytest.warns(UserWarning, match="mismatched line counts"):
-        views = _collect_asset_views(asset_directory=asset_directory, use_encryption=False)
-
-    assert views == []
+    with pytest.raises(RuntimeError, match="are not line-aligned"):
+        _collect_asset_views(asset_directory=asset_directory, use_encryption=False)
 
 
 @pytest.mark.ai_generated
