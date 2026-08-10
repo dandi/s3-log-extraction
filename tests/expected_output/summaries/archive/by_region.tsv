@@ -1,2 +1,8 @@
 region	bytes_sent	number_of_requests	number_of_downloads	number_of_views
-missing	7481053	<50	<50	<50
+AU/Victoria	4338	2	1	1
+CA/Ontario	66048	2	0	2
+DE/Berlin	1050654	2	1	1
+JP/Tokyo	2259	2	1	1
+US/California	7481053	7	5	2
+US/New York	2099230	2	2	0
+missing	1747	2	1	1
