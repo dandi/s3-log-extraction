@@ -5,69 +5,131 @@ import pathlib
 import pandas
 import tqdm
 
+from .globals import (
+    REGION_DISCLOSURE_THRESHOLD,
+    REGION_VALUE_COLUMN_NAMES,
+    SESSION_TIMEOUT_IN_SECONDS,
+    TIMESTAMP_FORMAT,
+)
 from ..config import get_cache_directory, get_cache_subdirectory
-from ..ip_utils import load_ip_cache
-from ..ip_utils._globals import is_cloud_service_or_vpn_label
+from ..ip_utils import is_cloud_service_or_vpn_label, is_resolved_region, load_ip_cache
 from ..ip_utils._ip_utils import _read_ips_from_file
 
-# A view of an asset is a streaming session: a maximal run of streaming (HTTP 206) requests from one IP
-# address to that asset in which no two consecutive requests are more than this many seconds apart.
-# Eight hours sits in an empirical minimum-density valley of the observed inter-request gaps.
-SESSION_TIMEOUT_IN_SECONDS = 28_800
 
-# Format of the per-request timestamps written to `timestamps.txt` during extraction
-TIMESTAMP_FORMAT = "%y%m%d%H%M%S"
-
-# Summary columns that are derived from per-requester behavior and must be privacy-rounded
-PRIVACY_PROTECTED_COLUMN_NAMES = ("number_of_requests", "number_of_downloads", "number_of_views")
-
-
-def _round_requester_count(count: int, modulo: int, minimum: int) -> str | int:
+def _read_summary_value(value: str | int | float, /) -> int:
     """
-    Round a unique requester count for privacy protection.
+    Read a single value of a by-region summary that was written previously.
 
-    If the count is less than ``minimum``, returns a sentinel string indicating
-    the count is below the threshold (e.g., ``"<50"``).  Otherwise, rounds to
-    the nearest multiple of ``modulo``.
+    Summaries written by earlier versions censored values below a disclosure threshold with sentinel
+    strings such as ``"<50"``. Those carry no number and are read as zero, so that they compare as
+    changed against any true value and the summary is republished once enough regions move.
+    """
+    numeric_value = pandas.to_numeric(value, errors="coerce")
+    return 0 if pandas.isna(numeric_value) else int(numeric_value)
+
+
+def _collect_resolved_region_values(summary_table: pandas.DataFrame, /) -> dict[str, tuple[int, ...]]:
+    """
+    Reduce a by-region summary to the values of its resolved regions, keyed by region.
+
+    Only resolved regions are collected. Labels such as ``"missing"`` or ``"undetermined"`` aggregate
+    requesters whose location is unknown, so they name no place and cannot be counted as one.
+    """
+    values_by_region: dict[str, list[int]] = {}
+    for _, row in summary_table.iterrows():
+        region = str(row["region"])
+        if not is_resolved_region(region):
+            continue
+
+        values = values_by_region.setdefault(region, [0] * len(REGION_VALUE_COLUMN_NAMES))
+        for index, column_name in enumerate(REGION_VALUE_COLUMN_NAMES):
+            values[index] += _read_summary_value(row[column_name] if column_name in summary_table.columns else 0)
+    return {region: tuple(values) for region, values in values_by_region.items()}
+
+
+def _count_updated_regions(*, summary_table: pandas.DataFrame, previous_summary_table: pandas.DataFrame | None) -> int:
+    """
+    Count the resolved regions whose values the new summary would change.
+
+    Every resolved region of a summary that has no previous version counts as updated, since writing that
+    summary for the first time discloses all of them at once.
+    """
+    new_values = _collect_resolved_region_values(summary_table)
+    if previous_summary_table is None:
+        return len(new_values)
+
+    previous_values = _collect_resolved_region_values(previous_summary_table)
+    unchanged = (0,) * len(REGION_VALUE_COLUMN_NAMES)
+    return sum(
+        1
+        for region in set(new_values) | set(previous_values)
+        if new_values.get(region, unchanged) != previous_values.get(region, unchanged)
+    )
+
+
+def _write_summary_by_region(
+    *,
+    summary_table: pandas.DataFrame,
+    summary_file_path: pathlib.Path,
+    region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
+) -> bool:
+    """
+    Write a by-region summary only if the update it carries spans more than the threshold of regions.
 
     Parameters
     ----------
-    count : int
-        The exact number of unique requesters to round.
-    modulo : int
-        The granularity used for rounding (e.g., ``20`` rounds to the nearest 20).
-    minimum : int
-        The minimum disclosure threshold.  Counts below this value are reported
-        as ``"<{minimum}"`` to protect privacy.
+    summary_table : pandas.DataFrame
+        The newly computed by-region summary, with its true values.
+    summary_file_path : pathlib.Path
+        Destination of the summary. Any version already there is read to determine what the new summary
+        would change, and is left untouched when the update is withheld.
+    region_disclosure_threshold : int
+        Number of resolved regions an update must move at once to be published.
+        Defaults to ``REGION_DISCLOSURE_THRESHOLD``.
 
     Returns
     -------
-    str or int
-        A string of the form ``"<{minimum}"`` if ``count < minimum``, otherwise
-        an integer rounded to the nearest multiple of ``modulo``.
+    bool
+        Whether the summary was written.
     """
-    if count < minimum:
-        return f"<{minimum}"
-    return round(count / modulo) * modulo
+    previous_summary_table = (
+        pandas.read_table(filepath_or_buffer=summary_file_path) if summary_file_path.exists() else None
+    )
+    number_of_updated_regions = _count_updated_regions(
+        summary_table=summary_table, previous_summary_table=previous_summary_table
+    )
+    if number_of_updated_regions <= region_disclosure_threshold:
+        return False
+
+    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
+    return True
 
 
-def _privacy_round_request_download_columns(
-    summary_table: pandas.DataFrame, *, modulo: int = 20, minimum: int = 50
-) -> pandas.DataFrame:
+def _count_regions_and_countries(summary_file_path: pathlib.Path, /) -> tuple[int, int]:
     """
-    Apply privacy rounding to every access count column present in the summary table.
+    Count the regions and the distinct countries of a by-region summary.
 
-    Columns listed in ``PRIVACY_PROTECTED_COLUMN_NAMES`` are rounded when present. Absent columns are
-    skipped so that summaries written before a column existed can still be rounded and rolled up.
+    A by-region summary is published only once its update spans enough resolved regions, so a dataset with
+    little activity may not have one yet. Both counts are zero in that case.
     """
-    for column_name in PRIVACY_PROTECTED_COLUMN_NAMES:
-        if column_name not in summary_table.columns:
+    if not summary_file_path.exists():
+        return 0, 0
+
+    summary_table = pandas.read_table(filepath_or_buffer=summary_file_path)
+    regions = [str(region) for region in summary_table["region"]]
+
+    unique_countries: set[str] = set()
+    for region in regions:
+        if not is_resolved_region(region):
             continue
 
-        summary_table[column_name] = summary_table[column_name].map(
-            lambda count: _round_requester_count(count=int(count), modulo=modulo, minimum=minimum)
-        )
-    return summary_table
+        country_code, region_name = region.split("/", 1)
+        if "AWS" in country_code:
+            country_code = region_name.split("-")[0].upper()
+        unique_countries.add(country_code)
+
+    return len(regions), len(unique_countries)
 
 
 def _collect_asset_views(
@@ -214,32 +276,27 @@ def _summarize_dataset_requester_count(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     ip_to_region: dict[str, str],
-    modulo: int = 20,
-    minimum: int = 50,
     use_encryption: bool = True,
 ) -> None:
     """
-    Compute and save the privacy-rounded unique requester count for a dataset.
+    Compute and save the unique requester count for a dataset.
 
     Reads all ``ips.txt`` files from the given asset directories, counts the
     number of unique IP addresses across the entire dataset (excluding known cloud
-    service and VPN IPs), rounds the result via :func:`_round_requester_count`, and
-    writes the value to ``summary_file_path``.
+    service and VPN IPs), and writes the value to ``summary_file_path``.
+
+    The count is not paired with any location, so it cannot single out a requester and is written with
+    its true value on every update.
 
     Parameters
     ----------
     asset_directories : list of pathlib.Path
         Paths to the per-asset extraction directories containing ``ips.txt`` files.
     summary_file_path : pathlib.Path
-        Destination file where the rounded count (as a string) will be written.
+        Destination file where the count (as a string) will be written.
     ip_to_region : dict of str to str
         Mapping of IP address to region/service label, used to exclude known cloud
         service IPs (e.g. GitHub, AWS, GCP, VPN) from the requester count.
-    modulo : int, optional
-        Granularity for rounding.  Default is ``20``.
-    minimum : int, optional
-        Minimum disclosure threshold.  Counts below this are reported as ``"<{minimum}"``.
-        Default is ``50``.
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
@@ -251,16 +308,15 @@ def _summarize_dataset_requester_count(
     if not unique_ips:
         return
 
-    rounded_count = _round_requester_count(count=len(unique_ips), modulo=modulo, minimum=minimum)
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_file_path.write_text(str(rounded_count))
+    summary_file_path.write_text(str(len(unique_ips)))
 
 
 def generate_summaries(
     level: int = 0,
     cache_directory: str | pathlib.Path | None = None,
     use_encryption: bool = True,
-    privacy_threshold_minimum: int = 50,
+    region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
 ) -> None:
     """
     Generate summaries for each dataset in the extraction directory.
@@ -269,6 +325,11 @@ def generate_summaries(
         - `by_day.tsv`: Summarizes the total bytes sent per day across all assets in the dataset.
         - `by_asset.tsv`: Summarizes the total bytes sent per asset in the dataset.
         - `by_region.tsv`: Summarizes the total bytes sent per region based on geolocations of the indexed IPs.
+
+    Every summary is written with its true values, except for `by_region.tsv`. That one pairs activity with
+    requester location, so it is written only when the update it carries moves more than
+    ``region_disclosure_threshold`` resolved regions at once. Its totals therefore drift out of step with
+    the other summaries between publications.
 
     Parameters
     ----------
@@ -281,9 +342,9 @@ def generate_summaries(
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` and IP cache files are decrypted when read.
         If ``False``, files are read as plaintext.
-    privacy_threshold_minimum : int
-        Minimum disclosure threshold for privacy-rounded requester/request/download
-        values. Default is ``50``.
+    region_disclosure_threshold : int
+        Number of resolved regions an update to a `by_region.tsv` must move at once to be published.
+        Default is ``REGION_DISCLOSURE_THRESHOLD`` (5).
     """
     if level != 0:
         message = (
@@ -321,7 +382,7 @@ def generate_summaries(
             summary_directory=summary_directory,
             ip_to_region=ip_to_region,
             use_encryption=use_encryption,
-            privacy_threshold_minimum=privacy_threshold_minimum,
+            region_disclosure_threshold=region_disclosure_threshold,
         )
 
         all_archive_unique_ips.update(
@@ -332,10 +393,7 @@ def generate_summaries(
     if all_archive_unique_ips:
         archive_directory = summary_directory / "archive"
         archive_directory.mkdir(exist_ok=True)
-        rounded_archive_count = _round_requester_count(
-            count=len(all_archive_unique_ips), modulo=20, minimum=privacy_threshold_minimum
-        )
-        (archive_directory / "requester_count.tsv").write_text(str(rounded_archive_count))
+        (archive_directory / "requester_count.tsv").write_text(str(len(all_archive_unique_ips)))
 
 
 def _summarize_dataset(
@@ -345,7 +403,7 @@ def _summarize_dataset(
     summary_directory: pathlib.Path,
     ip_to_region: dict[str, str],
     use_encryption: bool = True,
-    privacy_threshold_minimum: int = 50,
+    region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
 ) -> None:
     # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries
     views_by_asset_directory = {
@@ -357,13 +415,11 @@ def _summarize_dataset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_day.tsv",
         views_by_asset_directory=views_by_asset_directory,
-        privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_asset.tsv",
         views_by_asset_directory=views_by_asset_directory,
-        privacy_threshold_minimum=privacy_threshold_minimum,
     )
     _summarize_dataset_by_region(
         asset_directories=asset_directories,
@@ -371,13 +427,12 @@ def _summarize_dataset(
         ip_to_region=ip_to_region,
         views_by_asset_directory=views_by_asset_directory,
         use_encryption=use_encryption,
-        privacy_threshold_minimum=privacy_threshold_minimum,
+        region_disclosure_threshold=region_disclosure_threshold,
     )
     _summarize_dataset_requester_count(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
         ip_to_region=ip_to_region,
-        minimum=privacy_threshold_minimum,
         use_encryption=use_encryption,
     )
 
@@ -387,7 +442,6 @@ def _summarize_dataset_by_day(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
-    privacy_threshold_minimum: int = 50,
 ) -> None:
     all_dates = []
     all_bytes_sent = []
@@ -443,9 +497,6 @@ def _summarize_dataset_by_day(
     )
     summary_table.sort_values(by="date", inplace=True)
     summary_table.index = range(len(summary_table))
-    summary_table = _privacy_round_request_download_columns(
-        summary_table=summary_table, minimum=privacy_threshold_minimum
-    )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
@@ -454,7 +505,6 @@ def _summarize_dataset_by_asset(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
-    privacy_threshold_minimum: int = 50,
 ) -> None:
     dataset_id = summary_file_path.parent.name
     extraction_base_path = summary_file_path.parent.parent.parent / "extraction" / dataset_id  # Assumes same cache dir
@@ -497,9 +547,6 @@ def _summarize_dataset_by_asset(
             "number_of_views": [number_of_views_by_asset[path] for path in all_asset_paths],
         }
     )
-    summary_table = _privacy_round_request_download_columns(
-        summary_table=summary_table, minimum=privacy_threshold_minimum
-    )
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
@@ -510,7 +557,7 @@ def _summarize_dataset_by_region(
     ip_to_region: dict[str, str],
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
     use_encryption: bool = True,
-    privacy_threshold_minimum: int = 50,
+    region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
 ) -> None:
     all_regions = []
     all_bytes_sent = []
@@ -550,7 +597,6 @@ def _summarize_dataset_by_region(
     if len(summarized_activity_by_region) == 0:
         return
 
-    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
     all_regions_ordered = list(summarized_activity_by_region.keys())
     summary_table = pandas.DataFrame(
         data={
@@ -561,7 +607,8 @@ def _summarize_dataset_by_region(
             "number_of_views": [number_of_views_by_region[region] for region in all_regions_ordered],
         }
     )
-    summary_table = _privacy_round_request_download_columns(
-        summary_table=summary_table, minimum=privacy_threshold_minimum
+    _write_summary_by_region(
+        summary_table=summary_table,
+        summary_file_path=summary_file_path,
+        region_disclosure_threshold=region_disclosure_threshold,
     )
-    summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)

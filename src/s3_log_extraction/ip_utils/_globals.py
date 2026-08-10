@@ -3,7 +3,7 @@ _KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "VPN")  # Azure has problems; see _ip
 EXCLUDED_REGION_LABELS = frozenset(["VPN", "GitHub", "unknown", "undetermined", "missing", "bogon"])
 
 
-def is_cloud_service_or_vpn_label(region_label: str) -> bool:
+def is_cloud_service_or_vpn_label(region_label: str, /) -> bool:
     """
     Determine whether a region/service label (as produced by ``ip_to_region``) refers to a
     known cloud service or VPN provider (e.g. ``"GitHub"``, ``"AWS/us-east-1"``, ``"GCP/us-central1"``,
@@ -16,6 +16,21 @@ def is_cloud_service_or_vpn_label(region_label: str) -> bool:
     return any(
         region_label == service_name or region_label.startswith(f"{service_name}/") for service_name in _KNOWN_SERVICES
     )
+
+
+def is_resolved_region(region_label: str, /) -> bool:
+    """
+    Determine whether a region/service label (as produced by ``ip_to_region``) names an actual place.
+
+    A resolved label always pairs a top-level code with a subdivision of it, written as ``"US/California"``
+    for a geographic location or as ``"AWS/us-east-1"`` for a cloud service region. The slash is what makes
+    the label resolved.
+
+    Labels without a slash name no location. Some of them are unresolved outcomes of geolocation
+    (``"unknown"``, ``"undetermined"``, ``"missing"``, ``"bogon"``) and others are services whose region
+    was never reported (``"GitHub"``, ``"VPN"``).
+    """
+    return "/" in region_label
 
 
 _DEFAULT_REGION_CODES_TO_COORDINATES = {

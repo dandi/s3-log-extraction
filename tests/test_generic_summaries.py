@@ -42,6 +42,31 @@ def _write_asset(
     )
 
 
+def _write_ip_to_region_cache(*, cache_directory: pathlib.Path, ip_to_region: dict[str, str]) -> None:
+    """Write the ``ip_to_region`` cache that summaries geolocate their requesters with."""
+    ip_cache_directory = cache_directory / "ips"
+    ip_cache_directory.mkdir(parents=True, exist_ok=True)
+    (ip_cache_directory / "ip_to_region.yaml").write_text(
+        "\n".join(f"{ip}: {region}" for ip, region in ip_to_region.items()) + "\n"
+    )
+
+
+def _write_asset_spanning_regions(
+    *, asset_directory: pathlib.Path, cache_directory: pathlib.Path, regions: list[str]
+) -> None:
+    """
+    Write an asset streamed once from each of the given regions, by a distinct requester per region.
+
+    The requesters are drawn from the TEST-NET-1 documentation range.
+    """
+    requests = [(f"2501010000{index:02d}", _STREAMING, f"192.0.2.{index}") for index in range(len(regions))]
+    _write_asset(asset_directory=asset_directory, requests=requests)
+    _write_ip_to_region_cache(
+        cache_directory=cache_directory,
+        ip_to_region={f"192.0.2.{index}": region for index, region in enumerate(regions)},
+    )
+
+
 def test_generic_summaries(tmpdir: py.path.local):
     test_dir = pathlib.Path(tmpdir)
 
@@ -53,6 +78,9 @@ def test_generic_summaries(tmpdir: py.path.local):
     test_extraction_dir = test_dir / "extraction"
     test_summary_dir = test_dir / "summaries"
     shutil.copytree(src=expected_extraction_dir, dst=test_extraction_dir)
+    # Every requester of the example logs is a documentation-range address, which a real geolocation resolves
+    # to `bogon`; the mocked cache stands in for one so that the summaries have regions to report
+    shutil.copytree(src=base_tests_dir / "mocked_ips", dst=test_dir / "ips")
 
     s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
@@ -63,6 +91,8 @@ def test_generic_summaries(tmpdir: py.path.local):
     expected_file_paths = {
         path.relative_to(expected_summaries_dir): path for path in expected_summaries_dir.rglob(pattern="*.tsv")
     }
+    # No by_region.tsv is among them: every requester of this example data is unresolved, so no update to a
+    # by-region summary ever spans enough regions to be published
     assert set(test_file_paths.keys()) == set(expected_file_paths.keys())
 
     for expected_file_path in expected_file_paths.values():
@@ -123,15 +153,15 @@ def test_generate_all_dataset_totals_skips_archive(tmpdir: py.path.local):
     # Set up a real dataset summary
     dataset_dir = summary_dir / "ds001161"
     dataset_dir.mkdir(parents=True)
-    (dataset_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t1194564\t4\t3\n"
+    (dataset_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t1194564\t4\t3\n"
     )
 
     # Set up an archive summary that should be excluded
     archive_dir = summary_dir / "archive"
     archive_dir.mkdir(parents=True)
-    (archive_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t7481053\t7\t5\n"
+    (archive_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t7481053\t7\t5\n"
     )
 
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
@@ -147,8 +177,8 @@ def test_generate_archive_totals_raises_without_archive_requester_count(tmpdir: 
     test_dir = pathlib.Path(tmpdir)
     archive_dir = test_dir / "summaries" / "archive"
     archive_dir.mkdir(parents=True)
-    (archive_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t7481053\t7\t5\n"
+    (archive_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t7481053\t7\t5\n"
     )
 
     with pytest.raises(FileNotFoundError, match="Archive requester count file not found"):
@@ -156,73 +186,95 @@ def test_generate_archive_totals_raises_without_archive_requester_count(tmpdir: 
 
 
 @pytest.mark.ai_generated
-@pytest.mark.parametrize(
-    ("requests", "downloads", "minimum_threshold", "expected_requests", "expected_downloads"),
-    [
-        (4, 14, 5, "<5", 20),
-        (33, 36, 5, 40, 40),
-    ],
-)
-def test_generate_archive_totals_thresholds_request_and_download_counts(
-    tmpdir: py.path.local,
-    requests: int,
-    downloads: int,
-    minimum_threshold: int,
-    expected_requests: str | int,
-    expected_downloads: str | int,
-) -> None:
+def test_generate_archive_totals_raises_without_archive_by_day_summary(tmpdir: py.path.local) -> None:
+    """Archive totals are read from the archive by-day summary, so they cannot be taken without it."""
     test_dir = pathlib.Path(tmpdir)
     archive_dir = test_dir / "summaries" / "archive"
     archive_dir.mkdir(parents=True)
-    (archive_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" f"missing\t10\t{requests}\t{downloads}\n"
-    )
     (archive_dir / "requester_count.tsv").write_text("100\n")
 
-    s3_log_extraction.summarize.generate_archive_totals(
-        cache_directory=test_dir, privacy_threshold_minimum=minimum_threshold
-    )
-
-    archive_totals = json.loads((test_dir / "summaries" / "archive_totals.json").read_text())
-    assert archive_totals["total_number_of_requests"] == expected_requests
-    assert archive_totals["total_number_of_downloads"] == expected_downloads
+    with pytest.raises(FileNotFoundError, match="Archive by-day summary file not found"):
+        s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
 
 
 @pytest.mark.ai_generated
-@pytest.mark.parametrize(
-    ("requests", "downloads", "minimum_threshold", "expected_requests", "expected_downloads"),
-    [
-        (4, 14, 5, "<5", 20),
-        (33, 36, 5, 40, 40),
-    ],
-)
-def test_generate_all_dataset_totals_thresholds_request_and_download_counts(
-    tmpdir: py.path.local,
-    requests: int,
-    downloads: int,
-    minimum_threshold: int,
-    expected_requests: str | int,
-    expected_downloads: str | int,
-) -> None:
+def test_generate_archive_totals_reports_true_counts(tmpdir: py.path.local) -> None:
+    """Archive totals are the true sums of the archive by-day summary, however small they are."""
+    test_dir = pathlib.Path(tmpdir)
+    archive_dir = test_dir / "summaries" / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\tnumber_of_views\n2026-01-01\t10\t4\t3\t1\n"
+    )
+    (archive_dir / "requester_count.tsv").write_text("2\n")
+
+    s3_log_extraction.summarize.generate_archive_totals(cache_directory=test_dir)
+
+    archive_totals = json.loads((test_dir / "summaries" / "archive_totals.json").read_text())
+    assert archive_totals["total_bytes_sent"] == 10
+    assert archive_totals["total_number_of_requests"] == 4
+    assert archive_totals["total_number_of_downloads"] == 3
+    assert archive_totals["total_number_of_views"] == 1
+    assert archive_totals["number_of_requesters"] == 2
+
+
+@pytest.mark.ai_generated
+def test_generate_all_dataset_totals_reports_true_counts(tmpdir: py.path.local) -> None:
+    """Dataset totals are the true sums of the dataset by-day summary, however small they are."""
     test_dir = pathlib.Path(tmpdir)
     dataset_dir = test_dir / "summaries" / "ds001"
     dataset_dir.mkdir(parents=True)
-    (dataset_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n" f"missing\t10\t{requests}\t{downloads}\n"
+    (dataset_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\tnumber_of_views\n2026-01-01\t10\t4\t3\t1\n"
     )
-    (dataset_dir / "requester_count.tsv").write_text("100\n")
+    (dataset_dir / "requester_count.tsv").write_text("2\n")
 
-    s3_log_extraction.summarize.generate_all_dataset_totals(
-        cache_directory=test_dir, privacy_threshold_minimum=minimum_threshold
-    )
+    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
 
     totals = json.loads((test_dir / "summaries" / "totals.json").read_text())
-    assert totals["ds001"]["total_number_of_requests"] == expected_requests
-    assert totals["ds001"]["total_number_of_downloads"] == expected_downloads
+    assert totals["ds001"]["total_bytes_sent"] == 10
+    assert totals["ds001"]["total_number_of_requests"] == 4
+    assert totals["ds001"]["total_number_of_downloads"] == 3
+    assert totals["ds001"]["total_number_of_views"] == 1
+    assert totals["ds001"]["number_of_requesters"] == 2
 
 
 @pytest.mark.ai_generated
-def test_generate_archive_summaries_thresholds_request_and_download_columns(tmpdir: py.path.local) -> None:
+def test_totals_count_regions_only_from_a_published_by_region_summary(tmpdir: py.path.local) -> None:
+    """A dataset whose by-region summary is still withheld reports no regions and no countries."""
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    withheld_dir = summary_dir / "ds001"
+    withheld_dir.mkdir(parents=True)
+    (withheld_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t4\t3\n"
+    )
+
+    published_dir = summary_dir / "ds002"
+    published_dir.mkdir(parents=True)
+    (published_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t4\t3\n"
+    )
+    (published_dir / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
+        "US/California\t4\t2\t1\n"
+        "DE/Berlin\t4\t1\t1\n"
+        "missing\t2\t1\t1\n"
+    )
+
+    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
+
+    totals = json.loads((summary_dir / "totals.json").read_text())
+    assert totals["ds001"]["number_of_unique_regions"] == 0
+    assert totals["ds001"]["number_of_unique_countries"] == 0
+    assert totals["ds002"]["number_of_unique_regions"] == 3
+    assert totals["ds002"]["number_of_unique_countries"] == 2  # "missing" names no country
+
+
+@pytest.mark.ai_generated
+def test_generate_archive_summaries_reports_true_counts(tmpdir: py.path.local) -> None:
+    """The archive by-day summary aggregates the true values of the dataset summaries."""
     test_dir = pathlib.Path(tmpdir)
     summary_dir = test_dir / "summaries"
 
@@ -231,9 +283,6 @@ def test_generate_archive_summaries_thresholds_request_and_download_columns(tmpd
     (ds001_dir / "by_day.tsv").write_text(
         "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t1\t1\n"
     )
-    (ds001_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t10\t1\t1\n"
-    )
     (ds001_dir / "requester_count.tsv").write_text("60\n")
 
     ds002_dir = summary_dir / "ds002"
@@ -241,19 +290,17 @@ def test_generate_archive_summaries_thresholds_request_and_download_columns(tmpd
     (ds002_dir / "by_day.tsv").write_text(
         "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t40\t2\t1\n"
     )
-    (ds002_dir / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t40\t2\t1\n"
-    )
     (ds002_dir / "requester_count.tsv").write_text("40\n")
 
-    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir, privacy_threshold_minimum=4)
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
 
     archive_by_day = pandas.read_table(filepath_or_buffer=summary_dir / "archive" / "by_day.tsv")
-    archive_by_region = pandas.read_table(filepath_or_buffer=summary_dir / "archive" / "by_region.tsv")
-    assert archive_by_day.loc[0, "number_of_requests"] == "<4"
-    assert archive_by_day.loc[0, "number_of_downloads"] == "<4"
-    assert archive_by_region.loc[0, "number_of_requests"] == "<4"
-    assert archive_by_region.loc[0, "number_of_downloads"] == "<4"
+    assert archive_by_day.loc[0, "bytes_sent"] == 50
+    assert archive_by_day.loc[0, "number_of_requests"] == 3
+    assert archive_by_day.loc[0, "number_of_downloads"] == 2
+
+    # Every dataset by-region summary is still withheld, so the archive has nothing to aggregate for one
+    assert not (summary_dir / "archive" / "by_region.tsv").exists()
 
 
 @pytest.mark.ai_generated
@@ -373,33 +420,28 @@ def test_generate_archive_summaries_accepts_custom_asset_type_order(tmpdir: py.p
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("count", "modulo", "minimum", "expected"),
+    ("region_label", "expected"),
     [
-        # Below minimum → sentinel string
-        (0, 20, 50, "<50"),
-        (1, 20, 50, "<50"),
-        (49, 20, 50, "<50"),
-        # At or above minimum → rounded to nearest multiple of modulo
-        (50, 20, 50, 40),  # round(2.5)=2 (banker's rounding)
-        (55, 20, 50, 60),  # round(2.75)=3
-        (60, 20, 50, 60),
-        (100, 20, 50, 100),
-        (123, 20, 50, 120),
-        # Custom modulo and minimum
-        (4, 5, 5, "<5"),
-        (5, 5, 5, 5),
-        (7, 5, 5, 5),
-        (8, 5, 5, 10),
-        # minimum can differ from modulo
-        (9, 10, 5, 10),
-        (3, 10, 5, "<5"),
+        # A resolved label pairs a top-level code with a subdivision of it
+        ("US/California", True),
+        ("DE/Berlin", True),
+        ("AWS/us-east-1", True),
+        ("GCP/us-central1", True),
+        # Unresolved outcomes of geolocation name no place
+        ("unknown", False),
+        ("undetermined", False),
+        ("missing", False),
+        ("bogon", False),
+        # Neither do services whose region was never reported
+        ("GitHub", False),
+        ("VPN", False),
     ],
 )
-def test_round_requester_count(count: int, modulo: int, minimum: int, expected: str | int):
-    """Privacy-rounding returns the sentinel below minimum and rounds to the nearest modulo otherwise."""
-    from s3_log_extraction.summarize._generate_summaries import _round_requester_count
+def test_is_resolved_region(region_label: str, expected: bool) -> None:
+    """Only labels that name a place, which is to say the ones carrying a slash, are resolved regions."""
+    from s3_log_extraction.ip_utils import is_resolved_region
 
-    assert _round_requester_count(count=count, modulo=modulo, minimum=minimum) == expected
+    assert is_resolved_region(region_label) == expected
 
 
 @pytest.mark.ai_generated
@@ -453,7 +495,7 @@ def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.loc
 
 @pytest.mark.ai_generated
 def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpdir: py.path.local) -> None:
-    """The rounded requester count written to disk excludes known cloud service/VPN IPs."""
+    """The requester count written to disk excludes known cloud service/VPN IPs."""
     from s3_log_extraction.summarize._generate_summaries import _summarize_dataset_requester_count
 
     asset_dir = pathlib.Path(tmpdir) / "asset"
@@ -469,7 +511,6 @@ def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpd
         asset_directories=[asset_dir],
         summary_file_path=summary_file_path,
         ip_to_region=ip_to_region,
-        minimum=50,
         use_encryption=False,
     )
 
@@ -572,7 +613,8 @@ def test_collect_asset_views(
 @pytest.mark.ai_generated
 def test_collect_asset_views_respects_custom_session_timeout(tmpdir: py.path.local) -> None:
     """The session timeout is configurable, and the default of 8 hours is applied when it is not overridden."""
-    from s3_log_extraction.summarize._generate_summaries import SESSION_TIMEOUT_IN_SECONDS, _collect_asset_views
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
+    from s3_log_extraction.summarize.globals import SESSION_TIMEOUT_IN_SECONDS
 
     asset_directory = pathlib.Path(tmpdir) / "asset"
     _write_asset(
@@ -626,17 +668,17 @@ def test_collect_asset_views_raises_on_misaligned_files(tmpdir: py.path.local) -
 
 
 @pytest.mark.ai_generated
-def test_summaries_privacy_round_number_of_views(tmpdir: py.path.local) -> None:
-    """Per-asset view counts are privacy-rounded exactly like the request and download counts."""
+def test_summaries_report_true_number_of_views(tmpdir: py.path.local) -> None:
+    """Per-asset view counts are reported as they are, since an asset path names no requester."""
     test_dir = pathlib.Path(tmpdir)
     dataset_directory = test_dir / "extraction" / "ds001"
 
-    # One view from each of sixty distinct requesters, which survives the disclosure threshold
+    # One view from each of sixty distinct requesters
     _write_asset(
         asset_directory=dataset_directory / "popular.nwb",
         requests=[(f"2501010000{index:02d}", _STREAMING, f"192.0.2.{index}") for index in range(60)],
     )
-    # Three views from a single requester, which is censored
+    # Three views from a single requester
     _write_asset(
         asset_directory=dataset_directory / "quiet.nwb",
         requests=[
@@ -650,8 +692,8 @@ def test_summaries_privacy_round_number_of_views(tmpdir: py.path.local) -> None:
 
     by_asset = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_asset.tsv", index_col=0)
     assert by_asset.columns.tolist() == ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
-    assert by_asset.loc["popular.nwb", "number_of_views"] == "60"
-    assert by_asset.loc["quiet.nwb", "number_of_views"] == "<50"
+    assert by_asset.loc["popular.nwb", "number_of_views"] == 60
+    assert by_asset.loc["quiet.nwb", "number_of_views"] == 3
 
 
 @pytest.mark.ai_generated
@@ -687,8 +729,9 @@ def test_view_counts_roll_up_to_dataset_and_archive_totals(tmpdir: py.path.local
     test_dir = pathlib.Path(tmpdir)
     extraction_directory = test_dir / "extraction"
 
-    # Sixty views on each asset, one from each of sixty distinct requesters, so that every published
-    # value clears the disclosure threshold and the tables can be compared against each other directly
+    # Sixty views on each asset, one from each of sixty distinct requesters, spread over ten regions so that
+    # every by-region summary clears the disclosure threshold and the tables can be compared against each other
+    ip_to_region = {}
     for dataset_id, asset_name, subnet in (
         ("ds001", "first.nwb", "192.0.2"),
         ("ds001", "second.nwb", "198.51.100"),
@@ -698,6 +741,8 @@ def test_view_counts_roll_up_to_dataset_and_archive_totals(tmpdir: py.path.local
             asset_directory=extraction_directory / dataset_id / asset_name,
             requests=[(f"2501010000{index:02d}", _STREAMING, f"{subnet}.{index}") for index in range(60)],
         )
+        ip_to_region.update({f"{subnet}.{index}": f"US/Subdivision {index % 10}" for index in range(60)})
+    _write_ip_to_region_cache(cache_directory=test_dir, ip_to_region=ip_to_region)
 
     s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
     s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
@@ -747,9 +792,9 @@ def test_views_are_counted_on_the_day_the_session_began(tmpdir: py.path.local) -
     s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
 
     by_day = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_day.tsv", index_col=0)
-    assert by_day.loc["2025-01-01", "number_of_views"] == "60"
-    assert by_day.loc["2025-01-02", "number_of_views"] == "<50"  # Continuation of the session begun on the 1st
-    assert by_day.loc["2025-01-03", "number_of_views"] == "60"
+    assert by_day.loc["2025-01-01", "number_of_views"] == 60
+    assert by_day.loc["2025-01-02", "number_of_views"] == 0  # Continuation of the session begun on the 1st
+    assert by_day.loc["2025-01-03", "number_of_views"] == 60
 
 
 @pytest.mark.ai_generated
@@ -766,14 +811,15 @@ def test_views_are_attributed_to_the_region_of_their_requester(tmpdir: py.path.l
         ],
     )
 
-    ip_cache_directory = test_dir / "ips"
-    ip_cache_directory.mkdir(parents=True)
-    (ip_cache_directory / "ip_to_region.yaml").write_text(
-        "\n".join([f"{ip}: US/California" for ip in californian_ips] + [f"{ip}: DE/Berlin" for ip in berliner_ips])
-        + "\n"
+    _write_ip_to_region_cache(
+        cache_directory=test_dir,
+        ip_to_region={ip: "US/California" for ip in californian_ips} | {ip: "DE/Berlin" for ip in berliner_ips},
     )
 
-    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+    # Two regions is below the default disclosure threshold, which this test is not about
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, region_disclosure_threshold=1
+    )
 
     by_region = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_region.tsv", index_col=0)
     assert by_region.loc["US/California", "number_of_views"] == 60
@@ -781,22 +827,22 @@ def test_views_are_attributed_to_the_region_of_their_requester(tmpdir: py.path.l
 
 
 @pytest.mark.ai_generated
-def test_totals_report_censored_views_when_view_counts_are_missing(tmpdir: py.path.local) -> None:
-    """A cache summarized before views existed reports the censored sentinel rather than failing."""
+def test_totals_report_no_views_when_view_counts_are_missing(tmpdir: py.path.local) -> None:
+    """A cache summarized before views existed reports no views rather than failing."""
     test_dir = pathlib.Path(tmpdir)
     summary_directory = test_dir / "summaries"
 
     dataset_directory = summary_directory / "ds001"
     dataset_directory.mkdir(parents=True)
-    (dataset_directory / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t10\t60\t60\n"
+    (dataset_directory / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t60\t60\n"
     )
     (dataset_directory / "requester_count.tsv").write_text("60\n")
 
     archive_directory = summary_directory / "archive"
     archive_directory.mkdir(parents=True)
-    (archive_directory / "by_region.tsv").write_text(
-        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\nmissing\t10\t60\t60\n"
+    (archive_directory / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t60\t60\n"
     )
     (archive_directory / "requester_count.tsv").write_text("60\n")
 
@@ -805,5 +851,141 @@ def test_totals_report_censored_views_when_view_counts_are_missing(tmpdir: py.pa
 
     totals = json.loads((summary_directory / "totals.json").read_text())
     archive_totals = json.loads((summary_directory / "archive_totals.json").read_text())
-    assert totals["ds001"]["total_number_of_views"] == "<50"
-    assert archive_totals["total_number_of_views"] == "<50"
+    assert totals["ds001"]["total_number_of_views"] == 0
+    assert archive_totals["total_number_of_views"] == 0
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("number_of_regions", "expected_to_be_published"),
+    [
+        (1, False),
+        (5, False),  # The threshold itself is not enough; the update must move more regions than that
+        (6, True),
+        (12, True),
+    ],
+)
+def test_by_region_summary_is_published_only_above_the_disclosure_threshold(
+    tmpdir: py.path.local, number_of_regions: int, expected_to_be_published: bool
+) -> None:
+    """A by-region summary is created only once its first update spans more regions than the threshold."""
+    test_dir = pathlib.Path(tmpdir)
+
+    _write_asset_spanning_regions(
+        asset_directory=test_dir / "extraction" / "ds001" / "asset.nwb",
+        cache_directory=test_dir,
+        regions=[f"US/Subdivision {index}" for index in range(number_of_regions)],
+    )
+
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    summary_directory = test_dir / "summaries" / "ds001"
+    assert (summary_directory / "by_region.tsv").exists() == expected_to_be_published
+
+    # The summaries that name no requester location are written either way, with their true values
+    by_day = pandas.read_table(filepath_or_buffer=summary_directory / "by_day.tsv")
+    assert by_day.loc[0, "number_of_requests"] == number_of_regions
+
+
+@pytest.mark.ai_generated
+def test_unresolved_region_labels_do_not_count_toward_the_disclosure_threshold(tmpdir: py.path.local) -> None:
+    """Labels that name no place cannot make up the regions an update needs to be published."""
+    test_dir = pathlib.Path(tmpdir)
+
+    _write_asset_spanning_regions(
+        asset_directory=test_dir / "extraction" / "ds001" / "asset.nwb",
+        cache_directory=test_dir,
+        regions=["unknown", "undetermined", "missing", "bogon", "GitHub", "VPN", "US/California"],
+    )
+
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    assert not (test_dir / "summaries" / "ds001" / "by_region.tsv").exists()
+
+
+@pytest.mark.ai_generated
+def test_by_region_summary_is_not_updated_by_a_small_change(tmpdir: py.path.local) -> None:
+    """Activity that moves too few regions leaves the published by-region summary exactly as it was."""
+    test_dir = pathlib.Path(tmpdir)
+    asset_directory = test_dir / "extraction" / "ds001" / "asset.nwb"
+    summary_file_path = test_dir / "summaries" / "ds001" / "by_region.tsv"
+
+    regions = [f"US/Subdivision {index}" for index in range(10)]
+    _write_asset_spanning_regions(asset_directory=asset_directory, cache_directory=test_dir, regions=regions)
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    published = summary_file_path.read_text()
+
+    # Two more requests from two of the regions already published, which is too small an update to disclose
+    _write_asset_spanning_regions(
+        asset_directory=asset_directory, cache_directory=test_dir, regions=[*regions, *regions[:2]]
+    )
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    assert summary_file_path.read_text() == published
+
+    # The by-day summary meanwhile carries the true count, so the two fall out of step
+    by_day = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_day.tsv")
+    assert by_day.loc[0, "number_of_requests"] == 12
+
+
+@pytest.mark.ai_generated
+def test_by_region_summary_is_updated_by_a_change_across_enough_regions(tmpdir: py.path.local) -> None:
+    """Activity that moves more regions than the threshold republishes the by-region summary."""
+    test_dir = pathlib.Path(tmpdir)
+    asset_directory = test_dir / "extraction" / "ds001" / "asset.nwb"
+    summary_file_path = test_dir / "summaries" / "ds001" / "by_region.tsv"
+
+    regions = [f"US/Subdivision {index}" for index in range(10)]
+    _write_asset_spanning_regions(asset_directory=asset_directory, cache_directory=test_dir, regions=regions)
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    # Six of the ten regions request again, which is more than the threshold of five
+    _write_asset_spanning_regions(
+        asset_directory=asset_directory, cache_directory=test_dir, regions=[*regions, *regions[:6]]
+    )
+    s3_log_extraction.summarize.generate_summaries(cache_directory=test_dir, use_encryption=False)
+
+    by_region = pandas.read_table(filepath_or_buffer=summary_file_path, index_col=0)
+    assert by_region["number_of_requests"].sum() == 16
+    assert by_region.loc["US/Subdivision 0", "number_of_requests"] == 2
+    assert by_region.loc["US/Subdivision 9", "number_of_requests"] == 1
+
+
+@pytest.mark.ai_generated
+def test_archive_by_region_summary_is_published_only_above_the_disclosure_threshold(tmpdir: py.path.local) -> None:
+    """The archive by-region summary is held to the same threshold as the dataset summaries it aggregates."""
+    test_dir = pathlib.Path(tmpdir)
+    summary_directory = test_dir / "summaries"
+
+    dataset_directory = summary_directory / "ds001"
+    dataset_directory.mkdir(parents=True)
+    (dataset_directory / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t3\t3\n"
+    )
+    (dataset_directory / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
+        + "".join(f"US/Subdivision {index}\t1\t1\t1\n" for index in range(3))
+    )
+    (dataset_directory / "requester_count.tsv").write_text("3\n")
+
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+
+    assert not (summary_directory / "archive" / "by_region.tsv").exists()
+
+    # A second dataset brings the archive to seven regions in total, which clears the threshold
+    other_dataset_directory = summary_directory / "ds002"
+    other_dataset_directory.mkdir(parents=True)
+    (other_dataset_directory / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t4\t4\n"
+    )
+    (other_dataset_directory / "by_region.tsv").write_text(
+        "region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n"
+        + "".join(f"DE/Subdivision {index}\t1\t1\t1\n" for index in range(4))
+    )
+    (other_dataset_directory / "requester_count.tsv").write_text("4\n")
+
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+
+    archive_by_region = pandas.read_table(filepath_or_buffer=summary_directory / "archive" / "by_region.tsv")
+    assert len(archive_by_region) == 7

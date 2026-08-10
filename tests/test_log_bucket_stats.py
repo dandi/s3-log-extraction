@@ -348,9 +348,11 @@ def test_update_summaries_archive_forwards_cache_directory(
     def _stub_generate_archive_summaries(
         cache_directory: pathlib.Path | str | None = None,
         asset_types_in_order: tuple[str, ...] | list[str] | None = None,
+        region_disclosure_threshold: int = 5,
     ) -> None:
         captured["cache_directory"] = pathlib.Path(cache_directory) if cache_directory is not None else None
         captured["asset_types_in_order"] = list(asset_types_in_order) if asset_types_in_order is not None else None
+        captured["region_disclosure_threshold"] = region_disclosure_threshold
 
     monkeypatch.setattr(cli_module, "generate_archive_summaries", _stub_generate_archive_summaries)
 
@@ -365,6 +367,8 @@ def test_update_summaries_archive_forwards_cache_directory(
             "archive",
             "--asset-types-in-order",
             "Video,Neurophysiology,Miscellaneous",
+            "--threshold",
+            "7",
             "--cache",
             str(cache_dir),
         ],
@@ -373,6 +377,7 @@ def test_update_summaries_archive_forwards_cache_directory(
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     assert captured["cache_directory"] == cache_dir
     assert captured["asset_types_in_order"] == ["Video", "Neurophysiology", "Miscellaneous"]
+    assert captured["region_disclosure_threshold"] == 7
 
 
 @pytest.mark.ai_generated

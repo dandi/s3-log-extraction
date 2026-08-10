@@ -4,7 +4,8 @@ import beartype
 import natsort
 import pandas
 
-from ._generate_summaries import _privacy_round_request_download_columns
+from ._generate_summaries import _write_summary_by_region
+from .globals import REGION_DISCLOSURE_THRESHOLD
 from ..config import get_cache_subdirectory
 
 
@@ -12,10 +13,15 @@ from ..config import get_cache_subdirectory
 def generate_archive_summaries(
     cache_directory: str | pathlib.Path | None = None,
     asset_types_in_order: tuple[str, ...] | list[str] | None = None,
-    privacy_threshold_minimum: int = 50,
+    region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
 ) -> None:
     """
     Generate summaries by day and region for the entire archive from the mapped S3 logs.
+
+    Every summary is aggregated from the per-dataset summaries and written with those values, except for
+    `by_region.tsv`. That one is written only when the update it carries moves more than
+    ``region_disclosure_threshold`` resolved regions at once, on the same terms as the per-dataset
+    by-region summaries it aggregates.
 
     Parameters
     ----------
@@ -25,9 +31,9 @@ def generate_archive_summaries(
     asset_types_in_order : sequence[str], optional
         Preferred output column ordering for known asset types in the archive
         ``by_asset_type_per_week.tsv`` summary.
-    privacy_threshold_minimum : int
-        Minimum disclosure threshold for privacy-rounded request/download
-        summary values. Default is ``50``.
+    region_disclosure_threshold : int
+        Number of resolved regions an update to the archive `by_region.tsv` must move at once to be
+        published. Default is ``REGION_DISCLOSURE_THRESHOLD`` (5).
     """
     asset_types_in_order = list(dict.fromkeys(asset_types_in_order)) if asset_types_in_order is not None else []
 
@@ -65,9 +71,6 @@ def generate_archive_summaries(
             "number_of_views": "int64",
         }
     )
-    aggregated_activity_by_day = _privacy_round_request_download_columns(
-        summary_table=aggregated_activity_by_day, minimum=privacy_threshold_minimum
-    )
 
     archive_summary_by_day_file_path = archive_directory / "by_day.tsv"
     aggregated_activity_by_day.to_csv(
@@ -85,48 +88,45 @@ def generate_archive_summaries(
             if column_name not in summary.columns:  # Summarized before views were reported
                 summary[column_name] = 0
             summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
-    aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
-    pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)[
-        ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
-    ].sum()
-    pre_aggregated.sort_values(by="region", key=natsort.natsort_keygen(), inplace=True)
+    # Datasets whose by-region summary has not yet cleared the disclosure threshold have nothing to aggregate
+    if all_dataset_summaries_by_region:
+        aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
 
-    aggregated_activity_by_region = pre_aggregated.reindex(
-        columns=("region", "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
-    )
-    aggregated_activity_by_region = aggregated_activity_by_region.astype(
-        dtype={
-            "bytes_sent": "int64",
-            "number_of_requests": "int64",
-            "number_of_downloads": "int64",
-            "number_of_views": "int64",
-        }
-    )
-    aggregated_activity_by_region = _privacy_round_request_download_columns(
-        summary_table=aggregated_activity_by_region, minimum=privacy_threshold_minimum
-    )
+        pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)[
+            ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
+        ].sum()
+        pre_aggregated.sort_values(by="region", key=natsort.natsort_keygen(), inplace=True)
 
-    archive_summary_by_region_file_path = archive_directory / "by_region.tsv"
-    aggregated_activity_by_region.to_csv(
-        path_or_buf=archive_summary_by_region_file_path, mode="w", sep="\t", header=True, index=False
-    )
+        aggregated_activity_by_region = pre_aggregated.reindex(
+            columns=("region", "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
+        )
+        aggregated_activity_by_region = aggregated_activity_by_region.astype(
+            dtype={
+                "bytes_sent": "int64",
+                "number_of_requests": "int64",
+                "number_of_downloads": "int64",
+                "number_of_views": "int64",
+            }
+        )
+
+        _write_summary_by_region(
+            summary_table=aggregated_activity_by_region,
+            summary_file_path=archive_directory / "by_region.tsv",
+            region_disclosure_threshold=region_disclosure_threshold,
+        )
 
     # Requester count (aggregated from dataset requester_count.tsv files)
+    # Counts written before this file reported true values may still be censored sentinels, such as "<50",
+    # which carry no number and are skipped until the next per-dataset summary refreshes them.
     requester_counts: list[int] = [
         int(value)
         for summary_file_path in summary_directory.rglob(pattern="requester_count.tsv")
         if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
     ]
-    total_requester_count: int = sum(requester_counts)
-    archive_requester_count: str = (
-        f"<{privacy_threshold_minimum}"
-        if total_requester_count < privacy_threshold_minimum
-        else str(total_requester_count)
-    )
 
     archive_requester_count_file_path = archive_directory / "requester_count.tsv"
-    archive_requester_count_file_path.write_text(archive_requester_count)
+    archive_requester_count_file_path.write_text(str(sum(requester_counts)))
 
     # Optional by_asset_type_per_week aggregation
     all_dataset_summaries_by_asset_type_per_week = [

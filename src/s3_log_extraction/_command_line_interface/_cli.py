@@ -19,6 +19,7 @@ from ..summarize import (
     generate_archive_totals,
     generate_summaries,
 )
+from ..summarize.globals import REGION_DISCLOSURE_THRESHOLD
 from ..testing import generate_benchmark
 from ..utils import IpCategoryCount, get_extraction_completion, get_ip_stats, get_log_bucket_stats
 from ..validate import (
@@ -383,6 +384,19 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     default=None,
 )
 @rich_click.option(
+    "--threshold",
+    "region_disclosure_threshold",
+    help=(
+        "The number of resolved regions an update to a 'by_region.tsv' must move at once for it to be published. "
+        "Below this, the summary is left as it was, so that no single requester's activity can be read off "
+        "the change. A resolved region is any label naming a physical place, such as 'US/California'."
+    ),
+    required=False,
+    type=rich_click.IntRange(min=0),
+    default=REGION_DISCLOSURE_THRESHOLD,
+    show_default=True,
+)
+@rich_click.option(
     "--cache",
     "cache_directory",
     help=(
@@ -406,6 +420,7 @@ def _update_summaries_cli(
     skip: str | None = None,
     workers: int = -2,
     asset_types_in_order: str | None = None,
+    region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
     cache_directory: str | None = None,
     use_encryption: bool = True,
 ) -> None:
@@ -417,9 +432,14 @@ def _update_summaries_cli(
             generate_archive_summaries(
                 cache_directory=cache_path,
                 asset_types_in_order=parsed_asset_types_in_order,
+                region_disclosure_threshold=region_disclosure_threshold,
             )
         case _:
-            generate_summaries(cache_directory=cache_path, use_encryption=use_encryption)
+            generate_summaries(
+                cache_directory=cache_path,
+                use_encryption=use_encryption,
+                region_disclosure_threshold=region_disclosure_threshold,
+            )
 
 
 # s3logextraction update totals
