@@ -128,20 +128,33 @@ def load_streaming_requests(
     return df
 
 
-def compute_inter_request_intervals(df: pd.DataFrame) -> pd.DataFrame:
+def compute_inter_request_intervals(df: pd.DataFrame, per_asset: bool = False) -> pd.DataFrame:
     """
-    Return a tidy DataFrame of per-IP inter-request intervals.
+    Return a tidy DataFrame of inter-request intervals.
 
     Columns: ``ip``, ``interval`` (seconds), and — when the input carries an
     ``asset_path`` column — ``asset_before`` / ``asset_after`` identifying the
     assets of the two requests that bound each gap. The asset attribution lets
     downstream code attribute "moat-filling" intervals to specific assets (e.g.
     bot-hammered testing assets).
+
+    By default gaps are between consecutive requests from the same IP *across all
+    assets* (the calibration used for the archive-wide session valley). With
+    ``per_asset=True`` gaps are computed within each (IP, asset) group instead, i.e.
+    the delay between successive touches of the *same* asset by the same IP — the
+    scope the shipped per-asset ``number_of_views`` metric actually applies, and the
+    right distribution to calibrate that metric's timeout on. Note this is NOT the
+    same as filtering ``asset_before == asset_after``: same-asset returns with other
+    assets touched in between are only captured by the (IP, asset) grouping.
     """
     has_asset = "asset_path" in df.columns
+    if per_asset and not has_asset:
+        raise ValueError("per_asset=True requires an 'asset_path' column")
     seg_ip, seg_int, seg_before, seg_after = [], [], [], []
-    groups = list(df.groupby("ip"))
-    for ip, group in tqdm.tqdm(groups, desc="Computing intervals", unit="IP"):
+    group_keys = ["ip", "asset_path"] if per_asset else "ip"
+    groups = list(df.groupby(group_keys))
+    for key, group in tqdm.tqdm(groups, desc="Computing intervals", unit="grp"):
+        ip = key[0] if per_asset else key
         g = group.sort_values("timestamp")
         times = g["timestamp"].to_numpy()
         if times.size < 2:
@@ -399,6 +412,13 @@ def main() -> None:
         help="Optional text file with one exclusion glob per line (added to any --exclude-asset patterns).",
     )
     parser.add_argument(
+        "--per-asset",
+        action="store_true",
+        help="Compute gaps within each (IP, asset) group — the delay between successive touches of the "
+        "SAME asset by the same IP — instead of across all of an IP's assets. This matches the scope of "
+        "the shipped per-asset number_of_views metric; compare its valley against the default cross-asset one.",
+    )
+    parser.add_argument(
         "--out",
         default="session_assessment.png",
         type=pathlib.Path,
@@ -423,8 +443,9 @@ def main() -> None:
         exclude_patterns=exclude_patterns,
     )
 
-    print("Computing inter-request intervals...")
-    intervals_df = compute_inter_request_intervals(df)
+    scope = "same-asset (per IP, asset)" if args.per_asset else "cross-asset (per IP)"
+    print(f"Computing inter-request intervals [{scope}]...")
+    intervals_df = compute_inter_request_intervals(df, per_asset=args.per_asset)
     intervals = intervals_df["interval"].to_numpy()
     print(f"  {len(intervals):,} intervals computed")
 
