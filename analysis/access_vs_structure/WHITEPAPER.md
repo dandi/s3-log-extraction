@@ -129,6 +129,43 @@ Three consequences for our meta-statistics:
    the community's tooling mix (more Neurosift, better caching) would move these
    numbers with no change in underlying interest.
 
+### 2.3 Open calibration question: cross-asset vs. same-asset gaps
+
+The 8-hour timeout was found on the distribution of gaps between an IP's
+consecutive streaming requests **across all assets** (§2). But the shipped
+`number_of_views` metric applies the timeout **per (IP, asset)** — the gap between
+successive touches of the *same* file. Those are different distributions, so we
+re-ran the valley analysis on the same-asset gaps the metric actually uses.
+
+![Same-asset inter-request gaps](figures/session_assessment_per_asset.png)
+*Figure. Same-asset (per-IP, per-asset) streaming gap distribution. The interval
+CDF (top-left) flattens near 0.95 then steps up around one day: ~95 % of same-file
+gaps are seconds, and the rest are dominated by next-day returns to the same file.*
+
+Two things change under the same-asset scope, and one caveat dominates:
+
+- **The distribution is diurnal-dominated, not short-gap-bimodal.** Only ~95 % of
+  same-file gaps are under 10 minutes (vs. 99.8 % cross-asset) and the 99th
+  percentile is ~24 h — revisiting a file the next day is common. A
+  Google-Analytics-style ~30-minute inactivity timeout therefore does **not**
+  transfer; there is no clean sub-hour valley.
+- **8 h looks poorly placed under this scope.** The guard-band ambiguity sweep
+  peaks near ~8–9 h — i.e., the shipped threshold sits close to an ambiguity
+  *maximum* for same-asset gaps rather than the minimum it occupies cross-asset.
+- **Caveat (decisive): the same-asset view is heavily bot-contaminated.** Per-(IP,
+  asset) grouping amplifies periodic bots — one that pings a file every *N* hours
+  produces a clean same-file spike at *N* hours. The 1-day band alone holds ~2.6 M
+  gaps (1.6 % of all), and periodic blobs beyond the current `testing_blobs.txt`
+  list appear. So the exact locations of the peak (~8–9 h) and the lowest-density
+  valley (~30 h) are **preliminary artifacts as much as behavior**.
+
+**Conclusion:** the calibration scope genuinely matters, and 8 h is not obviously
+the right timeout for the per-asset metric — but the same-asset distribution must
+be cleaned of periodic bots (expand the exclusion list, then re-run `--per-asset`)
+before any recalibration is trustworthy. Until then the shipped 8 h stands on its
+cross-asset calibration, which is far more bot-robust. This is the clearest
+open follow-up from the analysis.
+
 ---
 
 ## 3. Why not normalize by a file property?

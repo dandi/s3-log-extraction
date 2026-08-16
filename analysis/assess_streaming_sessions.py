@@ -527,10 +527,16 @@ def main() -> None:
         if r["ambiguity_count"] > 0 and "asset_after" in intervals_df.columns:
             attribution = attribute_band_intervals(intervals_df, r["guard_lo"], r["guard_hi"], top_n=5)
             if attribution["same_asset_fraction"] is not None:
-                print(
-                    f"      {100 * attribution['same_asset_fraction']:.1f}% are same-asset gaps "
-                    f"(bot signature); top contributing assets:"
-                )
+                if args.per_asset:
+                    # In per-asset mode every gap is same-asset by construction, so the
+                    # same-asset fraction is a tautology (always 100%) and is NOT a bot
+                    # signal. Report only which assets pile up in the band.
+                    print("      top contributing assets (periodic ones are candidate bots to exclude):")
+                else:
+                    print(
+                        f"      {100 * attribution['same_asset_fraction']:.1f}% are same-asset gaps "
+                        f"(bot signature); top contributing assets:"
+                    )
                 for asset, count in attribution["top_assets"].items():
                     print(f"        {count:>7,}  {asset}")
 
