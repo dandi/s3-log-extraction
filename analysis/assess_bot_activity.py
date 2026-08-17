@@ -271,7 +271,8 @@ def report(df: pd.DataFrame, flagged: pd.Series, has_gh: bool) -> None:
             " [gh-actions]" if has_gh and r["is_github_actions_ip"] else ""
         )
         gap_h = r["median_gap"] / 3600
-        print(f"  {int(r['n_requests']):>8,} reqs  CV={r['cv_gaps']:.3f}  median_gap={gap_h:.1f}h  {r['asset_path']}{tags}")
+        head = f"  {int(r['n_requests']):>8,} reqs  CV={r['cv_gaps']:.3f}  median_gap={gap_h:.1f}h"
+        print(f"{head}  {r['asset_path']}{tags}")
 
 
 def main() -> None:
