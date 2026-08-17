@@ -20,15 +20,15 @@ metronomic (low cv_gaps OR high dominant_fraction).
 
 Two optional ground-truth labels turn this from "eyeball it" into measured
 precision/recall:
-  * --testing-dataset ID (repeatable) / --testing-asset-file GLOBS — DANDI testing
-    datasets/assets (the asset side of the truth).
+  * --testing-dataset-file / --testing-asset-file — DANDI testing datasets/assets,
+    one dandiset id (or asset glob) per line (the asset side of the truth).
   * --github-meta — fetch GitHub Actions IP ranges from api.github.com/meta and label
     IPs that fall in them (the requester side of the truth).
 
 Usage
 -----
     python assess_bot_activity.py --cache-dir /path/to/cache [--no-encryption] \\
-        [--testing-dataset 000xxx ...] [--github-meta] [--out bot_activity.png]
+        [--testing-dataset-file testing_datasets.txt] [--github-meta] [--out bot_activity.png]
 
 Requires numpy, pandas, matplotlib, tqdm (and requests if --github-meta).
 """
@@ -286,11 +286,10 @@ def main() -> None:
     )
     parser.add_argument("--min-span-hours", type=float, default=24.0, help="Persistent if span >= this (default 24h)")
     parser.add_argument(
-        "--testing-dataset",
-        action="append",
-        default=[],
-        metavar="ID",
-        help="Testing dandiset id (repeatable); matches '<ID>/*'",
+        "--testing-dataset-file",
+        type=pathlib.Path,
+        default=None,
+        help="Text file of testing dandiset ids, one per line; each becomes a '<id>/*' asset match.",
     )
     parser.add_argument(
         "--testing-asset-file", type=pathlib.Path, default=None, help="File of testing-asset globs, one per line"
@@ -299,13 +298,14 @@ def main() -> None:
     parser.add_argument("--out", default="bot_activity.png", type=pathlib.Path)
     args = parser.parse_args()
 
-    testing_globs = [f"{d}/*" for d in args.testing_dataset]
+    def _read_lines_file(path: pathlib.Path) -> list[str]:
+        return [line.strip() for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")]
+
+    testing_globs: list[str] = []
+    if args.testing_dataset_file:
+        testing_globs += [f"{ds}/*" for ds in _read_lines_file(args.testing_dataset_file)]
     if args.testing_asset_file:
-        testing_globs += [
-            line.strip()
-            for line in args.testing_asset_file.read_text().splitlines()
-            if line.strip() and not line.startswith("#")
-        ]
+        testing_globs += _read_lines_file(args.testing_asset_file)
 
     df = score_ip_asset_pairs(
         cache_dir=args.cache_dir,
