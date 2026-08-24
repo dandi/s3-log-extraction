@@ -15,8 +15,17 @@ Per (IP, asset) features (only pairs with >= --min-requests are scored):
   * dominant_fraction — share of gaps within +-tol of the median gap; ~1 = clockwork
   * median_gap, streaming_fraction
 
-A pair is flagged automated when it has enough requests over enough time AND is
-metronomic (low cv_gaps OR high dominant_fraction).
+A pair is flagged automated when it persists over enough time AND is metronomic:
+low cv_gaps, OR a dominant period accounting for most gaps whose length is at least
+a floor (so sub-second burst streaming of large zarr stores is not mistaken for a
+monitoring bot).
+
+Caveat learned from the first real run: at DANDI scale the dominant automated
+traffic is GitHub Actions (the dandi-cache CI streams every asset) which is
+IRREGULAR, so temporal regularity misses most of it. The IP label (GitHub Actions,
+plus the library's existing cloud/VPN classifier) is the primary bot signal; this
+regularity detector is a secondary catch for non-GitHub periodic monitors. See the
+label-coverage lines in the report.
 
 Two optional ground-truth labels turn this from "eyeball it" into measured
 precision/recall:
@@ -164,12 +173,27 @@ def label_github_actions_ips(df: pd.DataFrame) -> pd.Series:
 
 
 def flag_automated(
-    df: pd.DataFrame, cv_threshold: float, dominant_threshold: float, min_span_seconds: float
+    df: pd.DataFrame,
+    cv_threshold: float,
+    dominant_threshold: float,
+    min_span_seconds: float,
+    min_period_seconds: float = 60.0,
 ) -> pd.Series:
-    """Metronomic-and-persistent (IP, asset) pairs."""
+    """
+    Metronomic-and-persistent (IP, asset) pairs.
+
+    A pair is metronomic if its gaps have low CV, OR if a dominant period accounts
+    for most gaps AND that period is at least ``min_period_seconds``. The period
+    floor is essential: high-volume burst streaming (e.g. a zarr flooded with
+    thousands of chunk requests per second) has a near-zero median gap, so almost
+    all gaps fall within +-10% of it and the dominant-fraction test fires spuriously.
+    Real monitoring pings on the order of minutes to days, never sub-second, so the
+    floor removes those false positives without losing genuine periodic bots.
+    """
     persistent = df["span_seconds"] >= min_span_seconds
-    metronomic = (df["cv_gaps"] <= cv_threshold) | (df["dominant_fraction"] >= dominant_threshold)
-    return persistent & metronomic
+    low_cv = df["cv_gaps"] <= cv_threshold
+    dominant_period = (df["dominant_fraction"] >= dominant_threshold) & (df["median_gap"] >= min_period_seconds)
+    return persistent & (low_cv | dominant_period)
 
 
 def plot(df: pd.DataFrame, out_path: pathlib.Path, has_gh: bool) -> None:
@@ -189,7 +213,7 @@ def plot(df: pd.DataFrame, out_path: pathlib.Path, has_gh: bool) -> None:
             c = c[np.isfinite(c) & (c > 0)]
             if c.size:
                 ax.hist(np.log10(c), bins=50, alpha=0.6, label=label, color=color, edgecolor="none")
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=8, loc="upper right")
     else:
         ax.hist(np.log10(cv), bins=60, color="steelblue", alpha=0.85, edgecolor="none")
     ax.set_xlabel("coefficient of variation of gaps (log₁₀)")
@@ -214,7 +238,7 @@ def plot(df: pd.DataFrame, out_path: pathlib.Path, has_gh: bool) -> None:
     ax.set_xlabel("requests in the (IP, asset) pair")
     ax.set_ylabel("CV of gaps")
     ax.set_title(f"Count vs. regularity\n(colour = {color_key})", fontsize=9)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=8, loc="upper right")
     ax.grid(True, which="both", alpha=0.2)
 
     # Panel 3: dominant-period fraction histogram.
@@ -238,6 +262,22 @@ def report(df: pd.DataFrame, flagged: pd.Series, has_gh: bool) -> None:
     print("\n--- Automated-traffic flag summary ---")
     print(f"  flagged (IP, asset) pairs: {int(flagged.sum()):,} / {len(df):,}")
     print(f"  requests in flagged pairs: {flagged_requests:,} / {total_requests:,} ({pct:.2f}%)")
+
+    # Label coverage independent of the flag: how much traffic each label alone accounts
+    # for. For DANDI the IP label (GitHub Actions) is expected to dominate, since the
+    # dandi-cache CI streams every asset — traffic the regularity flag cannot catch.
+    if has_gh:
+        gh_pairs = int(df["is_github_actions_ip"].sum())
+        gh_requests = int(df.loc[df["is_github_actions_ip"], "n_requests"].sum())
+        print("\n  GitHub-Actions IP coverage (independent of the flag):")
+        print(f"    pairs:    {gh_pairs:,} / {len(df):,} ({100 * gh_pairs / max(len(df), 1):.1f}%)")
+        print(f"    requests: {gh_requests:,} / {total_requests:,} ({100 * gh_requests / max(total_requests, 1):.2f}%)")
+    if df["is_testing_asset"].any():
+        t_pairs = int(df["is_testing_asset"].sum())
+        t_requests = int(df.loc[df["is_testing_asset"], "n_requests"].sum())
+        print("\n  Testing-asset coverage (independent of the flag):")
+        print(f"    pairs:    {t_pairs:,} / {len(df):,} ({100 * t_pairs / max(len(df), 1):.1f}%)")
+        print(f"    requests: {t_requests:,} / {total_requests:,} ({100 * t_requests / max(total_requests, 1):.2f}%)")
 
     if df["is_testing_asset"].any():
         tp = int((flagged & df["is_testing_asset"]).sum())
