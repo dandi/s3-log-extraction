@@ -4,40 +4,55 @@ Dry-run: measure the impact of excluding cloud/VPN/GitHub IPs from ``number_of_v
 This does NOT change any production code. It reuses the library's *actual* view
 sessionizer (``_collect_asset_views``), the *actual* IP cache (``load_ip_cache``),
 and the *actual* exclusion predicate (``is_cloud_service_or_vpn_label``) to compute,
-over the extraction cache:
+over the whole extraction cache (all datasets by default):
 
   * total_views   — views exactly as the shipped ``number_of_views`` counts them
                     (this should match the published totals — a consistency check);
   * kept_views    — views that would remain after excluding IPs whose ip_to_region
                     label is a cloud/VPN service (GitHub, AWS/*, GCP/*, VPN);
-  * excluded_views and the % drop, broken down by service label.
+  * excluded_views and the % drop, broken down by service label and by dataset.
 
 Because it calls the same functions the summaries call, ``kept_views`` is exactly
 what ``number_of_views`` would become if the exclusion were wired into
 ``_collect_asset_views``. Run this BEFORE implementing the change to know the
 magnitude, and AFTER to confirm the official output matches.
 
+Efficient reruns (``--cache-parquet``)
+--------------------------------------
+The sessionization walk is the expensive part (hours to days). With
+``--cache-parquet`` the per-(dataset, IP) view counts are written to
+``<cache-dir>/analysis_cache/view_exclusion_pairs.parquet`` — co-located with the
+original data. The raw IP is NOT stored: it is replaced by a salted keyed hash, and
+the coarse ip_to_region *label* (e.g. ``GitHub`` or ``US/California``) is stored so
+the exclusion can be re-applied instantly on later runs without another walk. The
+stored label is frozen at build time; pass ``--rebuild-cache`` to refresh it after
+the ip_to_region cache updates.
+
 IMPORTANT: the exclusion uses the ip_to_region *cache* label, which is a different
-(and possibly staler, IPv4-only) source than a direct api.github.com/meta check.
-This measures the real production predicate, not the meta-API proxy.
+(possibly staler, IPv4-only) source than a direct api.github.com/meta check. This
+measures the real production predicate, not the meta-API proxy.
 
 Usage
 -----
     python measure_view_exclusion_impact.py --cache-dir /path/to/cache [--no-encryption] \\
-        [--dataset 000032]   # optional: restrict to one dataset for a fast first pass
+        [--cache-parquet] [--dataset 000032]
 
-Encryption password via S3_LOG_EXTRACTION_PASSWORD if the cache is encrypted.
+``--dataset`` restricts to one dataset for a fast first pass; omit it for the full
+run over every dataset. Encryption password via S3_LOG_EXTRACTION_PASSWORD.
 """
 
 import argparse
 import collections
+import hashlib
+import os
 import pathlib
 import sys
 
+import pandas as pd
 import tqdm
 
 
-def _load_library(cache_dir: pathlib.Path):
+def _load_library():
     """Import the exact production functions so the measurement matches the summaries."""
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
     from s3_log_extraction.ip_utils import is_cloud_service_or_vpn_label, load_ip_cache
@@ -46,65 +61,80 @@ def _load_library(cache_dir: pathlib.Path):
     return _collect_asset_views, load_ip_cache, is_cloud_service_or_vpn_label
 
 
+def _ip_hash_key() -> bytes:
+    salt = (
+        os.environ.get("S3_LOG_EXTRACTION_SALT") or os.environ.get("S3_LOG_EXTRACTION_PASSWORD") or "s3_log_extraction"
+    )
+    return salt.encode("utf-8")[:64]
+
+
 def _service_of(label: str) -> str:
     """Coarse service name for the breakdown (GitHub / AWS / GCP / VPN / other)."""
-    if not label:
-        return "other"
-    head = label.split("/", 1)[0]
+    head = label.split("/", 1)[0] if label else ""
     return head if head in {"GitHub", "AWS", "GCP", "VPN"} else "other"
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cache-dir", required=True, type=pathlib.Path)
-    parser.add_argument("--no-encryption", action="store_true")
-    parser.add_argument("--dataset", default=None, help="Optional dataset-name substring to restrict to")
-    args = parser.parse_args()
-    use_encryption = not args.no_encryption
-
-    collect_asset_views, load_ip_cache, is_cloud_service_or_vpn_label = _load_library(args.cache_dir)
-
-    print("Loading ip_to_region cache (the exact source the summaries use)...")
-    ip_to_region = load_ip_cache(
-        cache_type="ip_to_region", cache_directory=args.cache_dir, use_encryption=use_encryption
-    )
-    print(f"  {len(ip_to_region):,} IPs in the region cache")
-
-    extraction_root = args.cache_dir / "extraction"
+def build_view_pairs(
+    cache_dir: pathlib.Path,
+    use_encryption: bool,
+    dataset_filter: str | None,
+    collect_asset_views,
+    ip_to_region: dict[str, str],
+) -> pd.DataFrame:
+    """
+    Walk the extraction cache, sessionize with the production code path, and return a
+    per-(dataset, IP) view-count table: ``dataset_id``, ``ip_hash``, ``region_label``,
+    ``n_views``. The raw IP is hashed; the coarse region label is retained so the
+    exclusion can be re-applied without another walk.
+    """
+    extraction_root = cache_dir / "extraction"
     if not extraction_root.exists():
-        raise FileNotFoundError(f"No 'extraction' subdirectory under {args.cache_dir}")
+        raise FileNotFoundError(f"No 'extraction' subdirectory under {cache_dir}")
 
     asset_dirs = []
     for dataset_dir in sorted(extraction_root.iterdir()):
         if not dataset_dir.is_dir():
             continue
-        if args.dataset and args.dataset not in dataset_dir.name:
+        if dataset_filter and dataset_filter not in dataset_dir.name:
             continue
         for asset_dir in dataset_dir.rglob("*"):
             if (asset_dir / "timestamps.txt").exists():
                 asset_dirs.append(asset_dir)
     print(f"Found {len(asset_dirs)} asset directories")
 
-    total_views = 0
-    excluded_views = 0
-    excluded_by_service: dict[str, int] = collections.defaultdict(int)
-    excluded_ips: set[str] = set()
-    per_dataset_total: dict[str, int] = collections.defaultdict(int)
-    per_dataset_excluded: dict[str, int] = collections.defaultdict(int)
-
+    counts: dict[tuple[str, str], int] = collections.defaultdict(int)
+    skipped = 0
     for asset_dir in tqdm.tqdm(asset_dirs, desc="Sessionizing (production code path)"):
         dataset_id = asset_dir.relative_to(extraction_root).parts[0]
-        views = collect_asset_views(asset_directory=asset_dir, use_encryption=use_encryption)
+        try:
+            views = collect_asset_views(asset_directory=asset_dir, use_encryption=use_encryption)
+        except RuntimeError:
+            # The production reader raises on a corrupt/misaligned asset; a dry-run over the
+            # whole cache should not die on one, so record and continue.
+            skipped += 1
+            continue
         for _view_date, ip in views:
-            total_views += 1
-            per_dataset_total[dataset_id] += 1
-            label = ip_to_region.get(ip, "")
-            if is_cloud_service_or_vpn_label(label):  # exact production predicate (takes the region label)
-                excluded_views += 1
-                per_dataset_excluded[dataset_id] += 1
-                excluded_by_service[_service_of(label)] += 1
-                excluded_ips.add(ip)
+            counts[(dataset_id, ip)] += 1
+    if skipped:
+        print(f"  Skipped {skipped} asset(s) that raised the strict reader error")
 
+    key = _ip_hash_key()
+    rows = [
+        {
+            "dataset_id": dataset_id,
+            "ip_hash": hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest(),
+            "region_label": ip_to_region.get(ip, ""),
+            "n_views": n,
+        }
+        for (dataset_id, ip), n in counts.items()
+    ]
+    return pd.DataFrame(rows)
+
+
+def report(pairs: pd.DataFrame, is_cloud_service_or_vpn_label) -> None:
+    excluded_mask = pairs["region_label"].map(is_cloud_service_or_vpn_label)
+    total_views = int(pairs["n_views"].sum())
+    excluded_views = int(pairs.loc[excluded_mask, "n_views"].sum())
     kept_views = total_views - excluded_views
     pct = 100 * excluded_views / max(total_views, 1)
 
@@ -112,21 +142,72 @@ def main() -> None:
     print(f"  total_views (current number_of_views):      {total_views:,}")
     print(f"  kept_views  (after excluding cloud/VPN/GH):  {kept_views:,}")
     print(f"  excluded_views:                              {excluded_views:,} ({pct:.2f}%)")
-    print(f"  distinct excluded IPs:                       {len(excluded_ips):,}")
+    print(f"  distinct excluded IPs:                       {pairs.loc[excluded_mask, 'ip_hash'].nunique():,}")
+
     print("\n  excluded views by service label:")
-    for service, count in sorted(excluded_by_service.items(), key=lambda kv: -kv[1]):
+    by_service = collections.defaultdict(int)
+    for label, n in pairs.loc[excluded_mask, ["region_label", "n_views"]].itertuples(index=False):
+        by_service[_service_of(label)] += int(n)
+    for service, count in sorted(by_service.items(), key=lambda kv: -kv[1]):
         print(f"    {service:>7}: {count:,}")
 
     print("\n--- Datasets most affected (by % of views excluded) ---")
-    ranked = sorted(
-        per_dataset_total,
-        key=lambda d: per_dataset_excluded[d] / max(per_dataset_total[d], 1),
-        reverse=True,
+    per_total = pairs.groupby("dataset_id")["n_views"].sum()
+    per_excluded = pairs[excluded_mask].groupby("dataset_id")["n_views"].sum()
+    frac = (per_excluded / per_total).fillna(0.0).sort_values(ascending=False)
+    for dataset_id, f in frac.head(15).items():
+        exc = int(per_excluded.get(dataset_id, 0))
+        tot = int(per_total[dataset_id])
+        print(f"    {dataset_id}: {exc:,}/{tot:,} excluded ({100 * f:.1f}%)")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--cache-dir", required=True, type=pathlib.Path)
+    parser.add_argument("--no-encryption", action="store_true")
+    parser.add_argument(
+        "--dataset", default=None, help="Optional dataset-name substring to restrict to (omit for ALL datasets)"
     )
-    for dataset_id in ranked[:15]:
-        tot = per_dataset_total[dataset_id]
-        exc = per_dataset_excluded[dataset_id]
-        print(f"    {dataset_id}: {exc:,}/{tot:,} excluded ({100 * exc / max(tot, 1):.1f}%)")
+    parser.add_argument(
+        "--cache-parquet",
+        action="store_true",
+        help="Cache per-(dataset, IP) view counts under <cache-dir>/analysis_cache/ so the sessionization walk "
+        "runs once. IPs are stored as a salted hash; only the coarse region label is kept.",
+    )
+    parser.add_argument("--rebuild-cache", action="store_true", help="Ignore any existing parquet cache and rewalk.")
+    args = parser.parse_args()
+    use_encryption = not args.no_encryption
+
+    collect_asset_views, load_ip_cache, is_cloud_service_or_vpn_label = _load_library()
+
+    cache_path = args.cache_dir / "analysis_cache" / "view_exclusion_pairs.parquet"
+
+    if args.cache_parquet and cache_path.exists() and not args.rebuild_cache:
+        pairs = pd.read_parquet(cache_path)
+        print(f"Loaded {len(pairs):,} (dataset, IP) rows from cache {cache_path} (skipped the walk)")
+    else:
+        print("Loading ip_to_region cache (the exact source the summaries use)...")
+        ip_to_region = load_ip_cache(
+            cache_type="ip_to_region", cache_directory=args.cache_dir, use_encryption=use_encryption
+        )
+        print(f"  {len(ip_to_region):,} IPs in the region cache")
+        pairs = build_view_pairs(
+            cache_dir=args.cache_dir,
+            use_encryption=use_encryption,
+            dataset_filter=args.dataset,
+            collect_asset_views=collect_asset_views,
+            ip_to_region=ip_to_region,
+        )
+        if args.cache_parquet:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            pairs.to_parquet(cache_path, index=False)
+            print(f"Cached {len(pairs):,} (dataset, IP) rows to {cache_path} (IPs stored as a salted hash)")
+
+    if pairs.empty:
+        print("No views found.")
+        return
+
+    report(pairs, is_cloud_service_or_vpn_label)
 
 
 if __name__ == "__main__":
