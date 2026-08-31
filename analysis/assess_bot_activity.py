@@ -39,12 +39,17 @@ Usage
     python assess_bot_activity.py --cache-dir /path/to/cache [--no-encryption] \\
         [--testing-dataset-file testing_datasets.txt] [--github-meta] [--out bot_activity.png]
 
-Requires numpy, pandas, matplotlib, tqdm (and requests if --github-meta).
+Requires numpy, pandas, matplotlib, tqdm (requests if --github-meta; pyarrow if
+--cache-parquet). With --cache-parquet the scored feature table is written under
+<cache-dir>/analysis_cache/ (co-located with the original data) with IP addresses
+replaced by a salted keyed hash, so the multi-day walk only runs once.
 """
 
 import argparse
 import fnmatch
+import hashlib
 import ipaddress
+import os
 import pathlib
 import sys
 
@@ -315,6 +320,25 @@ def report(df: pd.DataFrame, flagged: pd.Series, has_gh: bool) -> None:
         print(f"{head}  {r['asset_path']}{tags}")
 
 
+def _secure_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Return a copy of the scored feature frame safe to persist next to the cache.
+
+    The raw ``ip`` column is replaced by a salted keyed hash (``ip_hash``), so no IP
+    address is ever written to disk in the clear. The hash key is derived from the
+    same ``S3_LOG_EXTRACTION_SALT`` / ``S3_LOG_EXTRACTION_PASSWORD`` environment the
+    library uses; grouping/identity is preserved (same IP -> same hash) but the value
+    is not reversible. Bot labels (``is_github_actions_ip``) must therefore be
+    computed before caching, since they cannot be recovered from the hash.
+    """
+    key = (
+        os.environ.get("S3_LOG_EXTRACTION_SALT") or os.environ.get("S3_LOG_EXTRACTION_PASSWORD") or "s3_log_extraction"
+    ).encode("utf-8")[:64]
+    out = df.copy()
+    out["ip_hash"] = out["ip"].map(lambda ip: hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest())
+    return out.drop(columns=["ip"])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cache-dir", required=True, type=pathlib.Path)
@@ -335,6 +359,14 @@ def main() -> None:
         "--testing-asset-file", type=pathlib.Path, default=None, help="File of testing-asset globs, one per line"
     )
     parser.add_argument("--github-meta", action="store_true", help="Label GitHub Actions IPs via api.github.com/meta")
+    parser.add_argument(
+        "--cache-parquet",
+        action="store_true",
+        help="Cache the scored (IP, asset) feature table as parquet under <cache-dir>/analysis_cache/ so the "
+        "multi-day walk runs once. IPs are stored as a salted keyed hash, never in the clear; the file lives "
+        "inside the cache directory alongside the original data. Rebuild with --rebuild-cache if labels change.",
+    )
+    parser.add_argument("--rebuild-cache", action="store_true", help="Ignore any existing parquet cache and rescore.")
     parser.add_argument("--out", default="bot_activity.png", type=pathlib.Path)
     args = parser.parse_args()
 
@@ -347,21 +379,35 @@ def main() -> None:
     if args.testing_asset_file:
         testing_globs += _read_lines_file(args.testing_asset_file)
 
-    df = score_ip_asset_pairs(
-        cache_dir=args.cache_dir,
-        use_encryption=not args.no_encryption,
-        min_requests=args.min_requests,
-        dominant_tol=0.1,
-        testing_globs=testing_globs,
-    )
+    cache_path = args.cache_dir / "analysis_cache" / "bot_activity_pairs.parquet"
+
+    if args.cache_parquet and cache_path.exists() and not args.rebuild_cache:
+        df = pd.read_parquet(cache_path)
+        print(f"Loaded {len(df):,} scored pairs from cache {cache_path} (skipped the cache walk)")
+    else:
+        df = score_ip_asset_pairs(
+            cache_dir=args.cache_dir,
+            use_encryption=not args.no_encryption,
+            min_requests=args.min_requests,
+            dominant_tol=0.1,
+            testing_globs=testing_globs,
+        )
+        if df.empty:
+            print("No (IP, asset) pairs met the minimum request count.")
+            return
+        if args.github_meta:
+            print("Labeling GitHub Actions IPs...")
+            df["is_github_actions_ip"] = label_github_actions_ips(df)
+        if args.cache_parquet:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            _secure_feature_frame(df).to_parquet(cache_path, index=False)
+            print(f"Cached {len(df):,} scored pairs to {cache_path} (IPs stored as a salted hash)")
+
     if df.empty:
         print("No (IP, asset) pairs met the minimum request count.")
         return
 
-    has_gh = args.github_meta
-    if has_gh:
-        print("Labeling GitHub Actions IPs...")
-        df["is_github_actions_ip"] = label_github_actions_ips(df)
+    has_gh = "is_github_actions_ip" in df.columns
 
     flagged = flag_automated(
         df,
