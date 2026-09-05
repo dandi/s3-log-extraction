@@ -95,9 +95,9 @@ def build_view_pairs(
         raise FileNotFoundError(f"No 'extraction' subdirectory under {cache_dir}")
 
     top_level = [d for d in sorted(extraction_root.iterdir()) if d.is_dir()]
-    print(
-        f"Top-level directories under extraction/: {[d.name for d in top_level][:10]}{' ...' if len(top_level) > 10 else ''}"
-    )
+    shown = [d.name for d in top_level][:10]
+    more = " ..." if len(top_level) > 10 else ""
+    print(f"Top-level directories under extraction/ (production 'datasets'): {shown}{more}")
 
     asset_dirs = []
     for dataset_dir in top_level:
