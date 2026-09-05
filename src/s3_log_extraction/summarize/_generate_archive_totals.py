@@ -51,7 +51,8 @@ def generate_archive_totals(
     if not requester_count_file_path.exists():
         msg = (
             f"Archive requester count file not found: {requester_count_file_path}. "
-            "Run archive summaries before archive totals."
+            "Run dataset summaries before archive totals; the archive requester count is deduplicated "
+            "across datasets and so is written by that step, not by the archive summaries."
         )
         raise FileNotFoundError(msg)
 
