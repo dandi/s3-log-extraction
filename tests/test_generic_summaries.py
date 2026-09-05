@@ -304,7 +304,12 @@ def test_generate_archive_summaries_reports_true_counts(tmpdir: py.path.local) -
 
 
 @pytest.mark.ai_generated
-def test_generate_archive_summaries_aggregates_requester_count(tmpdir: py.path.local) -> None:
+def test_generate_archive_summaries_leaves_requester_count_untouched(tmpdir: py.path.local) -> None:
+    """
+    The archive requester count is deduplicated across datasets, so the archive step must not rewrite it.
+
+    Summing the per-dataset counts would count a requester once per dataset it accessed.
+    """
     test_dir = pathlib.Path(tmpdir)
     summary_dir = test_dir / "summaries"
 
@@ -328,11 +333,33 @@ def test_generate_archive_summaries_aggregates_requester_count(tmpdir: py.path.l
     )
     (ds002_dir / "requester_count.tsv").write_text("40\n")
 
+    # The deduplicated count written by `generate_summaries`; the two datasets share 25 requesters
+    archive_dir = summary_dir / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "requester_count.tsv").write_text("75\n")
+
     s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
 
-    archive_requester_count_file_path = summary_dir / "archive" / "requester_count.tsv"
-    assert archive_requester_count_file_path.exists()
-    assert archive_requester_count_file_path.read_text().strip() == "100"
+    archive_requester_count_file_path = archive_dir / "requester_count.tsv"
+    assert archive_requester_count_file_path.read_text().strip() == "75"
+
+
+@pytest.mark.ai_generated
+def test_generate_archive_summaries_writes_no_requester_count(tmpdir: py.path.local) -> None:
+    """Without a deduplicated count to preserve, the archive step writes none rather than an inflated sum."""
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    ds001_dir = summary_dir / "ds001"
+    ds001_dir.mkdir(parents=True)
+    (ds001_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t1\t1\n"
+    )
+    (ds001_dir / "requester_count.tsv").write_text("60\n")
+
+    s3_log_extraction.summarize.generate_archive_summaries(cache_directory=test_dir)
+
+    assert not (summary_dir / "archive" / "requester_count.tsv").exists()
 
 
 @pytest.mark.ai_generated
