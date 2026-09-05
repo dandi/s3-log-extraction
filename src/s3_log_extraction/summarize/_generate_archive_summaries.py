@@ -23,6 +23,12 @@ def generate_archive_summaries(
     ``region_disclosure_threshold`` resolved regions at once, on the same terms as the per-dataset
     by-region summaries it aggregates.
 
+    The archive `requester_count.tsv` is not among the summaries written here. A requester is a unique IP
+    address, and one requester commonly accesses several datasets, so summing the per-dataset counts counts
+    that requester once per dataset it touched. Deduplicating requires the addresses themselves, which only
+    the extraction cache holds, so the archive count is written by ``generate_summaries`` and left untouched
+    by this function.
+
     Parameters
     ----------
     cache_directory : path-like, optional
@@ -116,17 +122,7 @@ def generate_archive_summaries(
             region_disclosure_threshold=region_disclosure_threshold,
         )
 
-    # Requester count (aggregated from dataset requester_count.tsv files)
-    # Counts written before this file reported true values may still be censored sentinels, such as "<50",
-    # which carry no number and are skipped until the next per-dataset summary refreshes them.
-    requester_counts: list[int] = [
-        int(value)
-        for summary_file_path in summary_directory.rglob(pattern="requester_count.tsv")
-        if summary_file_path.parent.name != "archive" and "<" not in (value := summary_file_path.read_text().strip())
-    ]
-
-    archive_requester_count_file_path = archive_directory / "requester_count.tsv"
-    archive_requester_count_file_path.write_text(str(sum(requester_counts)))
+    # Requester count is deliberately not aggregated here; see this function's docstring for why.
 
     # Optional by_asset_type_per_week aggregation
     all_dataset_summaries_by_asset_type_per_week = [

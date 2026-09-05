@@ -28,6 +28,8 @@
 
 ### 🐛 Bug Fix
 
+- Fixed the archive requester count, which double-counted requesters. `generate_summaries` writes the archive `requester_count.tsv` as the number of unique IP addresses across the whole archive, and `generate_archive_summaries` then overwrote it with the sum of the per-dataset counts, counting a requester once per dataset it accessed. The archive summaries no longer write that file, leaving the deduplicated count in place. Running `update summaries --mode archive` without having run `update summaries` first now leaves the archive count absent rather than writing an inflated one, and `generate_archive_totals` names the dataset summaries as the step to run in the `FileNotFoundError` it raises for the missing file. Published `archive_totals.json` values of `number_of_requesters` were overstated by the amount of cross-dataset overlap and will drop when the archive summaries are next regenerated. ([#295](https://github.com/dandi/s3-log-extraction/pull/295))
+
 - Fixed the daily IP cache update workflows so that an exhausted IPInfo (or OpenCage) API quota no longer wastes hours on doomed requests or crashes the run. `update ip regions` now halts at the first quota error and leaves unprocessed IPs uncached for retry on the next run, instead of permanently caching them as `undetermined`. `update ip coordinates` now saves partial progress and exits cleanly instead of raising an unhandled `RequestQuotaExceededError`. `update ip refresh` now halts early without overwriting existing cache entries. The daily remote tests skip (rather than fail) when the quota is exhausted, since live lookups cannot be validated in that state. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
 
 ## v1.10.8
