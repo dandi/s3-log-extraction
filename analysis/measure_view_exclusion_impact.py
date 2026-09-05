@@ -80,27 +80,35 @@ def build_view_pairs(
     dataset_filter: str | None,
     collect_asset_views,
     ip_to_region: dict[str, str],
+    max_assets: int | None = None,
 ) -> pd.DataFrame:
     """
     Walk the extraction cache, sessionize with the production code path, and return a
     per-(dataset, IP) view-count table: ``dataset_id``, ``ip_hash``, ``region_label``,
-    ``n_views``. The raw IP is hashed; the coarse region label is retained so the
-    exclusion can be re-applied without another walk.
+    ``n_views``. ``dataset_id`` is the top-level directory name under ``extraction/``,
+    exactly as the production summaries define a dataset (``dataset.name``). The raw IP
+    is hashed; the coarse region label is retained so the exclusion can be re-applied
+    without another walk.
     """
     extraction_root = cache_dir / "extraction"
     if not extraction_root.exists():
         raise FileNotFoundError(f"No 'extraction' subdirectory under {cache_dir}")
 
+    top_level = [d for d in sorted(extraction_root.iterdir()) if d.is_dir()]
+    print(
+        f"Top-level directories under extraction/: {[d.name for d in top_level][:10]}{' ...' if len(top_level) > 10 else ''}"
+    )
+
     asset_dirs = []
-    for dataset_dir in sorted(extraction_root.iterdir()):
-        if not dataset_dir.is_dir():
-            continue
+    for dataset_dir in top_level:
         if dataset_filter and dataset_filter not in dataset_dir.name:
             continue
         for asset_dir in dataset_dir.rglob("*"):
             if (asset_dir / "timestamps.txt").exists():
                 asset_dirs.append(asset_dir)
-    print(f"Found {len(asset_dirs)} asset directories")
+    if max_assets is not None:
+        asset_dirs = asset_dirs[:max_assets]
+    print(f"Found {len(asset_dirs)} asset directories{f' (limited to {max_assets})' if max_assets else ''}")
 
     counts: dict[tuple[str, str], int] = collections.defaultdict(int)
     skipped = 0
@@ -175,6 +183,13 @@ def main() -> None:
         "runs once. IPs are stored as a salted hash; only the coarse region label is kept.",
     )
     parser.add_argument("--rebuild-cache", action="store_true", help="Ignore any existing parquet cache and rewalk.")
+    parser.add_argument(
+        "--max-assets",
+        type=int,
+        default=None,
+        help="Process only the first N asset directories — a layout-independent smoke test that validates the "
+        "script end-to-end quickly, regardless of how the cache top level is named.",
+    )
     args = parser.parse_args()
     use_encryption = not args.no_encryption
 
@@ -197,6 +212,7 @@ def main() -> None:
             dataset_filter=args.dataset,
             collect_asset_views=collect_asset_views,
             ip_to_region=ip_to_region,
+            max_assets=args.max_assets,
         )
         if args.cache_parquet:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
