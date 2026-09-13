@@ -9,6 +9,7 @@ remote-testing CI workflow, which supplies valid ``MAXMIND_ACCOUNT_ID`` and
 import os
 import pathlib
 import re
+import shutil
 
 import pytest
 import yaml
@@ -50,35 +51,64 @@ def _write_by_region_summary(summary_file_path: pathlib.Path, regions: list[str]
     )
 
 
-@pytest.mark.remote
-@pytest.mark.ai_generated
-def test_update_geolite2_database_remote(tmp_path: pathlib.Path) -> None:
+@pytest.fixture(scope="session")
+def shared_geolite2_database() -> pathlib.Path:
     """
-    Test that the GeoLite2-City database can be downloaded from MaxMind with the configured credentials.
+    Resolve the GeoLite2 database once for the whole session, in the configured cache directory.
 
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Pytest-provided temporary directory for test isolation.
+    Every test here works in its own ``tmp_path``, so each one that reached for the database used to download
+    its own copy. A MaxMind account has a daily download allowance, and three copies per run across pull
+    request runs and the scheduled run was enough to spend it and turn this workflow red for the rest of the
+    day. One copy per session is shared instead, and CI caches the directory it lands in, so a run usually
+    downloads nothing at all.
+
+    Resolving here rather than in a temporary directory means a local run populates the developer's own cache
+    directory, which is the same place the tool itself uses.
     """
     _assert_maxmind_credentials_are_set()
 
     try:
-        database_path = s3_log_extraction.ip_utils.update_geolite2_database(cache_directory=tmp_path)
+        return s3_log_extraction.ip_utils.update_geolite2_database()
     except Exception as exc:
         _fail_if_maxmind_rejected(exc)
         raise
 
-    assert database_path == s3_log_extraction.ip_utils.get_geolite2_database_path(cache_directory=tmp_path)
-    assert database_path.exists(), "GeoLite2-City.mmdb was not downloaded"
-    assert database_path.stat().st_size > 1_000_000, "GeoLite2-City.mmdb is implausibly small"
+
+def _seed_geolite2_database(*, cache_directory: pathlib.Path, source_path: pathlib.Path) -> pathlib.Path:
+    """Place the session's database where a test's own cache directory expects to find it."""
+    destination_path = cache_directory / "geolite2" / source_path.name
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    # copy2 carries the modification time across, so the staleness check still sees the database's true age
+    # and a genuinely stale copy is still refreshed rather than silently accepted.
+    shutil.copy2(src=source_path, dst=destination_path)
+    return destination_path
 
 
 @pytest.mark.remote
 @pytest.mark.ai_generated
-def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path) -> None:
+def test_update_geolite2_database_remote(shared_geolite2_database: pathlib.Path) -> None:
     """
-    Test that the resolver classifies a real public IP via the live service listings and a freshly downloaded database.
+    Test that the GeoLite2-City database is obtainable from MaxMind with the configured credentials.
+
+    The session fixture resolves the database, downloading it whenever the cache directory holds no usable
+    copy. The scheduled workflow runs without the CI cache, so the download itself, and with it the check that
+    the credentials are still accepted, is exercised at least once a day.
+
+    Parameters
+    ----------
+    shared_geolite2_database : pathlib.Path
+        Path of the database resolved once for the session.
+    """
+    assert shared_geolite2_database == s3_log_extraction.ip_utils.get_geolite2_database_path()
+    assert shared_geolite2_database.exists(), "GeoLite2-City.mmdb is not present"
+    assert shared_geolite2_database.stat().st_size > 1_000_000, "GeoLite2-City.mmdb is implausibly small"
+
+
+@pytest.mark.remote
+@pytest.mark.ai_generated
+def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geolite2_database: pathlib.Path) -> None:
+    """
+    Test that the resolver classifies a real public IP via the live service listings and the local database.
 
     Uses ``4.4.4.4`` (Level3/Lumen Technologies), a major US-ISP address that is
     outside GitHub, AWS, GCP, and VPN CIDR ranges, to exercise the database lookup path.
@@ -87,10 +117,14 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path) -> None:
     ----------
     tmp_path : pathlib.Path
         Pytest-provided temporary directory for test isolation.
+    shared_geolite2_database : pathlib.Path
+        Path of the database resolved once for the session, seeded into ``tmp_path`` so that this test does not
+        spend another of the MaxMind account's daily downloads.
     """
     test_ip = "4.4.4.4"
 
     _assert_maxmind_credentials_are_set()
+    seeded_database_path = _seed_geolite2_database(cache_directory=tmp_path, source_path=shared_geolite2_database)
 
     try:
         with s3_log_extraction.ip_utils.IpRegionResolver(cache_directory=tmp_path) as resolver:
@@ -105,7 +139,7 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path) -> None:
     assert isinstance(region, str) and _REGION_LABEL_PATTERN.match(
         region
     ), f"Expected an ISO 3166 label such as 'USA/CA', got: {region!r}"
-    assert (tmp_path / "geolite2" / "GeoLite2-City.mmdb").exists(), "The database was not downloaded on first use"
+    assert seeded_database_path.exists(), "The resolver did not read the database from its own cache directory"
 
     # The resolved label must also have coordinates in the bundled tables, so that the heat maps can place it
     _write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region])
@@ -117,7 +151,9 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.remote
 @pytest.mark.ai_generated
-def test_update_region_code_coordinates_locates_aws_region_remote(tmp_path: pathlib.Path) -> None:
+def test_update_region_code_coordinates_locates_aws_region_remote(
+    tmp_path: pathlib.Path, shared_geolite2_database: pathlib.Path
+) -> None:
     """
     Test that a cloud service region is located with the GeoLite2 database and the live AWS IP range listing.
 
@@ -125,10 +161,14 @@ def test_update_region_code_coordinates_locates_aws_region_remote(tmp_path: path
     ----------
     tmp_path : pathlib.Path
         Pytest-provided temporary directory for test isolation.
+    shared_geolite2_database : pathlib.Path
+        Path of the database resolved once for the session, seeded into ``tmp_path`` so that this test does not
+        spend another of the MaxMind account's daily downloads.
     """
     region_code = "AWS/us-east-1"
 
     _assert_maxmind_credentials_are_set()
+    _seed_geolite2_database(cache_directory=tmp_path, source_path=shared_geolite2_database)
 
     _write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region_code])
 

@@ -4,7 +4,13 @@
 
 ### 🐛 Bug Fix
 
+- A refresh of the GeoLite2 database that MaxMind refuses because the account's daily download allowance is spent no longer fails outright when a usable copy is already in the cache directory. The cached copy is returned with a warning instead, on the same terms as a stale copy that cannot be refreshed for want of credentials. The allowance is a property of the account rather than of this package and resets on its own, so a run that already has a database to geolocate with has no reason to stop. With no copy to fall back on the refusal is still raised, since there is then nothing to geolocate with. ([#303](https://github.com/dandi/s3-log-extraction/pull/303))
+
 - The IP ranges of GitHub are now recognized by their shape, as any entry of the published meta document that parses as an IPv4 network, instead of by skipping a fixed list of non-range keys. GitHub adds listings to the document over time, most recently its PGP public key blocks, and each of those entries was previously handed to the resolver as a CIDR and reported with a "Skipping invalid CIDR entry" warning on every run. ([#300](https://github.com/dandi/s3-log-extraction/pull/300))
+
+### 🏠 Internal
+
+- The remote test workflow now actually reuses the GeoLite2 database between runs. Its cache step pointed at `~/.s3_log_extraction`, which is neither the cache directory the package writes the database to nor the configuration directory, so nothing was ever restored or saved and every run downloaded afresh. The step now caches `~/.cache/s3_log_extraction/geolite2` under a key that rotates weekly, matching how often a copy goes stale, since a cache entry is immutable once written and a fixed key would pin the first copy forever. The three remote tests each took their own temporary cache directory and so downloaded a copy apiece; they now share one resolved once per session. The scheduled run opts out of the cache so that it still downloads once a day and keeps checking that the credentials are accepted. ([#303](https://github.com/dandi/s3-log-extraction/pull/303))
 
 ## v1.11.2
 
