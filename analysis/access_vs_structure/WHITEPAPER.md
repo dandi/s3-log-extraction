@@ -13,10 +13,14 @@ joining structural-complexity metrics, asset size, and web-access counts across
 count, or a tree-balance index would not be *fair*: those quantities either
 do not predict genuine interest at all, or predict only the mechanical volume of
 requests that the session definition is specifically designed to absorb. Finally, we
-show that ~24 % of raw views come from cloud/CI infrastructure (GitHub ~18 %) with no
-clean behavioral separator, and that a *bot-clean* view count is best obtained by
-excluding automated traffic by IP provenance — specifically the GitHub Actions
-ranges — rather than by any per-viewer behavioral heuristic.
+show that a *bot-clean* view count needs two complementary exclusions: ~24 % of raw views
+come from cloud/CI infrastructure (removed by IP provenance — specifically the GitHub
+Actions ranges), but the far larger contaminant is a *handful of systematic archive
+scanners* that carry ordinary geographic labels and so escape every IP filter — one IP
+alone is 54 % of all view-sessions, and ~26 IPs covering ≥ 2 % of the archive account for
+~69 %. These are separable not by request count or timing alone but by **archive
+coverage**: authentic use is irregular in timing and idiosyncratic in asset choice, while a
+scanner enumerates the archive.
 
 ---
 
@@ -119,11 +123,13 @@ GitHub alone is ~18 %.** The effect is wildly uneven by storage type: **67 % of 
 views** come from these ranges versus 23.5 % for HDF5 blobs — Zarr assets are
 accessed overwhelmingly by automated monitoring.
 
-**Why the exclusion is by IP origin and not by behavior.** There is no clean
-behavioral separator for this bot population. Per-viewer session statistics —
+**Why *this* exclusion is by IP origin and not by behavior.** There is no clean
+behavioral separator for the *GitHub Actions* population specifically — but note that a
+larger, different bot population (archive-wide scanners) *is* behaviorally separable and
+is invisible to IP origin; see §2.1.2. Per-viewer session statistics —
 session count, inter-request-gap regularity (CV, dominant-period fraction),
-distinct-asset breadth, active span — do not cut cleanly, because the dominant bot
-here is **GitHub Actions CI**, which behaviorally resembles an engaged human: its
+distinct-asset breadth, active span — do not cut cleanly *for CI*, because the dominant CI bot
+here is **GitHub Actions**, which behaviorally resembles an engaged human: its
 traffic is *bursty and irregular* (runs fire on pushes/PRs/schedules, not on a fixed
 period, so a regularity filter catches only ~3 % of request volume and
 false-positives on legitimately periodic Zarr chunk bursts), *not low-activity*
@@ -151,6 +157,54 @@ IP→region labeling in place at the time of writing, where GitHub is still one 
 label. A separate change to that labeling is pending; the post-exclusion
 `number_of_views` and the `GH-actions`-vs-rest split will be re-measured once it
 lands, rather than re-run against soon-to-change labels.
+
+### 2.1.2 The view count is dominated by a few systematic actors that no IP label catches
+
+The IP-origin exclusion (§2.1.1) is necessary but far from sufficient. A per-IP
+behavioral profile over the whole cache (`analysis/profile_ip_behavior.py`, 101,386 IPs,
+11.97 M sessions) shows the raw view count is dominated by a *handful* of automated
+actors that carry no cloud/VPN/CI label at all:
+
+- **Extreme concentration.** The single busiest IP accounts for **54 % of all
+  view-sessions**; the top 10 for 66 %, the top 25 for 69 %, the top 100 for 75 %.
+  Cleaning the metric is mostly a question of a few dozen IPs, not a diffuse population.
+- **Archive coverage separates them cleanly.** Among the 8,177 IPs with ≥ 20 sessions,
+  the 99th percentile touches only **1.06 %** of all assets, but **26 IPs sit at ≥ 2 %
+  coverage — up to 66.9 %** (one IP streamed two-thirds of the entire archive) — and
+  those 26 hold **69 % of all sessions**. A human's asset selection is a tiny,
+  idiosyncratic scatter; a scanner enumerates the archive. (Threshold sensitivity: ≥ 1 %
+  → 74 % of sessions, ≥ 2 % → 69 %, ≥ 5 % → 66 %.)
+- **A behavior-clean count is ~20 % of the raw one.** Flagging an IP as systematic when
+  it is either metronomic (session-gap CV ≤ 0.1 or a dominant period) *or* covers ≥ 2 %
+  of the archive marks **1,112 IPs holding 79 % of all sessions**. The archetypes are
+  archive-wide **metadata scrapers** (small reads of every asset), **checksum/mirror
+  scanners** (whole-file reads of every asset — the 66.9 %-coverage IP streams ~2.4 GB
+  per session), and high-**revisit** re-indexers (the 54 % IP re-streams ~56 k assets
+  ~115 times each).
+- **No IP label catches them.** **84.8 %** of the systematic sessions resolve to ordinary
+  **geographic** labels; only 11.6 % are GH-actions, 3.1 % AWS, 0.3 % VPN. The shipped
+  `GH-actions` exclusion, and any conceivable cloud/VPN exclusion, leave essentially all
+  of this untouched. This is the single largest correction available to `number_of_views`,
+  and it is entirely behavioral.
+
+This refines, rather than contradicts, §2.1.1's "no clean behavioral separator" caveat:
+raw *session count* and *timing regularity* alone do not separate humans from the GitHub
+Actions population (Actions is irregular), but **archive coverage** does separate the
+dominant scanner population, and combined with the extreme concentration it makes the
+correction both large and attributable to a short list of IPs. The organizing principle is
+that authentic use is **irregular in timing and idiosyncratic in asset choice**, whereas a
+scanner is systematic on at least one axis.
+
+*Caveats.* (i) This is characterization, not a shipped rule — excluding these from
+`number_of_views` needs a global per-IP pre-pass feeding the per-asset sessionizer, since
+coverage is an archive-wide property. (ii) The 2 % coverage cut is chosen at the visible
+gap above the 99th percentile of active IPs; it is a defensible choice, not a natural
+constant, so the rule should be stated with its threshold and sensitivity. (iii) An
+earlier version of the profiler used the entropy of an IP's per-asset session counts as a
+"selection uniformity" axis; that was dropped because one-session-per-asset is the norm, so
+the entropy is ≈ 1 for nearly every active IP (scanners and broad humans alike) — it
+measures revisit-evenness, not the randomness of *which* assets are chosen. Coverage is the
+signal that works.
 
 ### 2.2 What the logs can (and cannot) tell us about access method
 
@@ -321,7 +375,16 @@ normalized away.
    no clean behavioral separator (§2.1.1). Key the exclusion on the narrow
    `GH-actions` label — unambiguous CI — so that genuine interactive use from other
    GitHub-hosted ranges (e.g. Codespaces) is still counted.
-4. **Monitor the guard-band ambiguity** (fraction of same-IP gaps within ±10 % of
+4. **Exclude the systematic archive-scanners, which no IP label catches, by behavior.**
+   A few dozen IPs — 26 covering ≥ 2 % of the archive, one alone at 54 % of all sessions —
+   account for ~69–79 % of raw view-sessions, and **85 % of them carry ordinary geographic
+   labels** (§2.1.2), so neither the `GH-actions` filter nor any cloud/VPN filter touches
+   them. This is the largest correction available to `number_of_views`. Flag an IP as a
+   scanner when it is metronomic (session-gap CV ≤ 0.1 or a dominant period) **or** covers
+   an implausible fraction of the archive (≥ 2 %, chosen at the gap above the 99th
+   percentile of active IPs); state the threshold and its sensitivity when reporting it.
+   Implementing it needs a global per-IP pre-pass, since coverage is archive-wide.
+5. **Monitor the guard-band ambiguity** (fraction of same-IP gaps within ±10 % of
    8 h) over time as a health check on the definition, and keep the bot-exclusion
    list current.
 
@@ -337,6 +400,13 @@ normalized away.
   and re-applies the production IP-origin predicate to report total vs. kept views by
   service label, with a per-tier sensitivity table. IPs are stored only as a salted
   keyed hash in the co-located parquet/CSV cache; the coarse region label is retained.
+- **Per-IP behavior** — `analysis/profile_ip_behavior.py` walks the cache once and emits a
+  per-IP profile keyed on the two axes that separate authentic use from bots: timing
+  irregularity (session-gap CV, dominant-period fraction) and archive coverage (fraction of
+  all assets touched), with read-shape and testing-asset overlays. It reports session
+  concentration, the coverage distribution and threshold sensitivity, and a by-service
+  breakdown of the systematic actors. Timing is scored for IPs with ≥ `--min-sessions`
+  (default 20); IPs are stored only as a salted keyed hash in the co-located cache.
 - **Access vs. structure** — `analysis/access_vs_structure/build_dataset.py` joins
   the `dandi-cache` structural caches (groups, datasets, total cophenetic index,
   out-degree stats; keyed by content ID) → `content-id-to-nwb-file` →
