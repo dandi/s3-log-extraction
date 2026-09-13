@@ -215,12 +215,10 @@ class RemoteS3LogAccessExtractor:
             self.s3_url_processing_start_record_file_path.exists()
             and self.s3_url_processing_end_record_file_path.exists()
         ):
-            s3_url_processing_start_record = {
-                file_path for file_path in self.s3_url_processing_start_record_file_path.read_text().splitlines()
-            }
-            self.s3_url_processing_end_record = {
-                file_path for file_path in self.s3_url_processing_end_record_file_path.read_text().splitlines()
-            }
+            s3_url_processing_start_record = set(self.s3_url_processing_start_record_file_path.read_text().splitlines())
+            self.s3_url_processing_end_record = set(
+                self.s3_url_processing_end_record_file_path.read_text().splitlines()
+            )
             s3_url_processing_record_difference = s3_url_processing_start_record - self.s3_url_processing_end_record
         if len(s3_url_processing_record_difference) > 0:
             # IDEA: an advanced feature for the future could be looking at the timestamp of the 'started' log
@@ -271,8 +269,7 @@ class RemoteS3LogAccessExtractor:
 
         s3_urls = [url for urls in inventory.values() for url in urls]
 
-        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
-        return unprocessed_s3_urls
+        return [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
 
     def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
         warnings.warn(
@@ -334,8 +331,7 @@ class RemoteS3LogAccessExtractor:
                 [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
             )
 
-        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
-        return unprocessed_s3_urls
+        return [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
 
     def _extract_s3_url(
         self,

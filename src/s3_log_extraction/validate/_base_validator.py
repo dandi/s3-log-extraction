@@ -15,8 +15,7 @@ class BaseValidator(abc.ABC):
 
     def __hash__(self) -> int:
         checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
-        checksum_int = int(checksum, 16)
-        return checksum_int
+        return int(checksum, 16)
 
     def __init__(self) -> None:
         self.records_directory = get_cache_subdirectory(name="records")

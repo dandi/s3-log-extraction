@@ -105,8 +105,7 @@ def get_key() -> bytes:
     )
     derived_key = kdf.derive(key_material=password_bytes)
 
-    key = base64.urlsafe_b64encode(derived_key)
-    return key
+    return base64.urlsafe_b64encode(derived_key)
 
 
 def encrypt_bytes(data: bytes) -> bytes:
@@ -126,8 +125,7 @@ def encrypt_bytes(data: bytes) -> bytes:
     key = get_key()
     fernet = cryptography.fernet.Fernet(key=key)
 
-    encrypted_data = fernet.encrypt(data=data)
-    return encrypted_data
+    return fernet.encrypt(data=data)
 
 
 def decrypt_bytes(encrypted_data: bytes) -> bytes:
@@ -147,8 +145,7 @@ def decrypt_bytes(encrypted_data: bytes) -> bytes:
     key = get_key()
     fernet = cryptography.fernet.Fernet(key=key)
 
-    decrypted_data = fernet.decrypt(token=encrypted_data)
-    return decrypted_data
+    return fernet.decrypt(token=encrypted_data)
 
 
 def read_text_from_file(*, file_path: pathlib.Path, use_encryption: bool) -> str:

@@ -148,7 +148,7 @@ def generate_archive_summaries(
                 .sum()
                 .reindex(columns=["week_start", *asset_type_columns])
             )
-            archive_summary = archive_summary.astype(dtype={column_name: "int64" for column_name in asset_type_columns})
+            archive_summary = archive_summary.astype(dtype=dict.fromkeys(asset_type_columns, "int64"))
             archive_summary.sort_values(by="week_start", key=natsort.natsort_keygen(), inplace=True)
 
             archive_summary_file_path = archive_directory / "by_asset_type_per_week.tsv"

@@ -26,8 +26,7 @@ class HttpEmptySplitPreValidator(BaseValidator):
             byte_content = file_stream.read()
 
         checksum = hashlib.sha1(string=byte_content).hexdigest()
-        checksum_int = int(checksum, 16)
-        return checksum_int
+        return int(checksum, 16)
 
     # TODO: parallelize
     def __init__(self):

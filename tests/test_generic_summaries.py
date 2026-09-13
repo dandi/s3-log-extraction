@@ -611,7 +611,7 @@ def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpd
     (asset_dir / "ips.txt").write_text("\n".join(real_ips + cloud_ips))
 
     region_resolver = MappingRegionResolver(
-        {ip: "US/California" for ip in real_ips} | {ip: "GitHub" for ip in cloud_ips}
+        dict.fromkeys(real_ips, "US/California") | dict.fromkeys(cloud_ips, "GitHub")
     )
 
     summary_file_path = pathlib.Path(tmpdir) / "requester_count.tsv"
@@ -927,7 +927,7 @@ def test_views_are_attributed_to_the_region_of_their_requester(tmpdir: py.path.l
     )
 
     region_resolver = MappingRegionResolver(
-        {ip: "US/California" for ip in californian_ips} | {ip: "DE/Berlin" for ip in berliner_ips}
+        dict.fromkeys(californian_ips, "US/California") | dict.fromkeys(berliner_ips, "DE/Berlin")
     )
 
     # Two regions is below the default disclosure threshold, which this test is not about

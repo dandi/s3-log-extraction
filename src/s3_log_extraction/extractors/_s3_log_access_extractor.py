@@ -56,12 +56,8 @@ class S3LogAccessExtractor:
         self.file_processing_end_record: set[str] = set()
         file_processing_record_difference: set[str] = set()
         if self.file_processing_start_record_file_path.exists() and self.file_processing_end_record_file_path.exists():
-            file_processing_start_record = {
-                file_path for file_path in self.file_processing_start_record_file_path.read_text().splitlines()
-            }
-            self.file_processing_end_record = {
-                file_path for file_path in self.file_processing_end_record_file_path.read_text().splitlines()
-            }
+            file_processing_start_record = set(self.file_processing_start_record_file_path.read_text().splitlines())
+            self.file_processing_end_record = set(self.file_processing_end_record_file_path.read_text().splitlines())
             file_processing_record_difference = file_processing_start_record - self.file_processing_end_record
         if len(file_processing_record_difference) > 0:
             # IDEA: an advanced feature for the future could be looking at the timestamp of the 'started' log

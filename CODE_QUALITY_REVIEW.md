@@ -59,6 +59,9 @@ its two guards unreachable.
 
 ### Findings by category
 
+Group 1 (CL-1, CL-2, CL-9, CL-18, DC-4, CON-3) has been applied; those six entries are marked APPLIED below.
+The remaining 41 are still proposals awaiting approval.
+
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
 | Dead code | 5 | 1 | 0 | 6 |
@@ -128,7 +131,7 @@ is real.
 - **Verification**: `ruff check .` must still report "All checks passed!", and `pre-commit run --all-files` must
   pass.
 
-#### DC-4 — Three unnecessary `pass` statements
+#### DC-4 — APPLIED. Three unnecessary `pass` statements
 
 - **Location**: `src/s3_log_extraction/_command_line_interface/_cli.py` (lines 180 `_config_cli`, 454 `_testing_cli`, 461 `_testing_generate_cli`)
 - **Issue**: Each of these three group functions has a docstring, which already satisfies the body requirement,
@@ -526,7 +529,7 @@ is real.
   `_extract_date_from_log_filename`, which is genuinely private and has no public alias.
 - **Verification**: `python -m pytest tests/test_ip_utils.py tests/test_log_bucket_stats.py -q`.
 
-#### CON-3 — Replace the `deque(..., maxlen=0)` drain in `reset_extraction`
+#### CON-3 — APPLIED. Replace the `deque(..., maxlen=0)` drain in `reset_extraction`
 
 - **Location**: `config/_reset.py` (lines 22-28)
 - **Issue**: Three separate oddities in seven lines. A list comprehension that only copies its iterable
@@ -612,7 +615,7 @@ is real.
 
 ### Cleanup
 
-#### CL-1 — 21 assignments immediately before a `return`
+#### CL-1 — APPLIED. 22 assignments immediately before a `return`
 
 - **Location**: `validate/_base_validator.py:19`; `validate/_downloads_logic_pre_validator.py:38`;
   `validate/_extraction_heuristic_pre_validator.py:27`; `validate/_http_empty_split_pre_validator.py:30`;
@@ -625,10 +628,10 @@ is real.
   so on) purely to return it, which triples the height of both functions for no information gain.
 - **Proposed change**: Return the expression directly at all 21 sites.
 - **Confidence it's safe**: **High**, flagged mechanically by `ruff check --select RET504`, which finds exactly
-  these 21 and nothing else. In each case the local is read exactly once, on the following line.
+  these 22 and nothing else. In each case the local is read exactly once, on the following line.
 - **Verification**: `ruff check --select RET504 src/` returns clean, then `python -m pytest tests/ -m "not remote" -q`.
 
-#### CL-2 — Four unnecessary set comprehensions
+#### CL-2 — APPLIED. Four unnecessary set comprehensions
 
 - **Location**: `extractors/_s3_log_access_extractor.py` (lines 59, 62) and `extractors/_remote_s3_log_access_extractor.py` (lines 218, 221)
 - **Issue**: `{file_path for file_path in X.read_text().splitlines()}` is `set(X.read_text().splitlines())`.
@@ -707,7 +710,7 @@ is real.
   rename is purely for consistency and to remove the trap.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`.
 
-#### CL-9 — `for key in dict.keys()`
+#### CL-9 — APPLIED. `for key in dict.keys()`
 
 - **Location**: `testing/_assertions.py` (line 69)
 - **Issue**: `for relative_file_path in relative_expected_file_contents.keys():` iterates the keys view
@@ -822,7 +825,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_encryption.py -q`, plus a spot check that
   `_estimate_entropy_bits` returns the identical float for a handful of inputs spanning all five classes.
 
-#### CL-18 — `dict.fromkeys` for a constant-valued dict comprehension
+#### CL-18 — APPLIED. `dict.fromkeys` for a constant-valued dict comprehension
 
 - **Location**: `summarize/_generate_archive_summaries.py` (line 151); also `tests/test_generic_summaries.py` (lines 614, 930, two occurrences each)
 - **Issue**: `{column_name: "int64" for column_name in asset_type_columns}` builds a dict whose value does not
@@ -950,7 +953,10 @@ Per AGENTS.md, every group that touches `src/` needs: `pre-commit` run before co
 `## Upcoming` section of `CHANGELOG.md` under `### 🏠 Internal`, and a single bump of `version` in
 `pyproject.toml` for the pull request as a whole (once, not once per commit).
 
-**Group 1 — Linter-verifiable mechanical cleanup.** CL-1, CL-2, CL-9, CL-18, DC-4, CON-3.
+**Group 1 — Linter-verifiable mechanical cleanup. APPLIED.** CL-1, CL-2, CL-9, CL-18, DC-4, CON-3.
+All six landed in one commit. CL-18's four test occurrences were taken here too rather than being deferred to
+Group 12, since Group 1's verification requires the whole rule set to come back clean; Group 12 therefore has
+nothing left of CL-18.
 These belong together because every one is flagged by a ruff rule, so the whole group is verified by re-running
 ruff with those rules selected and seeing it come back clean. No judgement calls.
 Verification: `ruff check --select RET504,C416,C420,SIM118,PIE790 src/ tests/` returns clean, then

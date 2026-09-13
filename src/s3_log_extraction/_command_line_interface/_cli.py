@@ -177,7 +177,6 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str
 @s3logextraction_cli.group(name="config")
 def _config_cli() -> None:
     """Configuration options, such as cache management."""
-    pass
 
 
 # s3logextraction config cache
@@ -451,14 +450,12 @@ def _update_totals_cli(
 @s3logextraction_cli.group(name="testing")
 def _testing_cli() -> None:
     """Testing utilities for the S3 log extraction."""
-    pass
 
 
 # s3logextraction testing generate benchmark
 @_testing_cli.group(name="generate")
 def _testing_generate_cli() -> None:
     """Generate various types of mock data for testing purposes."""
-    pass
 
 
 # s3logextraction testing generate benchmark

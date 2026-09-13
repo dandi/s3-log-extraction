@@ -1,4 +1,3 @@
-import collections
 import itertools
 import pathlib
 import shutil
@@ -19,10 +18,8 @@ def reset_extraction(cache_directory: str | pathlib.Path | None = None) -> None:
     extraction_directory.mkdir(exist_ok=True)
 
     records_directory = get_cache_subdirectory(cache_directory=cache_directory, name="records")
-    records = [
-        record
-        for record in itertools.chain(
-            records_directory.glob("*_extraction.log"), records_directory.glob("*_file-processing-*.txt")
-        )
-    ]
-    collections.deque((record.unlink(missing_ok=True) for record in records), maxlen=0)
+    records = list(
+        itertools.chain(records_directory.glob("*_extraction.log"), records_directory.glob("*_file-processing-*.txt"))
+    )
+    for record in records:
+        record.unlink(missing_ok=True)

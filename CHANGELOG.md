@@ -6,6 +6,10 @@
 
 - The IP ranges of GitHub are now recognized by their shape, as any entry of the published meta document that parses as an IPv4 network, instead of by skipping a fixed list of non-range keys. GitHub adds listings to the document over time, most recently its PGP public key blocks, and each of those entries was previously handed to the resolver as a CIDR and reported with a "Skipping invalid CIDR entry" warning on every run. ([#300](https://github.com/dandi/s3-log-extraction/pull/300))
 
+### 🏠 Internal
+
+- Removed a batch of mechanical noise across twelve modules, with no change to behavior. Twenty-two locals that were assigned only to be returned on the next line now return their expression directly, four set comprehensions that only copied their iterable became `set()` calls, a `dict` comprehension with a constant value became `dict.fromkeys`, a `.keys()` was dropped from an iteration, and three `pass` statements were removed from command groups that already had a docstring. `reset_extraction` now deletes its records with a plain loop rather than draining a generator through a zero-length `collections.deque`. Every one of these is flagged by a `ruff` rule, so the change is verified by that rule set coming back clean. The validator record file names, which are derived from a hash of each validator's awk script or of its `_run_validation` bytecode, were confirmed byte-identical before and after, so existing validation caches remain valid. ([#302](https://github.com/dandi/s3-log-extraction/pull/302))
+
 ## v1.11.2
 
 ### ⚠️ Breaking
