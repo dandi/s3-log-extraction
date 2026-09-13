@@ -103,17 +103,124 @@ def _load_globs(path: pathlib.Path | None) -> list[str]:
     ]
 
 
-def _session_starts(epochs: list[int], session_timeout_in_seconds: int) -> list[int]:
-    """Session-start epochs for one (IP, asset): the first request, then each request more
-    than ``session_timeout_in_seconds`` after the previous one (the shipped view definition)."""
+def _sessions(epochs: list[int], session_timeout_in_seconds: int) -> list[tuple[int, int]]:
+    """
+    Sessions for one (IP, asset) as ``(start, end)`` epoch pairs — the shipped view definition:
+    a maximal run of requests with no consecutive gap over ``session_timeout_in_seconds``.
+    ``start`` is the first request of the run, ``end`` the last (equal for a single-request session).
+    """
     if not epochs:
         return []
     ordered = sorted(epochs)
-    starts = [ordered[0]]
-    starts.extend(
-        current for previous, current in zip(ordered, ordered[1:]) if current - previous > session_timeout_in_seconds
-    )
-    return starts
+    sessions = []
+    start = prev = ordered[0]
+    for current in ordered[1:]:
+        if current - prev > session_timeout_in_seconds:
+            sessions.append((start, prev))
+            start = current
+        prev = current
+    sessions.append((start, prev))
+    return sessions
+
+
+def _visits(events: list[tuple[int, int, int]], session_timeout_in_seconds: int) -> list[tuple[float, int]]:
+    """
+    IP-level visits from an IP's per-(asset) sessions, as ``(duration_seconds, n_distinct_files)``.
+
+    ``events`` are ``(start, end, asset_index)`` triples across all of the IP's assets. Sorted by
+    start, a new visit begins whenever a session starts more than ``session_timeout_in_seconds`` after
+    the running end of the current visit; a visit's files are the distinct assets it spans.
+    """
+    if not events:
+        return []
+    ordered = sorted(events)
+    visits = []
+    v_start, v_end = ordered[0][0], ordered[0][1]
+    v_assets = {ordered[0][2]}
+    for start, end, asset_index in ordered[1:]:
+        if start - v_end > session_timeout_in_seconds:
+            visits.append((float(v_end - v_start), len(v_assets)))
+            v_start, v_end, v_assets = start, end, {asset_index}
+        else:
+            v_end = max(v_end, end)
+            v_assets.add(asset_index)
+    visits.append((float(v_end - v_start), len(v_assets)))
+    return visits
+
+
+_ALIAS_ADJECTIVES = (
+    "Swift",
+    "Silent",
+    "Brave",
+    "Clever",
+    "Gentle",
+    "Bold",
+    "Calm",
+    "Eager",
+    "Fierce",
+    "Jolly",
+    "Keen",
+    "Lucid",
+    "Merry",
+    "Noble",
+    "Proud",
+    "Quick",
+    "Rapid",
+    "Sage",
+    "Tidy",
+    "Vivid",
+    "Witty",
+    "Zesty",
+    "Amber",
+    "Cobalt",
+    "Crimson",
+    "Golden",
+    "Ivory",
+    "Jade",
+    "Scarlet",
+    "Teal",
+)
+_ALIAS_NOUNS = (
+    "Otter",
+    "Falcon",
+    "Maple",
+    "Heron",
+    "Lynx",
+    "Badger",
+    "Cedar",
+    "Finch",
+    "Willow",
+    "Marten",
+    "Osprey",
+    "Bison",
+    "Comet",
+    "Harbor",
+    "Juniper",
+    "Kestrel",
+    "Lark",
+    "Meadow",
+    "Nimbus",
+    "Opal",
+    "Pine",
+    "Quartz",
+    "Raven",
+    "Sable",
+    "Thistle",
+    "Umber",
+    "Vireo",
+    "Walrus",
+    "Yarrow",
+    "Zephyr",
+)
+
+
+def _alias(ip_hash: str) -> str:
+    """A deterministic CamelCase pseudonym for a hashed IP (stable across runs, human-readable)."""
+    value = int(ip_hash[:12], 16)
+    adjective = _ALIAS_ADJECTIVES[value % len(_ALIAS_ADJECTIVES)]
+    noun = _ALIAS_NOUNS[(value // len(_ALIAS_ADJECTIVES)) % len(_ALIAS_NOUNS)]
+    suffix = (value // (len(_ALIAS_ADJECTIVES) * len(_ALIAS_NOUNS))) % 100
+    return f"{adjective}{noun}{suffix:02d}"
 
 
 def _selection_entropy(per_asset_session_counts: list[int]) -> float:
@@ -151,29 +258,51 @@ def _timing_features(session_epochs: list[int], dominant_tol: float = 0.1) -> tu
     return cv, dominant, median_gap / 3600.0
 
 
-def ip_features(record: dict, total_assets: int, min_sessions: int) -> dict:
+def ip_features(
+    record: dict,
+    asset_is_testing: list,
+    total_assets: int,
+    total_testing_assets: int,
+    min_sessions: int,
+    session_timeout_in_seconds: int,
+) -> dict:
     """
-    Turn one IP's accumulated activity into the feature row. ``record`` carries
-    ``session_epochs`` (list), ``asset_sessions`` (asset -> session count),
-    ``total_bytes``, ``n_streaming_requests``, ``testing_sessions``.
+    Turn one IP's accumulated activity into the feature row. ``record`` carries ``sessions`` (a list of
+    ``(start, end, asset_index)`` per-(IP,asset) view sessions), ``total_bytes`` and
+    ``n_streaming_requests``; ``asset_is_testing`` maps asset_index -> whether it is a testing asset.
+
+    Reports both session models: per-(IP,asset) *view sessions* (the shipped number_of_views unit) and
+    IP-level *visits* (8h-gapped across all assets), the latter giving files-per-visit and visit duration.
     """
-    per_asset = list(record["asset_sessions"].values())
-    n_sessions = sum(per_asset)
+    sessions = record["sessions"]
+    n_sessions = len(sessions)
+    starts = [start for start, _end, _asset in sessions]
+    durations = [end - start for start, end, _asset in sessions]
+    per_asset = collections.Counter(asset for _s, _e, asset in sessions)
     n_assets = len(per_asset)
-    cv, dominant, median_gap_h = (
-        _timing_features(record["session_epochs"]) if n_sessions >= min_sessions else (float("nan"),) * 3
-    )
+    distinct_testing = sum(1 for asset in per_asset if asset_is_testing[asset])
+    testing_sessions = sum(count for asset, count in per_asset.items() if asset_is_testing[asset])
+
+    cv, dominant, median_gap_h = _timing_features(starts) if n_sessions >= min_sessions else (float("nan"),) * 3
+    visits = _visits(sessions, session_timeout_in_seconds)
     return {
         "n_sessions": n_sessions,
         "n_distinct_assets": n_assets,
         "coverage_fraction": n_assets / total_assets if total_assets else float("nan"),
-        "selection_entropy": _selection_entropy(per_asset),
+        "selection_entropy": _selection_entropy(list(per_asset.values())),
         "session_gap_cv": cv,
         "dominant_period_fraction": dominant,
         "median_session_gap_hours": median_gap_h,
         "mean_session_bytes": record["total_bytes"] / n_sessions if n_sessions else 0.0,
         "streaming_requests": record["n_streaming_requests"],
-        "testing_fraction": record["testing_sessions"] / n_sessions if n_sessions else 0.0,
+        "avg_session_duration_s": (sum(durations) / len(durations)) if durations else 0.0,
+        "distinct_testing_assets": distinct_testing,
+        "distinct_nontesting_assets": n_assets - distinct_testing,
+        "testing_assets_pct": (100 * distinct_testing / total_testing_assets) if total_testing_assets else 0.0,
+        "n_visits": len(visits),
+        "avg_visit_duration_s": (sum(d for d, _f in visits) / len(visits)) if visits else 0.0,
+        "avg_files_per_visit": (sum(f for _d, f in visits) / len(visits)) if visits else 0.0,
+        "testing_fraction": testing_sessions / n_sessions if n_sessions else 0.0,
     }
 
 
@@ -208,19 +337,15 @@ def build_ip_profiles(
     print(f"Found {total_assets} asset directories")
 
     def _new_record() -> dict:
-        return {
-            "session_epochs": [],
-            "asset_sessions": collections.defaultdict(int),
-            "total_bytes": 0,
-            "n_streaming_requests": 0,
-            "testing_sessions": 0,
-        }
+        # ``sessions``: list of (start_epoch, end_epoch, asset_index) per-(IP,asset) view sessions.
+        return {"sessions": [], "total_bytes": 0, "n_streaming_requests": 0}
 
     records: dict[str, dict] = collections.defaultdict(_new_record)
+    asset_is_testing: list[bool] = []  # indexed by asset_index (assigned per asset below)
     skipped = 0
-    for asset_dir in tqdm.tqdm(asset_dirs, desc="Profiling assets"):
+    for asset_index, asset_dir in enumerate(tqdm.tqdm(asset_dirs, desc="Profiling assets")):
         relative_path = asset_dir.relative_to(extraction_root).as_posix()
-        is_testing = any(fnmatch.fnmatch(relative_path, glob) for glob in testing_globs)
+        asset_is_testing.append(any(fnmatch.fnmatch(relative_path, glob) for glob in testing_globs))
         try:
             timestamps = [s for line in (asset_dir / "timestamps.txt").read_text().splitlines() if (s := line.strip())]
             downloads = [s for line in (asset_dir / "download.txt").read_text().splitlines() if (s := line.strip())]
@@ -250,28 +375,34 @@ def build_ip_profiles(
             per_ip_requests[ip] += 1
 
         for ip, epochs in per_ip_epochs.items():
-            starts = _session_starts(epochs, session_timeout_in_seconds)
-            if not starts:
+            sessions = _sessions(epochs, session_timeout_in_seconds)
+            if not sessions:
                 continue
             record = records[ip]
-            record["session_epochs"].extend(starts)
-            record["asset_sessions"][relative_path] += len(starts)
+            record["sessions"].extend((start, end, asset_index) for start, end in sessions)
             record["total_bytes"] += per_ip_bytes[ip]
             record["n_streaming_requests"] += per_ip_requests[ip]
-            if is_testing:
-                record["testing_sessions"] += len(starts)
     if skipped:
         print(f"  Skipped {skipped} asset(s) with missing or misaligned files")
 
-    print(f"Resolving {len(records):,} distinct IPs...")
+    total_testing_assets = sum(asset_is_testing)
+    print(f"Resolving {len(records):,} distinct IPs ({total_testing_assets} testing assets present)...")
     key = _ip_hash_key()
     rows = []
     for ip, record in tqdm.tqdm(records.items(), desc="Resolving + featurizing"):
-        features = ip_features(record, total_assets=total_assets, min_sessions=min_sessions)
+        features = ip_features(
+            record,
+            asset_is_testing=asset_is_testing,
+            total_assets=total_assets,
+            total_testing_assets=total_testing_assets,
+            min_sessions=min_sessions,
+            session_timeout_in_seconds=session_timeout_in_seconds,
+        )
         label = resolver.resolve(ip) or ""
         rows.append(
             {
                 "ip_hash": hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest(),
+                "alias": _alias(hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest()),
                 "region_label": label,
                 "service": _service_of(label),
                 **features,
@@ -556,9 +687,104 @@ def plot_testing_conditional(
     print(f"Saved {out_path}")
 
 
+def _fmt_duration(seconds: float) -> str:
+    """Human-readable duration from seconds (e.g. '3.2h', '12m', '45s')."""
+    if seconds >= 3600:
+        return f"{seconds / 3600:.1f}h"
+    if seconds >= 60:
+        return f"{seconds / 60:.1f}m"
+    return f"{seconds:.0f}s"
+
+
+def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path, top_n: int = 100) -> None:
+    """
+    Emit two derived view-behavior tables and write them as CSVs next to ``out_path``:
+
+    * per source *category* (service label) — an aggregate summary;
+    * per source *IP* (top-N by view sessions), with a stable CamelCase alias instead of the raw/hashed IP.
+
+    Columns cover both session models: per-(IP,asset) *view sessions* and IP-level *visits* (files-per-visit,
+    visit duration), plus testing vs non-testing distinct-asset counts and the testing-asset percentage.
+    """
+    active = profiles[profiles["n_sessions"] >= min_sessions].copy()
+    if active.empty:
+        print("\n(no active IPs for behavior tables)")
+        return
+    active["view_sessions"] = active["n_sessions"]
+
+    # --- Per source category (service) ---
+    grouped = active.groupby("service")
+    per_service = pd.DataFrame(
+        {
+            "n_ips": grouped.size(),
+            "view_sessions": grouped["view_sessions"].sum().astype(int),
+            "visits": grouped["n_visits"].sum().astype(int),
+            "avg_session_duration_s": grouped["avg_session_duration_s"].mean(),
+            "avg_visit_duration_s": grouped["avg_visit_duration_s"].mean(),
+            "avg_files_per_visit": grouped["avg_files_per_visit"].mean(),
+            "mean_distinct_testing_assets": grouped["distinct_testing_assets"].mean(),
+            "mean_distinct_nontesting_assets": grouped["distinct_nontesting_assets"].mean(),
+            "testing_session_pct": 100
+            * (active["testing_fraction"] * active["view_sessions"]).groupby(active["service"]).sum()
+            / grouped["view_sessions"].sum(),
+        }
+    ).sort_values("view_sessions", ascending=False)
+
+    print("\n=== View behavior per source category ===")
+    print(
+        f"    {'service':<11}{'IPs':>7}{'views':>12}{'visits':>10}{'avg_sess':>10}{'avg_visit':>10}"
+        f"{'files/visit':>12}{'test%sess':>10}"
+    )
+    for service, r in per_service.iterrows():
+        print(
+            f"    {service:<11}{int(r.n_ips):>7,}{int(r.view_sessions):>12,}{int(r.visits):>10,}"
+            f"{_fmt_duration(r.avg_session_duration_s):>10}{_fmt_duration(r.avg_visit_duration_s):>10}"
+            f"{r.avg_files_per_visit:>12.1f}{r.testing_session_pct:>9.2f}%"
+        )
+    service_csv = out_path.with_name(f"{out_path.stem}_by_service.csv")
+    per_service.to_csv(service_csv)
+    print(f"  Saved {service_csv}")
+
+    # --- Per source IP (top-N), aliased ---
+    cols = [
+        "alias",
+        "service",
+        "region_label",
+        "view_sessions",
+        "avg_session_duration_s",
+        "n_visits",
+        "avg_visit_duration_s",
+        "avg_files_per_visit",
+        "distinct_testing_assets",
+        "testing_assets_pct",
+        "distinct_nontesting_assets",
+        "coverage_fraction",
+        "session_gap_cv",
+    ]
+    top = active.nlargest(top_n, "view_sessions")[cols].copy()
+    print(f"\n=== View behavior per source IP (top {min(top_n, len(top))} by view sessions) ===")
+    print(
+        f"    {'alias':<16}{'label':<14}{'views':>10}{'avgSess':>9}{'visits':>8}{'avgVisit':>9}"
+        f"{'f/visit':>8}{'testAst':>8}{'nonTest':>9}{'cov':>7}{'CV':>7}"
+    )
+    for r in top.itertuples(index=False):
+        print(
+            f"    {r.alias:<16}{(r.region_label or '?'):<14}{int(r.view_sessions):>10,}"
+            f"{_fmt_duration(r.avg_session_duration_s):>9}{int(r.n_visits):>8,}"
+            f"{_fmt_duration(r.avg_visit_duration_s):>9}{r.avg_files_per_visit:>8.1f}"
+            f"{int(r.distinct_testing_assets):>8}{int(r.distinct_nontesting_assets):>9}"
+            f"{r.coverage_fraction:>7.4f}{r.session_gap_cv:>7.2f}"
+        )
+    ip_csv = out_path.with_name(f"{out_path.stem}_by_ip.csv")
+    top.to_csv(ip_csv, index=False)
+    print(f"  Saved {ip_csv}")
+
+
 def _cache_paths(cache_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     base = cache_dir / "analysis_cache"
-    return base / "ip_behavior_profiles.parquet", base / "ip_behavior_profiles.csv.gz"
+    # _v2: schema gained per-session durations, IP-level visits, distinct testing/non-testing assets,
+    # and aliases — an older cache lacks these columns, so it is not reused.
+    return base / "ip_behavior_profiles_v2.parquet", base / "ip_behavior_profiles_v2.csv.gz"
 
 
 def main() -> None:
@@ -624,6 +850,7 @@ def main() -> None:
         return
 
     report(profiles, min_sessions=args.min_sessions, testing_regular_min=args.testing_regular_min)
+    behavior_tables(profiles, min_sessions=args.min_sessions, out_path=args.out)
     try:
         plot(profiles, min_sessions=args.min_sessions, out_path=args.out)
         distributions_path = args.out.with_name(f"{args.out.stem}_distributions{args.out.suffix}")
