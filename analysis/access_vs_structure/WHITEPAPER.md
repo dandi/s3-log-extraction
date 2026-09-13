@@ -18,9 +18,11 @@ come from cloud/CI infrastructure (removed by IP provenance — specifically the
 Actions ranges), but the far larger contaminant is a *handful of systematic archive
 scanners* that carry ordinary geographic labels and so escape every IP filter — one IP
 alone is 54 % of all view-sessions, and ~26 IPs covering ≥ 2 % of the archive account for
-~69 %. These are separable not by request count or timing alone but by **archive
-coverage**: authentic use is irregular in timing and idiosyncratic in asset choice, while a
-scanner enumerates the archive.
+~69 %. These stand out at the *extremes* — by archive coverage, timing regularity, or
+re-visit rate — but **no axis yields a sharp threshold** (all three distributions are
+smooth), so the robust lever is the concentration itself (a short blocklist of extreme
+outliers), and a principled automatic rule likely needs a dataset-saturation axis the
+content-addressed cache cannot compute without a content-id→dandiset mapping.
 
 ---
 
@@ -168,12 +170,16 @@ actors that carry no cloud/VPN/CI label at all:
 - **Extreme concentration.** The single busiest IP accounts for **54 % of all
   view-sessions**; the top 10 for 66 %, the top 25 for 69 %, the top 100 for 75 %.
   Cleaning the metric is mostly a question of a few dozen IPs, not a diffuse population.
-- **Archive coverage separates them cleanly.** Among the 8,177 IPs with ≥ 20 sessions,
-  the 99th percentile touches only **1.06 %** of all assets, but **26 IPs sit at ≥ 2 %
-  coverage — up to 66.9 %** (one IP streamed two-thirds of the entire archive) — and
-  those 26 hold **69 % of all sessions**. A human's asset selection is a tiny,
-  idiosyncratic scatter; a scanner enumerates the archive. (Threshold sensitivity: ≥ 1 %
-  → 74 % of sessions, ≥ 2 % → 69 %, ≥ 5 % → 66 %.)
+- **Archive coverage ranks them — but with no natural cutpoint.** Among the 8,177 IPs with
+  ≥ 20 sessions, the 99th percentile touches only **1.06 %** of all assets, while **26 IPs
+  sit at ≥ 2 % — up to 66.9 %** (one IP streamed two-thirds of the entire archive), holding
+  **69 % of all sessions** (sensitivity: ≥ 1 % → 74 %, ≥ 2 % → 69 %, ≥ 5 % → 66 %). But the
+  coverage CCDF is a **smooth heavy tail with no gap or knee** — so while a human's selection
+  is a tiny scatter and a scanner enumerates the archive, there is *no natural boundary*
+  between them; any coverage cut is a judgment call on a continuum, not a valley (contrast
+  the 8-hour session boundary, which sat in a real density valley). The same is true of the
+  other axes: the session-gap-CV histogram is unimodal (no valley at 0.1) and the revisit
+  histogram is a spike at 1 plus a smooth tail.
 - **A behavior-clean count is ~20 % of the raw one.** Flagging an IP as systematic when
   it is either metronomic (session-gap CV ≤ 0.1 or a dominant period) *or* covers ≥ 2 %
   of the archive marks **1,112 IPs holding 79 % of all sessions**. The archetypes are
@@ -189,17 +195,23 @@ actors that carry no cloud/VPN/CI label at all:
 
 This refines, rather than contradicts, §2.1.1's "no clean behavioral separator" caveat:
 raw *session count* and *timing regularity* alone do not separate humans from the GitHub
-Actions population (Actions is irregular), but **archive coverage** does separate the
-dominant scanner population, and combined with the extreme concentration it makes the
-correction both large and attributable to a short list of IPs. The organizing principle is
-that authentic use is **irregular in timing and idiosyncratic in asset choice**, whereas a
-scanner is systematic on at least one axis.
+Actions population (Actions is irregular), but **archive coverage** ranks the dominant
+scanner population and, combined with the extreme concentration, makes the correction both
+large and attributable to a short list of IPs — even though no axis yields a sharp
+threshold. The organizing principle is that authentic use is **irregular in timing and
+idiosyncratic in asset choice**, whereas a scanner is systematic on at least one axis; that
+separates the *extremes* by inspection, not the *middle* by a cutpoint.
 
 *Caveats.* (i) This is characterization, not a shipped rule — excluding these from
 `number_of_views` needs a global per-IP pre-pass feeding the per-asset sessionizer, since
-coverage is an archive-wide property. (ii) The 2 % coverage cut is chosen at the visible
-gap above the 99th percentile of active IPs; it is a defensible choice, not a natural
-constant, so the rule should be stated with its threshold and sensitivity. (iii) An
+coverage is an archive-wide property. (ii) **No axis has a natural threshold** (see above):
+the distributions are smooth, so any fixed cut (2 % coverage, `CV ≤ 0.1`) is an arbitrary
+judgment call, not a data-driven boundary. What is robust is the *concentration* — a few
+dozen extreme actors dominate regardless of where a line is drawn — so the defensible lever
+is a **short, inspected blocklist of the extreme outliers**, not an automated threshold. A
+genuinely principled cut likely needs the structural **dataset-saturation** axis (fraction
+of files-within-dataset × fraction of datasets), which the content-addressed cache cannot
+compute without a content-id→dandiset mapping. (iii) An
 earlier version of the profiler used the entropy of an IP's per-asset session counts as a
 "selection uniformity" axis; that was dropped because one-session-per-asset is the norm, so
 the entropy is ≈ 1 for nearly every active IP (scanners and broad humans alike) — it
@@ -379,11 +391,14 @@ normalized away.
    A few dozen IPs — 26 covering ≥ 2 % of the archive, one alone at 54 % of all sessions —
    account for ~69–79 % of raw view-sessions, and **85 % of them carry ordinary geographic
    labels** (§2.1.2), so neither the `GH-actions` filter nor any cloud/VPN filter touches
-   them. This is the largest correction available to `number_of_views`. Flag an IP as a
-   scanner when it is metronomic (session-gap CV ≤ 0.1 or a dominant period) **or** covers
-   an implausible fraction of the archive (≥ 2 %, chosen at the gap above the 99th
-   percentile of active IPs); state the threshold and its sensitivity when reporting it.
-   Implementing it needs a global per-IP pre-pass, since coverage is archive-wide.
+   them. This is the largest correction available to `number_of_views`. But **no behavioral
+   axis has a natural threshold** — coverage, CV, and revisit are all smooth distributions
+   (§2.1.2) — so do *not* ship an automated cut as if it were data-driven. The robust,
+   defensible lever is the **concentration**: a short, human-inspected blocklist of the
+   extreme outliers (the ~26 IPs at ≥ 2 % coverage plus the high-revisit re-indexer) removes
+   ~69 % of raw sessions and is auditable. A principled *automatic* rule likely needs the
+   structural **dataset-saturation** axis, which requires a content-id→dandiset mapping the
+   cache lacks. Either way, implementing exclusion needs a global per-IP pre-pass.
 5. **Monitor the guard-band ambiguity** (fraction of same-IP gaps within ±10 % of
    8 h) over time as a health check on the definition, and keep the bot-exclusion
    list current.
