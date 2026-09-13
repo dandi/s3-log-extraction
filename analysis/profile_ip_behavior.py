@@ -123,28 +123,39 @@ def _sessions(epochs: list[int], session_timeout_in_seconds: int) -> list[tuple[
     return sessions
 
 
-def _visits(events: list[tuple[int, int, int]], session_timeout_in_seconds: int) -> list[tuple[float, int]]:
+def _visits(events: list[tuple[int, int, int]], session_timeout_in_seconds: int) -> list[dict]:
     """
-    IP-level visits from an IP's per-(asset) sessions, as ``(duration_seconds, n_distinct_files)``.
+    IP-level visits from an IP's per-(asset) sessions, each a dict
+    ``{"start", "duration", "n_files", "n_new"}``.
 
     ``events`` are ``(start, end, asset_index)`` triples across all of the IP's assets. Sorted by
     start, a new visit begins whenever a session starts more than ``session_timeout_in_seconds`` after
-    the running end of the current visit; a visit's files are the distinct assets it spans.
+    the running end of the current visit; a visit's files are the distinct assets it spans, and
+    ``n_new`` is how many of those assets the IP had never touched in any earlier visit (a metadata
+    sweep marches through fresh assets, ``n_new`` ~= ``n_files``; a returning analyst re-touches known
+    files, ``n_new`` << ``n_files``).
     """
     if not events:
         return []
     ordered = sorted(events)
     visits = []
+    seen: set[int] = set()
+
+    def _close(v_start: int, v_end: int, v_assets: set[int]) -> dict:
+        n_new = len(v_assets - seen)
+        seen.update(v_assets)
+        return {"start": v_start, "duration": float(v_end - v_start), "n_files": len(v_assets), "n_new": n_new}
+
     v_start, v_end = ordered[0][0], ordered[0][1]
     v_assets = {ordered[0][2]}
     for start, end, asset_index in ordered[1:]:
         if start - v_end > session_timeout_in_seconds:
-            visits.append((float(v_end - v_start), len(v_assets)))
+            visits.append(_close(v_start, v_end, v_assets))
             v_start, v_end, v_assets = start, end, {asset_index}
         else:
             v_end = max(v_end, end)
             v_assets.add(asset_index)
-    visits.append((float(v_end - v_start), len(v_assets)))
+    visits.append(_close(v_start, v_end, v_assets))
     return visits
 
 
@@ -258,6 +269,67 @@ def _timing_features(session_epochs: list[int], dominant_tol: float = 0.1) -> tu
     return cv, dominant, median_gap / 3600.0
 
 
+def _temporal_features(session_epochs: list[int]) -> dict:
+    """
+    Diurnal / calendar fingerprint from an IP's session start epochs (UTC).
+
+    A monitor or scraper runs for months, most days, at all hours; a human analysis project clusters
+    into a few weeks, on weekdays, in working hours. These separate presence *pattern* from volume:
+
+      * active_timespan_days   — span from first to last session (a poller runs for months).
+      * distinct_active_days   — number of distinct UTC calendar days with any session.
+      * presence_density       — distinct_active_days / active_timespan_days (1.0 = present every day).
+      * sessions_per_active_day
+      * off_hours_fraction     — sessions starting outside 08:00-20:00 UTC (bots don't sleep).
+      * weekend_fraction       — sessions on Sat/Sun (cron CI is flat across the week).
+    """
+    import datetime
+
+    if not session_epochs:
+        return {
+            "active_timespan_days": 0.0,
+            "distinct_active_days": 0,
+            "presence_density": 0.0,
+            "sessions_per_active_day": 0.0,
+            "off_hours_fraction": 0.0,
+            "weekend_fraction": 0.0,
+        }
+    ordered = sorted(session_epochs)
+    span_days = (ordered[-1] - ordered[0]) / 86400.0
+    days = set()
+    off_hours = 0
+    weekend = 0
+    for epoch in ordered:
+        moment = datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc)
+        days.add(moment.date())
+        if moment.hour < 8 or moment.hour >= 20:
+            off_hours += 1
+        if moment.weekday() >= 5:
+            weekend += 1
+    n_active_days = len(days)
+    n = len(ordered)
+    return {
+        "active_timespan_days": span_days,
+        "distinct_active_days": n_active_days,
+        "presence_density": (n_active_days / span_days) if span_days > 0 else 1.0,
+        "sessions_per_active_day": n / n_active_days if n_active_days else 0.0,
+        "off_hours_fraction": off_hours / n,
+        "weekend_fraction": weekend / n,
+    }
+
+
+def _cv(values: list[float]) -> float:
+    """Coefficient of variation (std/mean) of positive gaps between consecutive sorted values."""
+    if len(values) < 3:
+        return float("nan")
+    gaps = np.diff(np.array(sorted(values), dtype=np.float64))
+    gaps = gaps[gaps > 0]
+    if gaps.size < 2:
+        return float("nan")
+    mean_gap = float(gaps.mean())
+    return float(gaps.std() / mean_gap) if mean_gap > 0 else float("nan")
+
+
 def ip_features(
     record: dict,
     asset_is_testing: list,
@@ -285,6 +357,12 @@ def ip_features(
 
     cv, dominant, median_gap_h = _timing_features(starts) if n_sessions >= min_sessions else (float("nan"),) * 3
     visits = _visits(sessions, session_timeout_in_seconds)
+    n_visits = len(visits)
+    visit_files = [v["n_files"] for v in visits]
+    new_fractions = [v["n_new"] / v["n_files"] for v in visits if v["n_files"]]
+    download_requests = record["n_download_requests"]
+    stream_requests = record["n_streaming_requests"]
+    temporal = _temporal_features(starts)
     return {
         "n_sessions": n_sessions,
         "n_distinct_assets": n_assets,
@@ -294,15 +372,34 @@ def ip_features(
         "dominant_period_fraction": dominant,
         "median_session_gap_hours": median_gap_h,
         "mean_session_bytes": record["total_bytes"] / n_sessions if n_sessions else 0.0,
-        "streaming_requests": record["n_streaming_requests"],
+        "streaming_requests": stream_requests,
+        "download_requests": download_requests,
+        # download (200) vs stream (206) mix: tooling that always downloads sits high, genuine
+        # streaming sits near 0. NaN when the IP made no download or stream requests at all.
+        "download_stream_ratio": (
+            download_requests / stream_requests if stream_requests else (float("inf") if download_requests else 0.0)
+        ),
         "avg_session_duration_s": (sum(durations) / len(durations)) if durations else 0.0,
+        # median vs mean session duration: a big mean/median gap = a few long sessions among many
+        # instant ones (probe-then-skip scanning); a tight ratio = uniform behavior.
+        "median_session_duration_s": float(np.median(durations)) if durations else 0.0,
         "distinct_testing_assets": distinct_testing,
         "distinct_nontesting_assets": n_assets - distinct_testing,
         "testing_assets_pct": (100 * distinct_testing / total_testing_assets) if total_testing_assets else 0.0,
-        "n_visits": len(visits),
-        "avg_visit_duration_s": (sum(d for d, _f in visits) / len(visits)) if visits else 0.0,
-        "avg_files_per_visit": (sum(f for _d, f in visits) / len(visits)) if visits else 0.0,
+        # touches ONLY testing assets — a pure-CI/monitoring IP sits True; a dev who also does real
+        # analysis sits False (they touch non-testing assets too).
+        "testing_only": distinct_testing > 0 and (n_assets - distinct_testing) == 0,
+        "n_visits": n_visits,
+        "avg_visit_duration_s": (sum(v["duration"] for v in visits) / n_visits) if n_visits else 0.0,
+        "avg_files_per_visit": (sum(visit_files) / n_visits) if n_visits else 0.0,
+        # mean per-visit fraction of assets never seen in an earlier visit: a scanner marching through
+        # the archive is ~1 (all new); a returning analyst re-touches known files, so it is lower.
+        "new_asset_fraction_per_visit": (sum(new_fractions) / len(new_fractions)) if new_fractions else 0.0,
+        # regularity of the gaps between 8h visits — catches the "every day at the same time" cron
+        # cadence that per-session metronomy can miss (low CV = clockwork).
+        "visit_gap_cv": _cv([v["start"] for v in visits]) if n_visits >= min_sessions else float("nan"),
         "testing_fraction": testing_sessions / n_sessions if n_sessions else 0.0,
+        **temporal,
     }
 
 
@@ -338,7 +435,7 @@ def build_ip_profiles(
 
     def _new_record() -> dict:
         # ``sessions``: list of (start_epoch, end_epoch, asset_index) per-(IP,asset) view sessions.
-        return {"sessions": [], "total_bytes": 0, "n_streaming_requests": 0}
+        return {"sessions": [], "total_bytes": 0, "n_streaming_requests": 0, "n_download_requests": 0}
 
     records: dict[str, dict] = collections.defaultdict(_new_record)
     asset_is_testing: list[bool] = []  # indexed by asset_index (assigned per asset below)
@@ -362,8 +459,10 @@ def build_ip_profiles(
         per_ip_epochs: dict[str, list[int]] = collections.defaultdict(list)
         per_ip_bytes: dict[str, int] = collections.defaultdict(int)
         per_ip_requests: dict[str, int] = collections.defaultdict(int)
+        per_ip_downloads: dict[str, int] = collections.defaultdict(int)
         for timestamp, download, ip, n_bytes in zip(timestamps, downloads, ips, bytes_sent):
-            if download != "0":  # streaming only
+            if download != "0":  # a download (200), not a stream (206) — counted, then skipped
+                per_ip_downloads[ip] += 1
                 continue
             epoch = int(
                 datetime.datetime.strptime(timestamp, timestamp_format)
@@ -382,6 +481,7 @@ def build_ip_profiles(
             record["sessions"].extend((start, end, asset_index) for start, end in sessions)
             record["total_bytes"] += per_ip_bytes[ip]
             record["n_streaming_requests"] += per_ip_requests[ip]
+            record["n_download_requests"] += per_ip_downloads[ip]
     if skipped:
         print(f"  Skipped {skipped} asset(s) with missing or misaligned files")
 
@@ -720,8 +820,17 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
             "view_sessions": grouped["view_sessions"].sum().astype(int),
             "visits": grouped["n_visits"].sum().astype(int),
             "avg_session_duration_s": grouped["avg_session_duration_s"].mean(),
+            "median_session_duration_s": grouped["median_session_duration_s"].mean(),
             "avg_visit_duration_s": grouped["avg_visit_duration_s"].mean(),
             "avg_files_per_visit": grouped["avg_files_per_visit"].mean(),
+            "mean_new_asset_fraction_per_visit": grouped["new_asset_fraction_per_visit"].mean(),
+            "mean_download_stream_ratio": grouped["download_stream_ratio"].replace(np.inf, np.nan).mean(),
+            "mean_active_timespan_days": grouped["active_timespan_days"].mean(),
+            "mean_distinct_active_days": grouped["distinct_active_days"].mean(),
+            "mean_presence_density": grouped["presence_density"].mean(),
+            "mean_off_hours_fraction": grouped["off_hours_fraction"].mean(),
+            "mean_weekend_fraction": grouped["weekend_fraction"].mean(),
+            "n_testing_only_ips": grouped["testing_only"].sum().astype(int),
             "mean_distinct_testing_assets": grouped["distinct_testing_assets"].mean(),
             "mean_distinct_nontesting_assets": grouped["distinct_nontesting_assets"].mean(),
             "testing_session_pct": 100
@@ -730,16 +839,18 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
         }
     ).sort_values("view_sessions", ascending=False)
 
-    print("\n=== View behavior per source category ===")
+    print("\n=== View behavior per source category ===  (full columns in the CSV)")
     print(
-        f"    {'service':<11}{'IPs':>7}{'views':>12}{'visits':>10}{'avg_sess':>10}{'avg_visit':>10}"
-        f"{'files/visit':>12}{'test%sess':>10}"
+        f"    {'service':<11}{'IPs':>7}{'views':>12}{'visits':>9}{'avg_sess':>9}{'files/vis':>10}"
+        f"{'new%/vis':>9}{'span_d':>8}{'actdays':>8}{'off_hrs%':>9}{'wknd%':>7}{'test%':>7}"
     )
     for service, r in per_service.iterrows():
         print(
-            f"    {service:<11}{int(r.n_ips):>7,}{int(r.view_sessions):>12,}{int(r.visits):>10,}"
-            f"{_fmt_duration(r.avg_session_duration_s):>10}{_fmt_duration(r.avg_visit_duration_s):>10}"
-            f"{r.avg_files_per_visit:>12.1f}{r.testing_session_pct:>9.2f}%"
+            f"    {service:<11}{int(r.n_ips):>7,}{int(r.view_sessions):>12,}{int(r.visits):>9,}"
+            f"{_fmt_duration(r.avg_session_duration_s):>9}{r.avg_files_per_visit:>10.1f}"
+            f"{100 * r.mean_new_asset_fraction_per_visit:>8.1f}%{r.mean_active_timespan_days:>8.0f}"
+            f"{r.mean_distinct_active_days:>8.0f}{100 * r.mean_off_hours_fraction:>8.1f}%"
+            f"{100 * r.mean_weekend_fraction:>6.1f}%{r.testing_session_pct:>6.1f}%"
         )
     service_csv = out_path.with_name(f"{out_path.stem}_by_service.csv")
     per_service.to_csv(service_csv)
@@ -752,28 +863,39 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
         "region_label",
         "view_sessions",
         "avg_session_duration_s",
+        "median_session_duration_s",
         "n_visits",
         "avg_visit_duration_s",
         "avg_files_per_visit",
+        "new_asset_fraction_per_visit",
+        "download_stream_ratio",
         "distinct_testing_assets",
         "testing_assets_pct",
         "distinct_nontesting_assets",
+        "testing_only",
         "coverage_fraction",
         "session_gap_cv",
+        "visit_gap_cv",
+        "active_timespan_days",
+        "distinct_active_days",
+        "presence_density",
+        "off_hours_fraction",
+        "weekend_fraction",
     ]
     top = active.nlargest(top_n, "view_sessions")[cols].copy()
-    print(f"\n=== View behavior per source IP (top {min(top_n, len(top))} by view sessions) ===")
+    print(f"\n=== View behavior per source IP (top {min(top_n, len(top))} by view sessions) ===  (full columns in CSV)")
     print(
-        f"    {'alias':<16}{'label':<14}{'views':>10}{'avgSess':>9}{'visits':>8}{'avgVisit':>9}"
-        f"{'f/visit':>8}{'testAst':>8}{'nonTest':>9}{'cov':>7}{'CV':>7}"
+        f"    {'alias':<16}{'label':<13}{'views':>9}{'f/vis':>7}{'new%':>6}{'span_d':>8}{'actdays':>8}"
+        f"{'pres':>6}{'off%':>6}{'wknd%':>6}{'cov':>7}{'sCV':>6}{'vCV':>6}{'test':>6}"
     )
     for r in top.itertuples(index=False):
         print(
-            f"    {r.alias:<16}{(r.region_label or '?'):<14}{int(r.view_sessions):>10,}"
-            f"{_fmt_duration(r.avg_session_duration_s):>9}{int(r.n_visits):>8,}"
-            f"{_fmt_duration(r.avg_visit_duration_s):>9}{r.avg_files_per_visit:>8.1f}"
-            f"{int(r.distinct_testing_assets):>8}{int(r.distinct_nontesting_assets):>9}"
-            f"{r.coverage_fraction:>7.4f}{r.session_gap_cv:>7.2f}"
+            f"    {r.alias:<16}{(r.region_label or '?'):<13}{int(r.view_sessions):>9,}"
+            f"{r.avg_files_per_visit:>7.1f}{100 * r.new_asset_fraction_per_visit:>5.0f}%"
+            f"{r.active_timespan_days:>8.0f}{int(r.distinct_active_days):>8,}{r.presence_density:>6.2f}"
+            f"{100 * r.off_hours_fraction:>5.0f}%{100 * r.weekend_fraction:>5.0f}%"
+            f"{r.coverage_fraction:>7.4f}{r.session_gap_cv:>6.2f}{r.visit_gap_cv:>6.2f}"
+            f"{int(r.distinct_testing_assets):>6}"
         )
     ip_csv = out_path.with_name(f"{out_path.stem}_by_ip.csv")
     top.to_csv(ip_csv, index=False)
@@ -782,9 +904,10 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
 
 def _cache_paths(cache_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     base = cache_dir / "analysis_cache"
-    # _v2: schema gained per-session durations, IP-level visits, distinct testing/non-testing assets,
-    # and aliases — an older cache lacks these columns, so it is not reused.
-    return base / "ip_behavior_profiles_v2.parquet", base / "ip_behavior_profiles_v2.csv.gz"
+    # _v3: schema gained the temporal fingerprint (active timespan, active days, presence density,
+    # off-hours / weekend fractions), visit-gap CV, download/stream mix, per-visit new-asset fraction,
+    # median session duration, and the testing-only flag — an older cache lacks these, so it is not reused.
+    return base / "ip_behavior_profiles_v3.parquet", base / "ip_behavior_profiles_v3.csv.gz"
 
 
 def main() -> None:
