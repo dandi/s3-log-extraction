@@ -280,7 +280,7 @@ def build_ip_profiles(
     return pd.DataFrame(rows)
 
 
-def report(profiles: pd.DataFrame, min_sessions: int, top_n: int = 25) -> None:
+def report(profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int = 10, top_n: int = 25) -> None:
     total_sessions = int(profiles["n_sessions"].sum())
     print(f"\n=== Per-IP behavioral profiles ({len(profiles):,} IPs, {total_sessions:,} sessions) ===")
 
@@ -351,6 +351,29 @@ def report(profiles: pd.DataFrame, min_sessions: int, top_n: int = 25) -> None:
             testing_sessions = int(round(row.testing_fraction * row.n_sessions))
             flag = f"{testing_sessions:,} testing sessions" if testing_sessions else "none"
             print(f"    {row.region_label or '(unresolved)':<16} cov={row.coverage_fraction:>6.3f}  {flag}")
+
+    # --- Third axis: does the IP *regularly* access the reserved testing assets? An incidental
+    #     scanner sweep hits the 8 blobs ~once; a monitor polls them repeatedly. Regular testing
+    #     access is thus a poller signal orthogonal to coverage/timing. Coarse (only 8 testing blobs)
+    #     and expected to overlap the GH-actions monitors the shipped filter already removes. ---
+    if "testing_fraction" in active.columns and (active["testing_fraction"] > 0).any():
+        testing_sessions = (active["testing_fraction"] * active["n_sessions"]).round().astype(int)
+        regular = testing_sessions >= testing_regular_min
+        reg_sessions = int(active.loc[regular, "n_sessions"].sum())
+        print("\n  testing-asset access (third axis):")
+        print(f"    touch testing assets at all:                 {int((testing_sessions > 0).sum()):,} IPs")
+        print(
+            f"    REGULARLY (>= {testing_regular_min} testing sessions):        {int(regular.sum()):,} IPs, "
+            f"{reg_sessions:,} sessions ({100 * reg_sessions / max(total_sessions, 1):.2f}% of all)"
+        )
+        by_svc = active.loc[regular].groupby("service")["n_sessions"].sum().sort_values(ascending=False)
+        for svc, s in by_svc.items():
+            print(f"      {svc:>10}: {int(s):>12,} sessions")
+        new_beyond = int((regular & ~systematic).sum())
+        print(
+            f"    of the {int(regular.sum()):,} regular testing-accessors, {new_beyond:,} are NOT already "
+            f"flagged by coverage/metronomic (what this axis adds)"
+        )
 
     print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | test% | CV | domP | MB/sess):")
     cols = [
@@ -470,6 +493,59 @@ def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: path
     print(f"Saved {out_path}")
 
 
+def plot_testing_conditional(
+    profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int, out_path: pathlib.Path
+) -> None:
+    """
+    The coverage-vs-CV plane split on the third axis: IPs that *regularly* access the reserved testing
+    assets vs the rest. If the regular-testing group occupies a distinct region (e.g. low coverage +
+    low CV = pollers), testing access classifies bots the coverage/timing axes miss; if it just
+    overlays the scanner/CI cloud, it adds nothing beyond what those axes already flag.
+    """
+    import matplotlib.pyplot as plt
+
+    active = profiles[(profiles["n_sessions"] >= min_sessions) & profiles["session_gap_cv"].notna()].copy()
+    if active.empty or "testing_fraction" not in active.columns:
+        print("  (nothing to plot for testing-conditional)")
+        return
+    testing_sessions = (active["testing_fraction"] * active["n_sessions"]).round()
+    active["regular_testing"] = testing_sessions >= testing_regular_min
+
+    fig, axes = plt.subplots(1, 2, figsize=(14.0, 6.0), sharex=True, sharey=True)
+    fig.suptitle(
+        f"Coverage vs CV, conditioned on regular testing access (≥ {testing_regular_min} testing sessions)",
+        fontsize=12,
+        fontweight="bold",
+    )
+    for ax, (title, sub) in zip(
+        axes,
+        [
+            ("regularly accesses testing assets", active[active["regular_testing"]]),
+            ("does not", active[~active["regular_testing"]]),
+        ],
+    ):
+        if len(sub):
+            ax.scatter(
+                sub["coverage_fraction"].clip(lower=1e-6),
+                sub["session_gap_cv"].clip(lower=1e-3),
+                c=np.log10(sub["n_sessions"].clip(lower=1)),
+                s=6 + 30 * np.log10(sub["n_sessions"].clip(lower=1)),
+                cmap="viridis",
+                alpha=0.6,
+                linewidths=0,
+            )
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.axhline(0.1, color="crimson", ls="--", lw=0.8)
+        ax.axvline(0.02, color="crimson", ls="--", lw=0.8)
+        ax.set_xlabel("archive coverage fraction")
+        ax.set_title(f"{title}  (n={len(sub):,})", fontsize=9)
+    axes[0].set_ylabel("session gap CV")
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Saved {out_path}")
+
+
 def _cache_paths(cache_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     base = cache_dir / "analysis_cache"
     return base / "ip_behavior_profiles.parquet", base / "ip_behavior_profiles.csv.gz"
@@ -481,6 +557,13 @@ def main() -> None:
     parser.add_argument("--no-encryption", action="store_true")
     parser.add_argument("--testing-asset-file", type=pathlib.Path, default=None)
     parser.add_argument("--min-sessions", type=int, default=20, help="Timing-score IPs with >= this many sessions")
+    parser.add_argument(
+        "--testing-regular-min",
+        type=int,
+        default=10,
+        help="An IP with >= this many testing-asset sessions is a 'regular' testing accessor (a poller), "
+        "distinct from an archive scanner that touches the testing blobs once incidentally.",
+    )
     parser.add_argument("--cache-parquet", action="store_true", help="Cache the per-IP table (salted IP hash) in cache")
     parser.add_argument("--rebuild-cache", action="store_true")
     parser.add_argument("--max-assets", type=int, default=None, help="Layout-independent smoke test over the first N")
@@ -530,11 +613,18 @@ def main() -> None:
         print("No IPs found.")
         return
 
-    report(profiles, min_sessions=args.min_sessions)
+    report(profiles, min_sessions=args.min_sessions, testing_regular_min=args.testing_regular_min)
     try:
         plot(profiles, min_sessions=args.min_sessions, out_path=args.out)
         distributions_path = args.out.with_name(f"{args.out.stem}_distributions{args.out.suffix}")
         plot_distributions(profiles, min_sessions=args.min_sessions, out_path=distributions_path)
+        testing_path = args.out.with_name(f"{args.out.stem}_testing_conditional{args.out.suffix}")
+        plot_testing_conditional(
+            profiles,
+            min_sessions=args.min_sessions,
+            testing_regular_min=args.testing_regular_min,
+            out_path=testing_path,
+        )
     except ImportError:
         print("  (matplotlib not installed — skipped the plots)")
 
