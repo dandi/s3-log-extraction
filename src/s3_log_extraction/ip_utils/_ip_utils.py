@@ -55,15 +55,23 @@ def _ip_in_cidr(ip_address: str, cidr_address: str) -> bool:
 
 
 @functools.lru_cache
+def _fetch_github_meta() -> dict:
+    """Fetch (once) the GitHub meta document, shared by the ``GitHub`` and ``GH-actions`` services."""
+    import requests
+
+    return requests.get(url="https://api.github.com/meta").json()
+
+
+@functools.lru_cache
 def _request_cidr_range(service_name: str) -> dict:
     """Cache (in-memory) the requests to external services."""
     import requests
 
     match service_name:
         case "GitHub" | "GH-actions":
-            github_cidr_request = requests.get(url="https://api.github.com/meta").json()
-
-            return github_cidr_request
+            # Both services derive from the same meta document; fetch it once (see _fetch_github_meta)
+            # so the endpoint is not hit twice when the resolver builds every service's ranges.
+            return _fetch_github_meta()
         case "AWS":
             aws_cidr_request = requests.get(url="https://ip-ranges.amazonaws.com/ip-ranges.json").json()
 

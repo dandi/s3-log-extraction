@@ -48,6 +48,7 @@ def mocked_service_listings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Serve the published listings from fixtures rather than over the network, and report the URLs requested."""
     requested_urls = []
     s3_log_extraction.ip_utils._ip_utils._request_cidr_range.cache_clear()
+    s3_log_extraction.ip_utils._ip_utils._fetch_github_meta.cache_clear()
     s3_log_extraction.ip_utils._ip_utils._get_cidr_address_ranges_and_subregions.cache_clear()
 
     def _fake_get(url: str) -> _FakeResponse:
@@ -58,6 +59,7 @@ def mocked_service_listings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     yield requested_urls
 
     s3_log_extraction.ip_utils._ip_utils._request_cidr_range.cache_clear()
+    s3_log_extraction.ip_utils._ip_utils._fetch_github_meta.cache_clear()
     s3_log_extraction.ip_utils._ip_utils._get_cidr_address_ranges_and_subregions.cache_clear()
 
 
@@ -66,7 +68,7 @@ def test_fetch_service_networks_covers_every_known_service(mocked_service_listin
     """Every known service should be fetched from its own published endpoint."""
     service_networks = fetch_service_networks()
 
-    assert sorted(service_networks.keys()) == ["AWS", "GCP", "GitHub", "VPN"]
+    assert sorted(service_networks.keys()) == ["AWS", "GCP", "GH-actions", "GitHub", "VPN"]
     assert sorted(mocked_service_listings) == sorted(_URL_TO_PAYLOAD.keys())
 
 
