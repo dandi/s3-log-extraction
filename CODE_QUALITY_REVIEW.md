@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Group 1 (CL-1, CL-2, CL-9, CL-18, DC-4, CON-3) has been applied; those six entries are marked APPLIED below.
-The remaining 41 are still proposals awaiting approval.
+Group 1 (CL-1, CL-2, CL-9, CL-18, DC-4, CON-3) and Group 2 (DC-1, DC-2, DC-5) have been applied; those nine
+entries are marked APPLIED below. The remaining 38 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ is real.
 
 ### Dead Code
 
-#### DC-1 — `_ip_in_cidr` is unreferenced, and takes `import warnings` with it
+#### DC-1 — APPLIED. `_ip_in_cidr` is unreferenced, and takes `import warnings` with it
 
 - **Location**: `src/s3_log_extraction/ip_utils/_ip_utils.py` (lines 41-54, `_ip_in_cidr`; plus `import warnings` at line 4)
 - **Issue**: The function has no callers anywhere. It was superseded in v1.11.2 by the prefix-table matching in
@@ -98,7 +98,7 @@ is real.
 - **Verification**: `grep -rn "_ip_in_cidr\|warnings" src/s3_log_extraction/ip_utils/_ip_utils.py` should return
   nothing after the change, then `python -m pytest tests/ -m "not remote" -q`.
 
-#### DC-2 — Three unreachable `None` guards in the remote URL scan
+#### DC-2 — APPLIED. Three unreachable `None` guards in the remote URL scan
 
 - **Location**: `src/s3_log_extraction/extractors/_remote_s3_log_access_extractor.py` (lines 297-298, 307-308, 331-332, inside `_get_unprocessed_s3_urls_from_remote`)
 - **Issue**: Each guard reads `if months_result is None: continue` (and the `days_result` / `s3_urls_result`
@@ -143,7 +143,7 @@ is real.
   `pass` after a docstring compiles to nothing.
 - **Verification**: `ruff check --select PIE790 src/` returns clean, then `python -m pytest tests/test_cli_integration.py -q`.
 
-#### DC-5 — An index assignment that cannot affect the output
+#### DC-5 — APPLIED. An index assignment that cannot affect the output
 
 - **Location**: `src/s3_log_extraction/summarize/_generate_summaries.py` (line 524, in `_summarize_dataset_by_day`)
 - **Issue**: `summary_table.index = range(len(summary_table))` renumbers the index immediately before
@@ -962,7 +962,7 @@ ruff with those rules selected and seeing it come back clean. No judgement calls
 Verification: `ruff check --select RET504,C416,C420,SIM118,PIE790 src/ tests/` returns clean, then
 `python -m pytest tests/ -m "not remote" -q` (expect 278 passed, 3 deselected).
 
-**Group 2 — Dead code removal.** DC-1, DC-2, DC-5.
+**Group 2 — Dead code removal. APPLIED.** DC-1, DC-2, DC-5.
 Grouped because each is a deletion justified by a reachability argument rather than a linter, so they want the
 same kind of review attention. Keep them out of Group 1 so that a reviewer who disagrees with one reachability
 argument can revert this group alone.

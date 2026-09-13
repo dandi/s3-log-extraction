@@ -291,9 +291,6 @@ class RemoteS3LogAccessExtractor:
             months_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
-            if months_result is None:
-                continue
-
             months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
 
             for month in months:
@@ -301,9 +298,6 @@ class RemoteS3LogAccessExtractor:
                 days_result = _deploy_subprocess(
                     command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
                 )
-                if days_result is None:
-                    continue
-
                 dates = [f"{year}-{month}-{line.split(" ")[-1].rstrip("/\n")}" for line in days_result.splitlines()]
                 dates_with_logs.extend(dates)
 
@@ -325,8 +319,6 @@ class RemoteS3LogAccessExtractor:
             s3_urls_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
-            if s3_urls_result is None:
-                continue
             s3_urls.extend(
                 [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
             )

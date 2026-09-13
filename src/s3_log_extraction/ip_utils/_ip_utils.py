@@ -1,7 +1,6 @@
 import functools
 import ipaddress
 import pathlib
-import warnings
 
 from ..utils.encryption import read_text_from_file, write_text_to_file
 
@@ -36,22 +35,6 @@ def _write_ips_to_file(file_path: pathlib.Path, ips: list[str], use_encryption: 
     """
     text = "\n".join(ips) + ("\n" if ips else "")
     write_text_to_file(file_path=file_path, text=text, use_encryption=use_encryption)
-
-
-def _ip_in_cidr(ip_address: str, cidr_address: str) -> bool:
-    """Return True if ``ip_address`` falls within ``cidr_address``, False otherwise.
-
-    Uses ``strict=False`` to accept CIDRs that have host bits set, and returns
-    ``False`` for any entry that is not a valid CIDR string.
-    """
-    try:
-        return ipaddress.ip_address(address=ip_address) in ipaddress.ip_network(address=cidr_address, strict=False)
-    except ValueError as exception:
-        warnings.warn(
-            message=(f"Skipping invalid CIDR entry {cidr_address!r} while checking IP {ip_address!r}: {exception}"),
-            stacklevel=2,
-        )
-        return False
 
 
 @functools.lru_cache

@@ -521,7 +521,6 @@ def _summarize_dataset_by_day(
         }
     )
     summary_table.sort_values(by="date", inplace=True)
-    summary_table.index = range(len(summary_table))
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
 
