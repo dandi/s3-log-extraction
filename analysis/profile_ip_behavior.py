@@ -369,10 +369,20 @@ def report(profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int =
         by_svc = active.loc[regular].groupby("service")["n_sessions"].sum().sort_values(ascending=False)
         for svc, s in by_svc.items():
             print(f"      {svc:>10}: {int(s):>12,} sessions")
-        new_beyond = int((regular & ~systematic).sum())
+        new_mask = regular & ~systematic
+        new_sessions = int(active.loc[new_mask, "n_sessions"].sum())
+        combined_sessions = int(active.loc[systematic | regular, "n_sessions"].sum())
         print(
-            f"    of the {int(regular.sum()):,} regular testing-accessors, {new_beyond:,} are NOT already "
-            f"flagged by coverage/metronomic (what this axis adds)"
+            f"    of the {int(regular.sum()):,} regular testing-accessors, {int(new_mask.sum()):,} are NOT already "
+            f"flagged by coverage/metronomic —"
+        )
+        print(
+            f"      those add {new_sessions:,} sessions ({100 * new_sessions / max(total_sessions, 1):.2f}% of all) "
+            f"beyond coverage/metronomic (its true marginal contribution)"
+        )
+        print(
+            f"    combined (systematic OR regular-testing): {combined_sessions:,} sessions "
+            f"({100 * combined_sessions / max(total_sessions, 1):.2f}% of all)"
         )
 
     print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | test% | CV | domP | MB/sess):")
