@@ -1,10 +1,17 @@
 # Code Quality Review
 
-Functionality-preserving review of `s3-log-extraction` at commit `c44178a`, covering all 40 modules under
-`src/s3_log_extraction/` (about 4,500 lines), the six `.awk` scripts, `tools/`, `tests/` (about 3,500 lines),
-and the manifest and CI configuration.
+Functionality-preserving review of `s3-log-extraction`, covering all 40 modules under
+`src/s3_log_extraction/` (about 4,500 lines), the six `.awk` scripts, `tools/`, `tests/`, and the manifest and
+CI configuration.
 
 No changes have been applied. Every finding below was traced to its call sites before being recorded.
+
+The review was first written against `c44178a` and has since been rebased onto `e06bd63`, which merged
+[#301](https://github.com/dandi/s3-log-extraction/pull/301). That pull request added 1,464 lines across 13 new
+test modules and changed **nothing** under `src/`, so every source line number cited below still holds. It did
+change three things in this report, each marked where it applies: the verification baseline rose from 175 tests
+to 278, NV-12 is now closed, and NV-7 and CL-10 are both corroborated by the new tests rather than merely
+argued for.
 
 ## Summary
 
@@ -32,7 +39,8 @@ The second theme is **a pervasive low-grade idiom drift** that a linter would ca
 are 21 instances of assigning a value to a local and immediately returning it, four unnecessary set
 comprehensions, three unnecessary `pass` statements, and three uses of `any()` as a non-emptiness test. None of
 these matter alone. Together they are about 40 lines of noise spread across 12 files, and they are all
-mechanically verifiable.
+mechanically verifiable. Worth noting that the 13 test modules added by #301 introduce **no** new findings under
+that extended rule set, so this drift is confined to code written before it.
 
 The third theme is **drift from the project's own AGENTS.md rules**. Two function-local imports in
 `utils/inventory.py` are not there to break a cycle, and I confirmed by experiment that they import fine at
@@ -54,12 +62,13 @@ its two guards unreachable.
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
 | Dead code | 5 | 1 | 0 | 6 |
-| Duplication | 9 | 6 | 0 | 15 |
+| Duplication | 9 | 7 | 0 | 16 |
 | Consolidation | 3 | 4 | 0 | 7 |
 | Cleanup | 12 | 5 | 1 | 18 |
-| **Total** | **29** | **16** | **1** | **46** |
+| **Total** | **29** | **17** | **1** | **47** |
 
-Plus 12 items under **Needs Verification**, which are observations rather than proposed changes.
+Plus 12 items under **Needs Verification**, which are observations rather than proposed changes. One of those
+(NV-12) has since been closed by #301, and two more (NV-7, CL-10) are now corroborated by its new tests.
 
 All confidence ratings are about *safety* (whether the change preserves behavior), not about whether the finding
 is real.
@@ -437,20 +446,32 @@ is real.
 - **Verification**: `python -m pytest tests/test_ip_utils.py -q` and `python -m pytest tests/test_remote.py --collect-only -q`
   (the latter is `remote`-marked and cannot run here, so at least confirm it still collects).
 
-#### DUP-14 — `_build_inventory_directory` is implemented twice with drifted signatures
+#### DUP-14 — `_build_inventory_directory` is implemented three times with drifted signatures
 
-- **Location**: `tests/test_log_bucket_stats.py` (line 19) and `tests/test_remote_extractor_inventory.py` (line 62)
-- **Issue**: Both build a synthetic S3 inventory tree, and the bodies largely agree, but the signatures have
-  drifted. One takes `rows: list[tuple]` with a required `file_schema`; the other takes `keys: list[str]` with
-  `file_schema: str = "Bucket, Key"` defaulted. The second is the special case of the first where every row is
-  `(source_bucket, key)`.
-- **Proposed change**: Keep the general `rows` form in `tests/conftest.py` and express the `keys` form in terms
-  of it, then update the nine call sites across the two files.
-- **Confidence it's safe**: **Medium**. Behavior-neutral in principle, since one is a special case of the other,
-  but it touches nine call sites in two modules and the two bodies must be diffed in full first to confirm the
-  generated trees are identical.
-- **Verification**: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py -q`
-  (about 90 tests).
+- **Location**: `tests/test_log_bucket_stats.py` (line 19), `tests/test_remote_extractor_inventory.py` (line 62), and `tests/test_remote_validator.py` (line 15)
+- **Issue**: All three build a synthetic S3 inventory tree, and the bodies largely agree, but the signatures have
+  drifted. The first takes `rows: list[tuple]` with a required `file_schema`; the other two take `keys: list[str]`
+  with `file_schema: str = "Bucket, Key"` defaulted. The `keys` form is the special case of the `rows` form where
+  every row is `(source_bucket, key)`.
+- **Proposed change**: Keep the general `rows` form in `tests/conftest.py`, express the `keys` form in terms of
+  it, then update the call sites across the three files.
+- **Confidence it's safe**: **Medium**. Behavior-neutral in principle, since one form is a special case of the
+  other, but it touches many call sites across three modules and the three bodies must be diffed in full first to
+  confirm the generated trees are identical.
+- **Verification**: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py tests/test_remote_validator.py -q`.
+
+#### DUP-16 — Two divergent `_make_log_line` builders
+
+- **Location**: `tests/test_downloads_logic_pre_validator.py` (line 16) and `tests/test_timestamps_parsing_pre_validator.py` (line 12)
+- **Issue**: Both build a synthetic S3 log line, under the same name, with different signatures:
+  `(status, bytes_sent, total_bytes)` against `(datetime, request_type="REST.GET.OBJECT", status="200")`. Only
+  `status` is common. Two same-named builders of the same artifact will keep drifting as more pre-validator
+  tests are added, and the second shadows the stdlib `datetime` name in its parameter list.
+- **Proposed change**: One shared builder in `tests/conftest.py` with every field defaulted, so each test
+  overrides only the fields it cares about. Rename the `datetime` parameter to `bracketed_datetime`.
+- **Confidence it's safe**: **Medium**. The merged builder must emit byte-identical lines for the arguments each
+  call site passes today, which means diffing both templates field by field before merging.
+- **Verification**: `python -m pytest tests/test_downloads_logic_pre_validator.py tests/test_timestamps_parsing_pre_validator.py -q`.
 
 #### DUP-15 — The validator protocol list is written out three times
 
@@ -704,9 +725,12 @@ is real.
   `list(running_pids)[0]` on line 37.
 - **Proposed change**: Change the annotation to `set[str]`.
 - **Confidence it's safe**: **High**. No `beartype` decorator on this function, so the annotation is not enforced
-  at runtime, and correcting it cannot raise. The returned object is unchanged.
+  at runtime, and correcting it cannot raise. The returned object is unchanged. #301 settles this independently:
+  `tests/test_stop_extraction.py:29` asserts `get_running_pids() == {"101", "102"}` against a set literal, and
+  line 78 declares a stub as `def _fake_get_running_pids() -> set[str]`. The test suite already treats the
+  return as a set; only the annotation disagrees.
 - **Verification**: `python -c "from s3_log_extraction.extractors import get_running_pids; print(type(get_running_pids()))"`
-  prints `<class 'set'>`, then `python -m pytest tests/ -m "not remote" -q`.
+  prints `<class 'set'>`, then `python -m pytest tests/test_stop_extraction.py -q`.
 
 #### CL-11 — `_request_cidr_range` is annotated `-> dict` but one branch returns a list
 
@@ -863,14 +887,24 @@ and GitHub ranges for the service-matching tests to mean anything. The rest look
 expectations would need reworking. **Question:** which of these are deliberate? Enumerate with
 `grep -rhoE '"[0-9]{1,3}(\.[0-9]{1,3}){3}"' tests/ | sort -u`.
 
-**NV-7 — `BaseValidator.__hash__` and the abstract `_run_validation` body never execute.** All five concrete
-validators override `__hash__`, and `BaseValidator` is an `abc.ABC` with an abstract method, so it cannot be
-instantiated; its `__hash__` body (lines 16-19) is therefore unreachable within this repository. The same applies
-to the `NotImplementedError` on lines 49-50, since no subclass calls `super()._run_validation()`. **Both are
-nonetheless public extension surface**: `BaseValidator` is exported in `validate.__all__`, so a downstream
-subclass that does not override `__hash__` relies on it. Do not remove either. Recorded here so that a future
-reviewer does not mistake them for dead code. Confirmed with `grep -rn "super()" src/`, which shows only
-`super().__init__()` calls.
+**NV-7 — `BaseValidator.__hash__` and the abstract `_run_validation` body are live, not dead.** No concrete
+validator in `src/` reaches either: all five override `__hash__`, and `BaseValidator` is an `abc.ABC` with an
+abstract method, so it cannot be instantiated. Both are nonetheless public extension surface, since
+`BaseValidator` is exported in `validate.__all__`.
+
+**This is no longer a judgement call. As of #301 both are directly tested.**
+`tests/test_base_validator.py:10` defines `class _CountingValidator(BaseValidator)` which does *not* override
+`__hash__`, and line 158 asserts
+`validator.record_file_path.name == f"_CountingValidator_{hex(hash(validator))[2:]}.txt"`, so
+`BaseValidator.__hash__` runs and its exact value is pinned. Line 166 defines a `_DeferringValidator` whose
+`_run_validation` calls `super()._run_validation(...)` inside
+`pytest.raises(NotImplementedError, match="Validation rule has not been implemented")`, so the
+`NotImplementedError` body executes too.
+
+**Do not remove either, and in particular do not fold DUP-3's shared helper into `BaseValidator.__hash__`.**
+Doing so would change the hash for any subclass that does not override it, breaking
+`tests/test_base_validator.py` outright. DUP-3 is deliberately scoped to a free function that the five
+subclasses call, precisely to avoid this.
 
 **NV-8 — The broader extractor inheritance question.** Beyond DUP-2 and DUP-12, `RemoteS3LogAccessExtractor`
 duplicates the first seven lines of `S3LogAccessExtractor.__init__` verbatim, the record-corruption check with
@@ -901,10 +935,9 @@ always write their records to the configured default even though almost every ot
 `--cache` override. `RemoteS3BucketValidator.__init__` does accept `cache_directory`. **Question:** is this an
 intentional asymmetry? Adding the parameter would change where files are written.
 
-**NV-12 — Three pre-validators have no dedicated test module.** There are test files for `downloads_logic` and
-`extraction_heuristic`, but none for `http_empty_split`, `http_split_count`, or `timestamps_parsing`. Recorded as
-a coverage gap only. Writing tests is outside the scope of a functionality-preserving review, and any new tests
-would need the `ai_generated` marker per AGENTS.md. Confirm with `ls tests/test_*pre_validator*.py`.
+**NV-12 — CLOSED by #301.** This recorded that `http_empty_split`, `http_split_count`, and `timestamps_parsing`
+had no dedicated test module. All three now do, and `ls tests/test_*pre_validator*.py` returns five files. No
+action remains. Kept in the list so the numbering stays stable for anyone working from an earlier copy.
 
 ---
 
@@ -921,7 +954,7 @@ Per AGENTS.md, every group that touches `src/` needs: `pre-commit` run before co
 These belong together because every one is flagged by a ruff rule, so the whole group is verified by re-running
 ruff with those rules selected and seeing it come back clean. No judgement calls.
 Verification: `ruff check --select RET504,C416,C420,SIM118,PIE790 src/ tests/` returns clean, then
-`python -m pytest tests/ -m "not remote" -q` (expect 175 passed, 3 deselected).
+`python -m pytest tests/ -m "not remote" -q` (expect 278 passed, 3 deselected).
 
 **Group 2 — Dead code removal.** DC-1, DC-2, DC-5.
 Grouped because each is a deletion justified by a reachability argument rather than a linter, so they want the
@@ -985,10 +1018,10 @@ because by this point the duplication that obscures them has already gone.
 Verification: `python -m pytest tests/ -m "not remote" -q` in full, and diff the generated summary tree against
 `tests/expected_output/` directly.
 
-**Group 12 — Test-suite cleanup.** DUP-13, DUP-14, CL-18 (the test occurrences).
+**Group 12 — Test-suite cleanup.** DUP-13, DUP-14, DUP-16, CL-18 (the test occurrences).
 Last because it touches no production code and can land independently of everything above. No version bump and
 no `CHANGELOG.md` entry are needed for a `tests/`-only change, per the AGENTS.md bump rule.
-Verification: `python -m pytest tests/ -m "not remote" -q` must report the same count, 175 passed.
+Verification: `python -m pytest tests/ -m "not remote" -q` must report the same count, 278 passed.
 
 **Deliberately not scheduled:** CL-5 (the `config/_config.py` site needs a maintainer's sign-off), CL-14 and
 CL-17 (worth doing but each needs a human eyeball on progress output and on a float comparison respectively), and
