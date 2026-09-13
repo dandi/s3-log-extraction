@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1, 2 and 3 have been applied, nineteen entries in all, and are marked APPLIED below. The remaining 28
-are still proposals awaiting approval.
+Groups 1 through 4 have been applied, twenty-one entries in all, and are marked APPLIED below. The remaining
+26 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -70,7 +70,7 @@ are still proposals awaiting approval.
 | Cleanup | 12 | 5 | 1 | 18 |
 | **Total** | **29** | **17** | **1** | **47** |
 
-Plus 12 items under **Needs Verification**, which are observations rather than proposed changes. One of those
+Plus 14 items under **Needs Verification**, which are observations rather than proposed changes. One of those
 (NV-12) has since been closed by #301, and two more (NV-7, CL-10) are now corroborated by its new tests.
 
 All confidence ratings are about *safety* (whether the change preserves behavior), not about whether the finding
@@ -158,7 +158,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`. The golden files under
   `tests/expected_output/` pin the exact bytes of `by_day.tsv`, so any change in output fails the suite.
 
-#### DC-6 — The `hatch-vcs` version source is never consulted
+#### DC-6 — APPLIED. The `hatch-vcs` version source is never consulted
 
 - **Location**: `pyproject.toml` (lines 2 `requires = [..., "hatch-vcs"]` and 5-6 `[tool.hatch.version] source = "vcs"`, against line 15 `version="1.11.3"`)
 - **Issue**: Hatchling reads `[tool.hatch.version]` only when `version` appears in `[project].dynamic`. Here
@@ -166,9 +166,10 @@ is real.
   installed distribution reports `1.11.3`, the literal. AGENTS.md instructing a manual bump of this field
   confirms the static value is the intended mechanism.
 - **Proposed change**: Remove lines 5-6 and drop `hatch-vcs` from `build-system.requires`.
-- **Confidence it's safe**: **Medium**. The evidence that the literal wins is direct (`pip show` reports
-  `1.11.3` with no `dynamic` declared), but this touches the build backend, so it should be confirmed against a
-  real build rather than by inspection, and it belongs in its own commit.
+- **Confidence it's safe**: **High**, upgraded from Medium once a real build confirmed it. Wheels built before
+  and after the change are byte-identical: the same 56 files with the same contents, and the same
+  `Metadata-Version`, `Name`, `Version` and `Requires-Python`. Both report `Version: 1.11.4`, the static literal,
+  rather than a VCS-derived version such as `1.11.5.dev3+g436a9e5`.
 - **Verification**: `python -m build` before and after, then compare the `Version:` field of the generated
   `*.dist-info/METADATA` in both wheels. They must match.
 
@@ -939,6 +940,18 @@ always write their records to the configured default even though almost every ot
 `--cache` override. `RemoteS3BucketValidator.__init__` does accept `cache_directory`. **Question:** is this an
 intentional asymmetry? Adding the parameter would change where files are written.
 
+**NV-13 — Is `git` still needed in `Dockerfile.dev`?** It is installed there (lines 6-8) and the comment above
+it said the reason was `hatch-vcs` versioning. DC-6 removed that versioning, so the stated reason is gone and
+the comment has been corrected to say so. Whether the `apt-get install -y git` itself should go depends on
+whether anything uses `git` inside the image, which cannot be checked from a review. Left in place; removing it
+is a change to the published image and wants its own verification.
+
+**NV-14 — Are the `git fetch --prune --unshallow --tags` steps still needed?** They appear in
+`remote_testing.yml:33`, `testing.yml:27` and `build_and_upload_docker_image_latest.yml:25`. Fetching full
+history and tags is what VCS versioning requires, so DC-6 likely makes them unnecessary, and dropping them
+would speed every run. Left in place: something else may rely on full history, and `version_check.yml` is not
+the answer since it does its own `fetch-depth: 0`. Worth one deliberate check rather than an assumption.
+
 **NV-12 — CLOSED by #301.** This recorded that `http_empty_split`, `http_split_count`, and `timestamps_parsing`
 had no dedicated test module. All three now do, and `ls tests/test_*pre_validator*.py` returns five files. No
 action remains. Kept in the list so the numbering stays stable for anyone working from an earlier copy.
@@ -976,7 +989,7 @@ Verification: `python -m pytest tests/ -m "not remote" -q`, plus
 `python -c "from s3_log_extraction.extractors import get_running_pids; print(type(get_running_pids()))"` prints
 `<class 'set'>`.
 
-**Group 4 — Configuration hygiene.** DC-3, and DC-6 as a *separate commit within the group*.
+**Group 4 — Configuration hygiene. APPLIED.** DC-3, and DC-6 as a separate commit within the group.
 DC-3 is proven by running ruff. DC-6 touches the build backend and needs a real `python -m build` to verify, so
 it must be its own commit and could reasonably be deferred entirely.
 Verification: `ruff check .` reports "All checks passed!" and `pre-commit run --all-files` passes. For DC-6,
