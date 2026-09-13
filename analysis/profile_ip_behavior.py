@@ -10,14 +10,18 @@ this profiler measures the two axes that do:
   * timing irregularity — coefficient of variation of the gaps between an IP's view
     sessions, and the fraction of those gaps clustered at a dominant period. Low CV or a
     strong dominant period = metronomic = bot.
-  * selection randomness — how the IP spreads its sessions across the assets it touches:
-    an uneven, concentrated scatter (a human returning to a few files of interest) versus
-    a uniform enumeration (the same one-or-few touches applied to every asset). Measured
-    by the normalized entropy of the per-asset session-count distribution and by archive
-    coverage.
+  * archive coverage — the fraction of ALL assets an IP touched. A human touches a tiny
+    fraction; a systematic scanner (metadata scrub, checksum sweep, mirror) touches an
+    implausibly large one. This is the "enumeration" signal.
 
 Read shape (mean bytes per session) is carried as a descriptor — a checksum scanner reads
 whole files, a metadata scraper reads headers — but it is not a decision axis on its own.
+
+The per-asset session-count entropy (``selection_entropy``) is ALSO computed and kept in the
+table, but the first real run showed it is ~1.0 for nearly every high-activity IP — because
+one-session-per-asset is the norm, so touching many assets once each looks "uniform" whether
+it is a scanner or a researcher with broad interests. It measures revisit-evenness, not the
+randomness of which assets are chosen, so it is a descriptor only, NOT a decision axis.
 
 This is a CHARACTERIZATION tool, not a shipped classifier: it emits a per-IP feature table
 and a summary so the archetypes (pollers, scrapers, checksum scanners, real users) can be
@@ -280,32 +284,61 @@ def report(profiles: pd.DataFrame, min_sessions: int, top_n: int = 25) -> None:
     total_sessions = int(profiles["n_sessions"].sum())
     print(f"\n=== Per-IP behavioral profiles ({len(profiles):,} IPs, {total_sessions:,} sessions) ===")
 
+    # --- Concentration (threshold-free, robust): a few IPs may dominate the whole view count. ---
+    ordered = profiles["n_sessions"].sort_values(ascending=False).to_numpy()
+    cumulative = ordered.cumsum()
+    print("\n  session concentration (share of ALL sessions held by the top IPs):")
+    for k in [1, 5, 10, 25, 100]:
+        if k <= len(ordered):
+            print(f"    top {k:>4}: {100 * cumulative[k - 1] / max(total_sessions, 1):5.1f}%")
+
     active = profiles[profiles["n_sessions"] >= min_sessions].copy()
-    print(f"  IPs with >= {min_sessions} sessions (timing-scored): {len(active):,}")
+    print(f"\n  IPs with >= {min_sessions} sessions (timing-scored): {len(active):,}")
     if active.empty:
         print("  (none active enough to score timing)")
         return
 
-    # Regular = metronomic timing; systematic-selection = near-uniform spread across many assets.
-    regular = (active["session_gap_cv"] <= 0.1) | (active["dominant_period_fraction"] >= 0.6)
-    broad_uniform = (active["selection_entropy"] >= 0.9) & (active["n_distinct_assets"] >= 20)
-    systematic = regular | broad_uniform
+    # --- Two SOUND axes (selection_entropy is a descriptor only — see the note below). ---
+    # 1) Metronomic timing: a fixed cadence between sessions.
+    metronomic = (active["session_gap_cv"] <= 0.1) | (active["dominant_period_fraction"] >= 0.6)
+    m_sessions = int(active.loc[metronomic, "n_sessions"].sum())
+    print(
+        f"\n  metronomic timing (CV<=0.1 or dominant>=0.6): {int(metronomic.sum()):,} IPs, "
+        f"{m_sessions:,} sessions ({100 * m_sessions / max(total_sessions, 1):.2f}%)"
+    )
+
+    # 2) Archive coverage: the fraction of ALL assets an IP touched. A human touches a tiny
+    #    fraction; a systematic scanner touches an implausibly large one. This is the real
+    #    "enumeration" signal (selection_entropy is ~1 for almost every high-activity IP, since
+    #    one-session-per-asset is the norm, so it does NOT separate scanners from broad humans).
+    cov = active["coverage_fraction"]
+    print("\n  archive-coverage distribution among active IPs (fraction of all assets touched):")
+    for q in [0.5, 0.9, 0.99, 0.999, 1.0]:
+        print(f"    {q * 100:>5g}th pct: {cov.quantile(q):.5f}")
+    print("\n  IPs above coverage thresholds (systematic-enumeration candidates):")
+    for threshold in [0.005, 0.01, 0.02, 0.05, 0.10]:
+        mask = cov >= threshold
+        s = int(active.loc[mask, "n_sessions"].sum())
+        print(
+            f"    coverage >= {threshold:>5.1%}: {int(mask.sum()):>5,} IPs, "
+            f"{s:>12,} sessions ({100 * s / max(total_sessions, 1):5.1f}% of all)"
+        )
+
+    # Combined systematic candidate = metronomic OR broadly-covering, at an illustrative 2% coverage.
+    systematic = metronomic | (cov >= 0.02)
     sys_sessions = int(active.loc[systematic, "n_sessions"].sum())
     print(
-        f"  systematic (regular timing OR broad-uniform selection): {int(systematic.sum()):,} IPs, "
+        f"\n  systematic (metronomic OR coverage>=2%): {int(systematic.sum()):,} IPs, "
         f"{sys_sessions:,} sessions ({100 * sys_sessions / max(total_sessions, 1):.2f}% of all)"
     )
-    print(f"    - metronomic timing (CV<=0.1 or dominant>=0.6): {int(regular.sum()):,} IPs")
-    print(f"    - broad-uniform selection (entropy>=0.9, >=20 assets): {int(broad_uniform.sum()):,} IPs")
 
-    print("\n  candidate archetypes among active IPs:")
-    poller = regular & (active["n_distinct_assets"] <= 5)
-    scraper = broad_uniform & (active["mean_session_bytes"] < 1e6)
-    checksum = broad_uniform & (active["mean_session_bytes"] >= 1e6)
-    print(f"    poller (regular, <=5 assets):                  {int(poller.sum()):,}")
-    print(f"    metadata scraper (broad, uniform, small):      {int(scraper.sum()):,}")
-    print(f"    checksum scanner (broad, uniform, large):      {int(checksum.sum()):,}")
-    print(f"    irregular / idiosyncratic (human-like):        {int((~systematic).sum()):,}")
+    # --- Label overlay: which SERVICE the systematic, high-volume actors resolve to. The point is
+    #     that the biggest scanners are geographic, invisible to the GH-actions and cloud/VPN filters. ---
+    print("\n  systematic candidates by service label (sessions):")
+    sys_rows = active[systematic]
+    by_service = sys_rows.groupby("service")["n_sessions"].sum().sort_values(ascending=False)
+    for service, s in by_service.items():
+        print(f"    {service:>10}: {int(s):>12,} ({100 * s / max(sys_sessions, 1):5.1f}% of systematic)")
 
     print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | entropy | CV | domP | MB/sess):")
     cols = [
@@ -336,23 +369,24 @@ def plot(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> N
     fig, ax = plt.subplots(figsize=(8.5, 6.5))
     sizes = 6 + 30 * np.log10(active["n_sessions"].clip(lower=1))
     scatter = ax.scatter(
-        active["selection_entropy"],
+        active["coverage_fraction"].clip(lower=1e-6),
         active["session_gap_cv"].clip(lower=1e-3),
-        c=active["coverage_fraction"],
+        c=np.log10(active["n_sessions"].clip(lower=1)),
         s=sizes,
         cmap="viridis",
         alpha=0.6,
         linewidths=0,
     )
+    ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("selection entropy  (0 = concentrated / human, 1 = uniform sweep / scraper)")
+    ax.set_xlabel("archive coverage fraction  (right = systematic enumeration / scanner)")
     ax.set_ylabel("session gap CV  (low = metronomic / bot, high = irregular / human)")
     ax.set_title(
-        f"Per-IP behavior ({len(active):,} IPs ≥ {min_sessions} sessions)\ncolor = archive coverage", fontsize=10
+        f"Per-IP behavior ({len(active):,} IPs ≥ {min_sessions} sessions)\ncolor = log₁₀ sessions", fontsize=10
     )
     ax.axhline(0.1, color="crimson", ls="--", lw=0.8)
-    ax.axvline(0.9, color="crimson", ls="--", lw=0.8)
-    fig.colorbar(scatter, ax=ax, label="archive coverage fraction")
+    ax.axvline(0.02, color="crimson", ls="--", lw=0.8)
+    fig.colorbar(scatter, ax=ax, label="log₁₀ sessions")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"Saved {out_path}")
