@@ -117,16 +117,6 @@ line-length = 120
 [tool.ruff.lint]
 select = ["F", "E", "I"]
 ignore = [
-    "PTH123",
-    "D203",
-    "D212",
-    "T201",
-    "FIX002",
-    "TD003",
-    "TD002",
-    "S101",
-    "ICN001",
-    "INP001",
     "F821",  # Only way to do annotation of lazy imports...
 ]
 fixable = ["ALL"]

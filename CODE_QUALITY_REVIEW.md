@@ -116,7 +116,7 @@ is real.
   remote extractor sets it. This code path needs live S3 and is only exercised by the `remote`-marked tests, so
   also confirm with `python -m pytest tests/ -m "not remote" -q` that nothing else regresses.
 
-#### DC-3 — Ten of the eleven `ruff` ignore entries are inert
+#### DC-3 — APPLIED. Ten of the eleven `ruff` ignore entries are inert
 
 - **Location**: `pyproject.toml` (`[tool.ruff.lint] ignore`, the entries `PTH123`, `D203`, `D212`, `T201`, `FIX002`, `TD003`, `TD002`, `S101`, `ICN001`, `INP001`)
 - **Issue**: `select = ["F", "E", "I"]` resolves to Pyflakes, pycodestyle errors, and isort. None of the ten
@@ -126,8 +126,9 @@ is real.
 - **Proposed change**: Reduce the `ignore` list to just the `F821` entry, keeping its existing comment.
 - **Confidence it's safe**: **High**, verified by experiment rather than by reasoning about prefix matching. With
   the ten entries removed and only `F821` ignored, `ruff check .` reports "All checks passed!". With `F821` also
-  removed, it reports two `F821 Undefined name geoip2` errors at `ip_utils/_geolite2.py:141` and
-  `ip_utils/_resolver.py:131`, the lazy-import string annotations the comment refers to.
+  removed, it reports four `F821 Undefined name geoip2` errors, at `ip_utils/_geolite2.py:141`,
+  `ip_utils/_resolver.py:131` and `:167`, and `ip_utils/_update_region_code_coordinates.py:105`, the lazy-import
+  string annotations the comment refers to. (An earlier draft said two, having read a truncated `ruff` output.)
 - **Verification**: `ruff check .` must still report "All checks passed!", and `pre-commit run --all-files` must
   pass.
 
