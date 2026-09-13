@@ -437,6 +437,61 @@ def test_update_geolite2_database_force_redownloads_fresh_copy(
 
 
 @pytest.mark.ai_generated
+def test_update_geolite2_database_keeps_cached_copy_when_daily_quota_is_spent(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refresh refused for a spent daily allowance falls back to the cached copy with a warning."""
+    import requests
+
+    monkeypatch.setenv("MAXMIND_ACCOUNT_ID", "123456")
+    monkeypatch.setenv("MAXMIND_LICENSE_KEY", "test-license-key")
+
+    database_path = tmp_path / "geolite2" / GEOLITE2_DATABASE_FILE_NAME
+    database_path.parent.mkdir(parents=True)
+    database_path.write_bytes(b"cached")
+
+    mock_response = unittest.mock.MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.status_code = 429
+    mock_response.text = "Daily GeoIP database download limit reached"
+    mock_response.raise_for_status.side_effect = requests.HTTPError(
+        "429 Client Error: Too Many Requests for url: x", response=mock_response
+    )
+
+    with unittest.mock.patch("requests.get", return_value=mock_response):
+        with pytest.warns(RuntimeWarning, match="daily .* download allowance .* is spent"):
+            returned_path = update_geolite2_database(cache_directory=tmp_path, force=True)
+
+    assert returned_path == database_path
+    assert database_path.read_bytes() == b"cached", "The cached database must be left intact"
+
+
+@pytest.mark.ai_generated
+def test_update_geolite2_database_raises_on_spent_quota_without_a_cached_copy(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no copy to fall back on, a spent allowance is raised, since there is nothing to geolocate with."""
+    import requests
+
+    monkeypatch.setenv("MAXMIND_ACCOUNT_ID", "123456")
+    monkeypatch.setenv("MAXMIND_LICENSE_KEY", "test-license-key")
+
+    mock_response = unittest.mock.MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.status_code = 429
+    mock_response.text = "Daily GeoIP database download limit reached"
+    mock_response.raise_for_status.side_effect = requests.HTTPError(
+        "429 Client Error: Too Many Requests for url: x", response=mock_response
+    )
+
+    with unittest.mock.patch("requests.get", return_value=mock_response):
+        with pytest.raises(requests.HTTPError, match="429 Client Error"):
+            update_geolite2_database(cache_directory=tmp_path)
+
+    assert not (tmp_path / "geolite2" / GEOLITE2_DATABASE_FILE_NAME).exists()
+
+
+@pytest.mark.ai_generated
 def test_open_geolite2_database_warns_on_stale_copy_without_credentials(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
