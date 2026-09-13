@@ -340,22 +340,34 @@ def report(profiles: pd.DataFrame, min_sessions: int, top_n: int = 25) -> None:
     for service, s in by_service.items():
         print(f"    {service:>10}: {int(s):>12,} ({100 * s / max(sys_sessions, 1):5.1f}% of systematic)")
 
-    print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | entropy | CV | domP | MB/sess):")
+    # --- Do the systematic actors also touch the reserved testing assets? A broad scanner sweeps
+    #     the whole archive, so it should hit the testing blobs too (at a tiny testing FRACTION,
+    #     since those are a handful of assets among thousands). "Touches" = any testing session. ---
+    if "testing_fraction" in active.columns and (active["testing_fraction"] > 0).any():
+        broad = active[cov >= 0.02]
+        touch = broad[broad["testing_fraction"] > 0]
+        print(f"\n  of the {len(broad):,} coverage>=2% IPs, {len(touch):,} also touch the testing assets:")
+        for row in broad.sort_values("coverage_fraction", ascending=False).itertuples(index=False):
+            testing_sessions = int(round(row.testing_fraction * row.n_sessions))
+            flag = f"{testing_sessions:,} testing sessions" if testing_sessions else "none"
+            print(f"    {row.region_label or '(unresolved)':<16} cov={row.coverage_fraction:>6.3f}  {flag}")
+
+    print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | test% | CV | domP | MB/sess):")
     cols = [
         "region_label",
         "n_sessions",
         "n_distinct_assets",
         "coverage_fraction",
-        "selection_entropy",
+        "testing_fraction",
         "session_gap_cv",
         "dominant_period_fraction",
         "mean_session_bytes",
     ]
     for row in active.nlargest(top_n, "n_sessions")[cols].itertuples(index=False):
-        label, n, assets, cov, ent, cv, dom, mb = row
+        label, n, assets, cov_frac, test_frac, cv, dom, mb = row
         print(
-            f"    {label or '(unresolved)':<16} {int(n):>7,} {int(assets):>6} {cov:>7.4f} "
-            f"{ent:>7.3f} {cv:>7.3f} {dom:>6.2f} {mb / 1e6:>8.2f}"
+            f"    {label or '(unresolved)':<16} {int(n):>7,} {int(assets):>6} {cov_frac:>7.4f} "
+            f"{100 * test_frac:>6.3f} {cv:>7.3f} {dom:>6.2f} {mb / 1e6:>8.2f}"
         )
 
 
