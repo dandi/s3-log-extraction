@@ -404,6 +404,72 @@ def plot(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> N
     print(f"Saved {out_path}")
 
 
+def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> None:
+    """
+    The distributions that would justify (or refute) a threshold on each axis.
+
+    A defensible cut needs a visible *gap or valley* separating a human bulk from a bot tail — the
+    same standard the 8-hour session boundary met. If an axis is a smooth heavy tail with no valley,
+    any fixed cut on it is arbitrary, and that is itself the finding.
+    """
+    import matplotlib.pyplot as plt
+
+    active = profiles[profiles["n_sessions"] >= min_sessions].copy()
+    if active.empty:
+        print("  (nothing to plot)")
+        return
+    active["revisit"] = active["n_sessions"] / active["n_distinct_assets"].clip(lower=1)
+
+    fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.0))
+    fig.suptitle(
+        f"Threshold justification: per-IP distributions ({len(active):,} IPs ≥ {min_sessions} sessions)",
+        fontsize=12,
+        fontweight="bold",
+    )
+
+    # (b) coverage — CCDF on log-log; a scanner tail should break away from the human bulk.
+    ax = axes[0]
+    cov = np.sort(active["coverage_fraction"].clip(lower=1e-6).to_numpy())[::-1]
+    ccdf = np.arange(1, cov.size + 1) / cov.size
+    ax.plot(cov, ccdf, lw=1.2, color="steelblue")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.axvline(0.01, color="gray", ls=":", lw=0.8, label="1% (99th pct)")
+    ax.axvline(0.02, color="crimson", ls="--", lw=0.9, label="2% (candidate)")
+    ax.set_xlabel("archive coverage fraction")
+    ax.set_ylabel("fraction of IPs with coverage ≥ x (CCDF)")
+    ax.set_title("(b) coverage — is there a gap to cut at?", fontsize=9)
+    ax.legend(fontsize=8)
+
+    # (a) timing — CV histogram in log10; a valley near the cut would justify it.
+    ax = axes[1]
+    cv = active["session_gap_cv"].to_numpy(float)
+    cv = cv[np.isfinite(cv) & (cv > 0)]
+    if cv.size:
+        ax.hist(np.log10(cv), bins=60, color="darkorange", alpha=0.85, edgecolor="none")
+    ax.axvline(np.log10(0.1), color="crimson", ls="--", lw=0.9, label="CV = 0.1 (candidate)")
+    ax.set_xlabel("session-gap CV (log₁₀)")
+    ax.set_ylabel("IPs")
+    ax.set_title("(a) timing — is there a valley at the cut?", fontsize=9)
+    ax.legend(fontsize=8)
+
+    # revisit rate — the re-indexer tail (sessions per distinct asset).
+    ax = axes[2]
+    rev = active["revisit"].to_numpy(float)
+    rev = rev[np.isfinite(rev) & (rev > 0)]
+    if rev.size:
+        ax.hist(np.log10(rev), bins=60, color="seagreen", alpha=0.85, edgecolor="none")
+    ax.axvline(np.log10(1.0), color="gray", ls=":", lw=0.8, label="1 (touch once)")
+    ax.set_xlabel("revisit rate = sessions ÷ distinct assets (log₁₀)")
+    ax.set_ylabel("IPs")
+    ax.set_title("revisit — re-indexer tail", fontsize=9)
+    ax.legend(fontsize=8)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Saved {out_path}")
+
+
 def _cache_paths(cache_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     base = cache_dir / "analysis_cache"
     return base / "ip_behavior_profiles.parquet", base / "ip_behavior_profiles.csv.gz"
@@ -467,8 +533,10 @@ def main() -> None:
     report(profiles, min_sessions=args.min_sessions)
     try:
         plot(profiles, min_sessions=args.min_sessions, out_path=args.out)
+        distributions_path = args.out.with_name(f"{args.out.stem}_distributions{args.out.suffix}")
+        plot_distributions(profiles, min_sessions=args.min_sessions, out_path=distributions_path)
     except ImportError:
-        print("  (matplotlib not installed — skipped the plot)")
+        print("  (matplotlib not installed — skipped the plots)")
 
 
 if __name__ == "__main__":
