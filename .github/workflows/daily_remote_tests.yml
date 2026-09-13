@@ -16,6 +16,10 @@ jobs:
 
   DailyRemoteTests:
     uses: ./.github/workflows/remote_testing.yml
+    with:
+      # The scheduled run downloads a fresh database once a day, so that a license key which has expired or
+      # lost its GeoLite2 permission is reported here rather than going unnoticed until a cache entry ages out.
+      cache_geolite2_database: false
     secrets:
       S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
       MAXMIND_ACCOUNT_ID: ${{ secrets.MAXMIND_ACCOUNT_ID }}

@@ -1,6 +1,14 @@
 name: Remote testing
 on:
   workflow_call:
+    inputs:
+      cache_geolite2_database:
+        description: >-
+          Whether to reuse the GeoLite2 database between runs. True for pull request runs, which are frequent and
+          would otherwise spend the MaxMind account's daily download allowance. False for the scheduled run, so
+          that it downloads once a day and thereby keeps checking that the credentials are still accepted.
+        type: boolean
+        default: true
     secrets:
       S3_LOG_EXTRACTION_PASSWORD:
         required: true
@@ -45,25 +53,57 @@ jobs:
       - name: Display installed packages and their sources for debugging
         run: pip list
 
-      - name: Ensure caching is working
-        run: ls ~
+      - name: Determine the week the GeoLite2 cache entry belongs to
+        if: inputs.cache_geolite2_database
+        id: geolite2_cache_period
+        # MaxMind publishes new data twice a week and the package treats a copy older than
+        # GEOLITE2_MAX_DATABASE_AGE_IN_DAYS (7) as stale, so one entry per ISO week matches how often the
+        # database is worth fetching. A cache entry is immutable once written, so a fixed key would pin the
+        # first copy forever and every run past its seventh day would download again.
+        run: echo "value=$(date --utc +%G-W%V)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache the GeoLite2 database and IP to region mapping to avoid re-downloading
-        uses: actions/cache@v6
-        id: enable_cache
+      - name: Restore the GeoLite2 database so that every run does not download its own copy
+        if: inputs.cache_geolite2_database
+        id: geolite2_cache
+        uses: actions/cache/restore@v6
         with:
-          path: ~/.s3_log_extraction
-          key: ubuntu_home_cache
-
-      - if: steps.enable_cache.outputs.cache-hit == 'true'
-        name: Ensure caching is working
-        run: |
-          ls ~
-          ls ~/.s3_log_extraction
-          cat ~/.s3_log_extraction/ip_hash_to_region.yaml
+          # Where the package actually puts the database, from config._globals.DEFAULT_CACHE_DIRECTORY
+          path: ~/.cache/s3_log_extraction/geolite2
+          # The v2 segment is a manual invalidation lever. A cache entry is immutable, so an entry that turns
+          # out to be wrong, such as the empty one a run with nothing to download wrote before the save below
+          # became conditional, can only be abandoned by moving to a new key. Bump it to start clean.
+          key: geolite2-v2-${{ runner.os }}-${{ steps.geolite2_cache_period.outputs.value }}
+          # Fall back to any earlier entry. Restoring one preserves its modification time, so a copy that has
+          # since gone stale is still recognized as stale and refreshed.
+          restore-keys: geolite2-v2-${{ runner.os }}-
 
       - name: Run pytest with coverage and printout coverage for debugging
         run: pytest -m "remote" -vv -rsx --cov=s3_log_extraction --cov-report xml:./coverage.xml
+
+      - name: Note whether a GeoLite2 database is present to save
+        if: always() && inputs.cache_geolite2_database
+        id: geolite2_present
+        run: |
+          if [ -s ~/.cache/s3_log_extraction/geolite2/GeoLite2-City.mmdb ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save the GeoLite2 database for later runs
+        # Saving is deliberately separate from restoring, and conditional. A run that obtained no database,
+        # because the account's daily download allowance was spent and the tests skipped, leaves the directory
+        # empty. A cache entry is immutable once written, so saving that empty directory would pin this week's
+        # key to it and no later run could store the real database until the key rotated.
+        if: >-
+          always()
+          && inputs.cache_geolite2_database
+          && steps.geolite2_cache.outputs.cache-hit != 'true'
+          && steps.geolite2_present.outputs.value == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/s3_log_extraction/geolite2
+          key: geolite2-v2-${{ runner.os }}-${{ steps.geolite2_cache_period.outputs.value }}
 
       - name: Printout coverage for debugging
         run: cat ./coverage.xml
