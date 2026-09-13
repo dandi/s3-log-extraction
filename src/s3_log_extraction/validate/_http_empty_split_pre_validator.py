@@ -29,7 +29,7 @@ class HttpEmptySplitPreValidator(BaseValidator):
         return int(checksum, 16)
 
     # TODO: parallelize
-    def __init__(self):
+    def __init__(self) -> None:
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = pathlib.Path(__file__).parent / "_http_empty_split_pre_validator_script.awk"
 

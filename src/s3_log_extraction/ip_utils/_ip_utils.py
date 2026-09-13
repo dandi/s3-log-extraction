@@ -38,7 +38,7 @@ def _write_ips_to_file(file_path: pathlib.Path, ips: list[str], use_encryption: 
 
 
 @functools.lru_cache
-def _request_cidr_range(service_name: str) -> dict:
+def _request_cidr_range(service_name: str) -> dict | list[str]:
     """Cache (in-memory) the requests to external services."""
     import requests
 

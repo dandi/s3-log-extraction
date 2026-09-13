@@ -49,12 +49,12 @@ def generate_archive_totals(
 
     requester_count_file_path = archive_directory / "requester_count.tsv"
     if not requester_count_file_path.exists():
-        msg = (
+        message = (
             f"Archive requester count file not found: {requester_count_file_path}. "
             "Run dataset summaries before archive totals; the archive requester count is deduplicated "
             "across datasets and so is written by that step, not by the archive summaries."
         )
-        raise FileNotFoundError(msg)
+        raise FileNotFoundError(message)
 
     number_of_requesters: str | int = requester_count_file_path.read_text().strip()
     if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
@@ -71,5 +71,5 @@ def generate_archive_totals(
     }
 
     archive_totals_file_path = summary_directory / "archive_totals.json"
-    with archive_totals_file_path.open(mode="w") as io:
-        json.dump(obj=archive_totals, fp=io, indent=2, sort_keys=True)
+    with archive_totals_file_path.open(mode="w") as file_stream:
+        json.dump(obj=archive_totals, fp=file_stream, indent=2, sort_keys=True)

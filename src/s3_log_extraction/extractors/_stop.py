@@ -8,7 +8,7 @@ from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ..config import get_cache_directory
 
 
-def get_running_pids() -> list[str]:
+def get_running_pids() -> set[str]:
     """
     Get a list of possible running PIDs from the temporary directory.
 

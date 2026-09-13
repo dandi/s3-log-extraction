@@ -243,6 +243,7 @@ def _collect_asset_views(
 
 
 def _collect_unique_ips(
+    *,
     asset_directories: list[pathlib.Path],
     use_encryption: bool = True,
     region_resolver: RegionResolver | None = None,
@@ -485,7 +486,7 @@ def _summarize_dataset_by_day(
             continue
 
         dates = [
-            datetime.datetime.strptime(str(timestamp.strip()), "%y%m%d%H%M%S").strftime(format="%Y-%m-%d")
+            datetime.datetime.strptime(timestamp.strip(), TIMESTAMP_FORMAT).strftime(format="%Y-%m-%d")
             for timestamp in timestamps_file_path.read_text().splitlines()
         ]
         all_dates.extend(dates)

@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Group 1 (CL-1, CL-2, CL-9, CL-18, DC-4, CON-3) and Group 2 (DC-1, DC-2, DC-5) have been applied; those nine
-entries are marked APPLIED below. The remaining 38 are still proposals awaiting approval.
+Groups 1, 2 and 3 have been applied, nineteen entries in all, and are marked APPLIED below. The remaining 28
+are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -600,7 +600,7 @@ is real.
   be shared, so it must not be mutated, and nothing currently mutates it.
 - **Verification**: `python -m pytest tests/test_ip_utils.py -q`.
 
-#### CON-7 — Give the pre-validator `__init__` methods their return annotation
+#### CON-7 — APPLIED. Give the pre-validator `__init__` methods their return annotation
 
 - **Location**: all five files in `validate/`, `def __init__(self):` at lines 41, 30, 33, 32, 29 respectively
 - **Issue**: `BaseValidator.__init__` and `RemoteS3BucketValidator.__init__` are both annotated `-> None`; the
@@ -641,7 +641,7 @@ is real.
 - **Verification**: `ruff check --select C416 src/` returns clean, then
   `python -m pytest tests/test_generic_extraction.py tests/test_remote_extractor_inventory.py -q`.
 
-#### CL-3 — Use `TIMESTAMP_FORMAT` instead of repeating its literal
+#### CL-3 — APPLIED. Use `TIMESTAMP_FORMAT` instead of repeating its literal
 
 - **Location**: `summarize/_generate_summaries.py` (line 488)
 - **Issue**: The module imports `TIMESTAMP_FORMAT` from `.globals` at line 12 and uses it at line 230, but line
@@ -652,7 +652,7 @@ is real.
   character-for-character the literal on line 488, and the name is already imported in this module.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`.
 
-#### CL-4 — A redundant `str()` around a value that is already `str`
+#### CL-4 — APPLIED. A redundant `str()` around a value that is already `str`
 
 - **Location**: `summarize/_generate_summaries.py` (line 488)
 - **Issue**: `datetime.datetime.strptime(str(timestamp.strip()), ...)` where `timestamp` comes from
@@ -679,7 +679,7 @@ is real.
 - **Verification**: `python -m pytest tests/ -m "not remote" -q`, and for the `_config.py` site confirm no caller
   can produce a falsy key: `grep -rn "save_config" src/ tests/`.
 
-#### CL-6 — An f-string wrapper around an expression that is already a string
+#### CL-6 — APPLIED. An f-string wrapper around an expression that is already a string
 
 - **Location**: `extractors/_remote_s3_log_access_extractor.py` (line 300)
 - **Issue**: `months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}`. The
@@ -691,7 +691,7 @@ is real.
 - **Verification**: Remote-only code path; confirm `python -m pytest tests/ -m "not remote" -q` still passes and
   that `tests/test_remote.py` still collects.
 
-#### CL-7 — `msg` where the rest of the codebase uses `message`
+#### CL-7 — APPLIED. `msg` where the rest of the codebase uses `message`
 
 - **Location**: `summarize/_generate_archive_totals.py` (line 52)
 - **Issue**: Every `raise` in the package binds its text to `message`, including line 34 of this very function.
@@ -700,7 +700,7 @@ is real.
 - **Confidence it's safe**: **High**. A local variable with one read, on the `raise` that follows it.
 - **Verification**: `grep -rn "msg" src/` should return nothing, then `python -m pytest tests/test_generic_summaries.py -q`.
 
-#### CL-8 — `io` used as a file-handle variable name
+#### CL-8 — APPLIED. `io` used as a file-handle variable name
 
 - **Location**: `summarize/_generate_archive_totals.py` (line 74) and `summarize/_generate_all_dataset_totals.py` (line 68)
 - **Issue**: `with archive_totals_file_path.open(mode="w") as io:` shadows the name of the stdlib `io` module
@@ -719,7 +719,7 @@ is real.
 - **Confidence it's safe**: **High**, flagged by `ruff check --select SIM118`. Iteration order is identical.
 - **Verification**: `ruff check --select SIM118 src/` returns clean, then `python -m pytest tests/ -m "not remote" -q`.
 
-#### CL-10 — `get_running_pids` is annotated `list[str]` but returns `set[str]`
+#### CL-10 — APPLIED. `get_running_pids` is annotated `list[str]` but returns `set[str]`
 
 - **Location**: `extractors/_stop.py` (line 11)
 - **Issue**: The body builds a set comprehension and subtracts a set, so the return value is a `set[str]`. The
@@ -735,7 +735,7 @@ is real.
 - **Verification**: `python -c "from s3_log_extraction.extractors import get_running_pids; print(type(get_running_pids()))"`
   prints `<class 'set'>`, then `python -m pytest tests/test_stop_extraction.py -q`.
 
-#### CL-11 — `_request_cidr_range` is annotated `-> dict` but one branch returns a list
+#### CL-11 — APPLIED. `_request_cidr_range` is annotated `-> dict` but one branch returns a list
 
 - **Location**: `ip_utils/_ip_utils.py` (line 58)
 - **Issue**: The `"GitHub"`, `"AWS"`, and `"GCP"` arms return parsed JSON objects, but the `"VPN"` arm returns
@@ -745,7 +745,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_ip_utils.py -q`, which patches this function by name and
   exercises all four service arms.
 
-#### CL-12 — `_validate_cli` annotates its `directory` parameter as `pathlib.Path`
+#### CL-12 — APPLIED. `_validate_cli` annotates its `directory` parameter as `pathlib.Path`
 
 - **Location**: `_command_line_interface/_cli.py` (line 489)
 - **Issue**: The argument is declared as `rich_click.Path(writable=False)` with no `path_type`, so click passes a
@@ -784,7 +784,7 @@ is real.
 - **Verification**: Run `s3logextraction update ip coordinates` against a populated cache and confirm the bar
   still shows a denominator.
 
-#### CL-15 — `_collect_unique_ips` takes three positional parameters
+#### CL-15 — APPLIED. `_collect_unique_ips` takes three positional parameters
 
 - **Location**: `summarize/_generate_summaries.py` (lines 245-248)
 - **Issue**: AGENTS.md requires keyword-only parameters via `(*, ...)` for multi-input functions. This private
@@ -968,7 +968,7 @@ same kind of review attention. Keep them out of Group 1 so that a reviewer who d
 argument can revert this group alone.
 Verification: `grep -rn "_ip_in_cidr" src/ tests/` returns nothing, then `python -m pytest tests/ -m "not remote" -q`.
 
-**Group 3 — Annotation and naming corrections.** CL-3, CL-4, CL-6, CL-7, CL-8, CL-10, CL-11, CL-12, CL-15, CON-7.
+**Group 3 — Annotation and naming corrections. APPLIED.** CL-3, CL-4, CL-6, CL-7, CL-8, CL-10, CL-11, CL-12, CL-15, CON-7.
 All are local, non-structural, and individually obvious. None changes a runtime value. Grouped so the diff is
 easy to scan in one pass.
 Verification: `python -m pytest tests/ -m "not remote" -q`, plus

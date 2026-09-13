@@ -26,7 +26,7 @@ class ExtractionHeuristicPreValidator(BaseValidator):
         return int(checksum, 16)
 
     # TODO: parallelize
-    def __init__(self):
+    def __init__(self) -> None:
         self._excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX") or "^$"
 
         # TODO: does this hold after bundling?

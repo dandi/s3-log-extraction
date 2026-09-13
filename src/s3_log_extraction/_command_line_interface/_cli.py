@@ -483,7 +483,7 @@ def _validate_cli(
     protocol: typing.Literal[
         "downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"
     ],
-    directory: pathlib.Path,
+    directory: str,
 ) -> None:
     """Run a pre-validation protocol."""
     match protocol:

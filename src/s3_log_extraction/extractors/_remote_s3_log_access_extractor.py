@@ -291,7 +291,7 @@ class RemoteS3LogAccessExtractor:
             months_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
-            months = {f"{line.split(" ")[-1].rstrip("/\n")}" for line in months_result.splitlines()}
+            months = {line.split(" ")[-1].rstrip("/\n") for line in months_result.splitlines()}
 
             for month in months:
                 subdirectory = f"{s3_root}/{year}/{month}"
