@@ -18,6 +18,10 @@ import s3_log_extraction
 
 _AUTH_ERROR_PATTERNS = ("401", "403", "Unknown token", "Unauthorized", "not authorized")
 
+# The status MaxMind answers with once the account's daily download allowance is spent. Pinned here rather than
+# imported so that these tests keep their own statement of what the limit looks like.
+_DOWNLOAD_QUOTA_EXHAUSTED_STATUS_CODE = 429
+
 # ISO 3166-1 alpha-3 country code, optionally followed by an ISO 3166-2 subdivision code
 _REGION_LABEL_PATTERN = re.compile(r"^[A-Z]{3}(/[A-Z0-9]{1,3})?$")
 
@@ -31,6 +35,23 @@ def _is_auth_error(exc: Exception) -> bool:
 def _assert_maxmind_credentials_are_set() -> None:
     for name in ("MAXMIND_ACCOUNT_ID", "MAXMIND_LICENSE_KEY"):
         assert os.environ.get(name, "").strip(), f"{name} environment variable must be set to a non-empty value"
+
+
+def _skip_if_download_quota_is_spent(exc: Exception) -> None:
+    """
+    Skip rather than fail when MaxMind refused for a spent daily allowance rather than for cause.
+
+    The allowance belongs to the account and resets on its own, so exhausting it says nothing about the code
+    under test. Failing on it turns every run for the rest of the day red, which is what it used to do.
+    """
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) != _DOWNLOAD_QUOTA_EXHAUSTED_STATUS_CODE:
+        return
+
+    pytest.skip(
+        "MaxMind's daily GeoLite2 download allowance for this account is spent, so the database could not be "
+        f"obtained and these tests have nothing to geolocate with ({exc}). The allowance resets on its own."
+    )
 
 
 def _fail_if_maxmind_rejected(exc: Exception) -> None:
@@ -70,6 +91,7 @@ def shared_geolite2_database() -> pathlib.Path:
     try:
         return s3_log_extraction.ip_utils.update_geolite2_database()
     except Exception as exc:
+        _skip_if_download_quota_is_spent(exc)
         _fail_if_maxmind_rejected(exc)
         raise
 
@@ -133,6 +155,7 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geoli
             assert set(resolver.service_networks.keys()) == {"GitHub", "AWS", "GCP", "VPN"}
             assert all(len(networks) > 0 for networks in resolver.service_networks.values())
     except Exception as exc:
+        _skip_if_download_quota_is_spent(exc)
         _fail_if_maxmind_rejected(exc)
         raise
 
@@ -175,6 +198,7 @@ def test_update_region_code_coordinates_locates_aws_region_remote(
     try:
         s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)
     except Exception as exc:
+        _skip_if_download_quota_is_spent(exc)
         _fail_if_maxmind_rejected(exc)
         raise
 
