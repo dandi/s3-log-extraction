@@ -11,9 +11,9 @@ import pytest
 from click.testing import CliRunner
 
 import s3_log_extraction._command_line_interface._cli as cli_module
-from s3_log_extraction._command_line_interface._cli import s3logextraction_cli
+from s3_log_extraction import s3logextraction_cli
 from s3_log_extraction.ip_utils import MappingRegionResolver
-from s3_log_extraction.utils.inventory import get_extraction_completion, get_ip_stats, get_log_bucket_stats
+from s3_log_extraction.utils import get_extraction_completion, get_ip_stats, get_log_bucket_stats
 
 
 def _build_inventory_directory(

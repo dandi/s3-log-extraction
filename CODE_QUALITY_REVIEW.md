@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 4 have been applied, twenty-one entries in all, and are marked APPLIED below. The remaining
-26 are still proposals awaiting approval.
+Groups 1 through 5 have been applied, twenty-three entries in all, and are marked APPLIED below. The remaining
+24 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -498,7 +498,7 @@ is real.
 
 ### Consolidation
 
-#### CON-1 — Move the two function-local `config` imports to module top
+#### CON-1 — APPLIED. Move the two function-local `config` imports to module top
 
 - **Location**: `utils/inventory.py` (line 126 inside `get_ip_stats`, line 484 inside `get_extraction_completion`)
 - **Issue**: AGENTS.md requires imports at the top of the file, with breaking a circular dependency as the only
@@ -514,7 +514,7 @@ is real.
   `..ip_utils._resolver`, which transitively imports `..config`.
 - **Verification**: `python -c "import s3_log_extraction"` then `python -m pytest tests/ -m "not remote" -q`.
 
-#### CON-2 — Import from the public surface in three test modules
+#### CON-2 — APPLIED. Import from the public surface in three test modules
 
 - **Location**: `tests/test_ip_utils.py` (line 22), `tests/test_log_bucket_stats.py` (lines 14, 16)
 - **Issue**: AGENTS.md asks tests to import what is publicly exposed through `__init__.py`. Three imports reach
@@ -995,7 +995,7 @@ it must be its own commit and could reasonably be deferred entirely.
 Verification: `ruff check .` reports "All checks passed!" and `pre-commit run --all-files` passes. For DC-6,
 compare the `Version:` field of `*.dist-info/METADATA` in wheels built before and after.
 
-**Group 5 — AGENTS.md compliance.** CON-1, CON-2.
+**Group 5 — APPLIED. AGENTS.md compliance.** CON-1, CON-2.
 Both are import relocations with no logic change, and both were verified by experiment rather than inspection.
 Verification: `python -c "import s3_log_extraction"` succeeds, then
 `python -m pytest tests/ -m "not remote" -q`.

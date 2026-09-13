@@ -11,7 +11,13 @@ import pytest
 import yaml
 
 import s3_log_extraction
-from s3_log_extraction.ip_utils import IpRegionResolver, MappingRegionResolver, RegionResolver
+from s3_log_extraction.ip_utils import (
+    IpRegionResolver,
+    MappingRegionResolver,
+    RegionResolver,
+    country_alpha_2_to_alpha_3,
+    get_region_coordinates,
+)
 from s3_log_extraction.ip_utils._geolite2 import (
     GEOLITE2_DATABASE_FILE_NAME,
     GEOLITE2_MAX_DATABASE_AGE_IN_DAYS,
@@ -19,7 +25,6 @@ from s3_log_extraction.ip_utils._geolite2 import (
     open_geolite2_database,
     update_geolite2_database,
 )
-from s3_log_extraction.ip_utils._region_codes import country_alpha_2_to_alpha_3, get_region_coordinates
 
 # Loose bounding boxes (south, north, west, east) used to check that a coordinate lands in the right place
 _CALIFORNIA_BOX = (32.0, 42.5, -125.0, -114.0)

@@ -5,6 +5,7 @@ import json
 import pathlib
 import typing
 
+from ..config import get_cache_directory, get_cache_subdirectory
 from ..ip_utils._ip_utils import _read_ips_from_file
 from ..ip_utils._resolver import IpRegionResolver, RegionResolver
 
@@ -123,8 +124,6 @@ def get_ip_stats(
     IpStats
         A typed dict with the extracted count and per-category breakdowns.
     """
-    from ..config import get_cache_directory
-
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else get_cache_directory()
 
     # Count unique IPs across all ips.txt files in the extraction subdirectory, matching the scope of the summaries
@@ -481,8 +480,6 @@ def get_extraction_completion(
         A typed dict with processed count, inventory count, and completion
         percentage.
     """
-    from ..config import get_cache_subdirectory
-
     inventory_stats = get_log_bucket_stats(inventory_directory=inventory_directory)
     records_directory = get_cache_subdirectory(cache_directory=cache_directory, name="records")
     record_file_paths = [
