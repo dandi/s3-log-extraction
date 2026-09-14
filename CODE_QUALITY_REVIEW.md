@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 10 have been applied, thirty-seven entries in all, and are marked APPLIED below. The remaining
-10 are still proposals awaiting approval.
+Groups 1 through 11 have been applied, forty-one entries in all, and are marked APPLIED below. The remaining
+6 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -388,7 +388,7 @@ is real.
   `for c in "stop" "reset extraction" "update ip database" "update ip coordinates" "update summaries" "update totals"; do s3logextraction $c --help; done > /tmp/help.txt`
   must produce a byte-identical file.
 
-#### DUP-10 — `_summarize_dataset_by_day` and `_summarize_dataset_by_region` are twins
+#### DUP-10 — APPLIED. `_summarize_dataset_by_day` and `_summarize_dataset_by_region` are twins
 
 - **Location**: `summarize/_generate_summaries.py` (lines 465-525 and 578-640)
 - **Issue**: About 45 lines of the two functions are the same algorithm with one column renamed. Both accumulate
@@ -412,7 +412,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`. The golden `by_day.tsv` and
   `by_region.tsv` files pin row order exactly, so a sorting mistake fails loudly.
 
-#### DUP-11 — The archive by-day and by-region aggregations are twins
+#### DUP-11 — APPLIED. The archive by-day and by-region aggregations are twins
 
 - **Location**: `summarize/_generate_archive_summaries.py` (lines 52-84 and 87-123)
 - **Issue**: Both blocks glob the per-dataset summaries, filter out the `archive` directory with the identical
@@ -422,6 +422,12 @@ is real.
 - **Proposed change**: Extract
   `def _aggregate_dataset_summaries(*, summary_directory: pathlib.Path, pattern: str, key_column_name: str) -> pandas.DataFrame | None`
   and call it twice.
+
+  **What was applied**: two helpers rather than one. A single helper that also does the globbing would have to
+  own the empty case, and the two call sites need opposite behavior there. Splitting into
+  `_read_dataset_summaries` (glob and coerce) and `_aggregate_dataset_summaries` (concatenate and group) leaves
+  the `if all_dataset_summaries_by_region:` guard visible at the call site that needs it, so the asymmetry is
+  preserved by construction rather than by a flag.
 - **Confidence it's safe**: **Medium**. One asymmetry must be preserved exactly: the by-region block is wrapped
   in `if all_dataset_summaries_by_region:` (line 99) and the by-day block is not, so an archive with no
   published by-region summary currently skips the region work while an archive with no by-day summary raises
@@ -571,7 +577,7 @@ is real.
   directory glob has already yielded, but if you prefer to be conservative, keep `list(...)` around the chain.
 - **Verification**: `python -m pytest tests/ -m "not remote" -q -k "reset or cli"`.
 
-#### CON-4 — Pass the extraction path in rather than deriving it from three parents
+#### CON-4 — APPLIED. Pass the extraction path in rather than deriving it from three parents
 
 - **Location**: `summarize/_generate_summaries.py` (lines 534-535, in `_summarize_dataset_by_asset`)
 - **Issue**: The function recovers `dataset_id` from `summary_file_path.parent.name` and then the extraction root
@@ -606,7 +612,7 @@ is real.
   would have threaded `extracted_ip_count` through six call sites for a one-line function, which reads worse
   than it reads now.
 
-#### CON-6 — Cache the subregion-to-CIDR index instead of rebuilding it per region
+#### CON-6 — APPLIED. Cache the subregion-to-CIDR index instead of rebuilding it per region
 
 - **Location**: `ip_utils/_update_region_code_coordinates.py` (line 119, in `_get_service_coordinates_from_geolite2`)
 - **Issue**: `subregion_to_cidr_address = {subregion: cidr_address for cidr_address, subregion in cidr_addresses_and_subregions}`
@@ -1052,7 +1058,7 @@ The two provable extractions only. The broader inheritance refactor (NV-8) is ex
 Verification: `python -m pytest tests/test_generic_extraction.py tests/test_cli_integration.py -q`, which runs
 real `gawk` subprocesses in both serial and parallel modes.
 
-**Group 11 — Structural refactors.** DUP-10, DUP-11, CON-4, CON-6.
+**Group 11 — APPLIED. Structural refactors.** DUP-10, DUP-11, CON-4, CON-6.
 These reshape control flow rather than lifting identical blocks, so each needs its own careful read. Last,
 because by this point the duplication that obscures them has already gone.
 Verification: `python -m pytest tests/ -m "not remote" -q` in full, and diff the generated summary tree against

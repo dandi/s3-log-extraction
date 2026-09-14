@@ -451,6 +451,7 @@ def generate_summaries(
                 dataset_id=dataset_id,
                 asset_directories=asset_directories,
                 summary_directory=summary_directory,
+                extraction_directory=extraction_directory,
                 region_resolver=region_resolver,
                 use_encryption=use_encryption,
                 region_disclosure_threshold=region_disclosure_threshold,
@@ -476,6 +477,7 @@ def _summarize_dataset(
     dataset_id: str,
     asset_directories: list[pathlib.Path],
     summary_directory: pathlib.Path,
+    extraction_directory: pathlib.Path,
     region_resolver: RegionResolver,
     use_encryption: bool = True,
     region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
@@ -495,6 +497,8 @@ def _summarize_dataset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_asset.tsv",
         views_by_asset_directory=views_by_asset_directory,
+        dataset_id=dataset_id,
+        extraction_directory=extraction_directory,
     )
     _summarize_dataset_by_region(
         asset_directories=asset_directories,
@@ -509,6 +513,65 @@ def _summarize_dataset(
         summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
         region_resolver=region_resolver,
         use_encryption=use_encryption,
+    )
+
+
+def _assemble_activity_summary(
+    *,
+    keys: list[str],
+    bytes_sent: list[int],
+    downloads: list[int],
+    number_of_views_by_key: dict[str, int],
+    key_column_name: str,
+) -> pandas.DataFrame | None:
+    """
+    Aggregate per-request activity into one row per key.
+
+    Rows come out in the order each key was first seen. The by-region summary publishes that order as it is;
+    the by-day summary sorts afterwards, at its own call site, so the sort is deliberately not done here.
+
+    ``number_of_views_by_key`` is indexed rather than queried with a default, because both callers pass a
+    ``defaultdict(int)`` and a key with no views is expected to read as zero.
+
+    Parameters
+    ----------
+    keys : list of str
+        One key per request, such as a date or a region label.
+    bytes_sent : list of int
+        Bytes sent per request, positionally aligned with ``keys``.
+    downloads : list of int
+        Download flag per request, positionally aligned with ``keys``.
+    number_of_views_by_key : dict of str to int
+        Views already tallied per key.
+    key_column_name : str
+        Name of the first column of the assembled frame.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        The assembled summary, or ``None`` when there was nothing to aggregate, in which case the caller
+        writes no file at all.
+    """
+    summarized_activity = collections.defaultdict(int)
+    number_of_requests = collections.defaultdict(int)
+    number_of_downloads = collections.defaultdict(int)
+    for key, key_bytes_sent, download in zip(keys, bytes_sent, downloads):
+        summarized_activity[key] += key_bytes_sent
+        number_of_requests[key] += 1
+        number_of_downloads[key] += download
+
+    if len(summarized_activity) == 0:
+        return None
+
+    keys_ordered = list(summarized_activity.keys())
+    return pandas.DataFrame(
+        data={
+            key_column_name: keys_ordered,
+            "bytes_sent": list(summarized_activity.values()),
+            "number_of_requests": [number_of_requests[key] for key in keys_ordered],
+            "number_of_downloads": [number_of_downloads[key] for key in keys_ordered],
+            "number_of_views": [number_of_views_by_key[key] for key in keys_ordered],
+        }
     )
 
 
@@ -548,28 +611,17 @@ def _summarize_dataset_by_day(
         downloads = _read_integers_from_file(download_file_path)
         all_downloads.extend(downloads)
 
-    summarized_activity_by_day = collections.defaultdict(int)
-    number_of_requests_by_day = collections.defaultdict(int)
-    number_of_downloads_by_day = collections.defaultdict(int)
-    for date, bytes_sent, download in zip(all_dates, all_bytes_sent, all_downloads):
-        summarized_activity_by_day[date] += bytes_sent
-        number_of_requests_by_day[date] += 1
-        number_of_downloads_by_day[date] += download
-
-    if len(summarized_activity_by_day) == 0:
+    summary_table = _assemble_activity_summary(
+        keys=all_dates,
+        bytes_sent=all_bytes_sent,
+        downloads=all_downloads,
+        number_of_views_by_key=number_of_views_by_day,
+        key_column_name="date",
+    )
+    if summary_table is None:
         return
 
     summary_file_path.parent.mkdir(parents=True, exist_ok=True)
-    all_dates_ordered = list(summarized_activity_by_day.keys())
-    summary_table = pandas.DataFrame(
-        data={
-            "date": all_dates_ordered,
-            "bytes_sent": list(summarized_activity_by_day.values()),
-            "number_of_requests": [number_of_requests_by_day[date] for date in all_dates_ordered],
-            "number_of_downloads": [number_of_downloads_by_day[date] for date in all_dates_ordered],
-            "number_of_views": [number_of_views_by_day[date] for date in all_dates_ordered],
-        }
-    )
     summary_table.sort_values(by="date", inplace=True)
     summary_table.to_csv(path_or_buf=summary_file_path, mode="w", sep="\t", header=True, index=False)
 
@@ -579,9 +631,12 @@ def _summarize_dataset_by_asset(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    dataset_id: str,
+    extraction_directory: pathlib.Path,
 ) -> None:
-    dataset_id = summary_file_path.parent.name
-    extraction_base_path = summary_file_path.parent.parent.parent / "extraction" / dataset_id  # Assumes same cache dir
+    # The `asset_path` column is each asset's path relative to this, so it is passed in rather than recovered
+    # by walking up from the summary file, which only worked while both trees shared a cache directory.
+    extraction_base_path = extraction_directory / dataset_id
 
     summarized_activity_by_asset = collections.defaultdict(int)
     number_of_requests_by_asset = collections.defaultdict(int)
@@ -661,27 +716,16 @@ def _summarize_dataset_by_region(
         downloads = _read_integers_from_file(download_file_path)
         all_downloads.extend(downloads)
 
-    summarized_activity_by_region = collections.defaultdict(int)
-    number_of_requests_by_region = collections.defaultdict(int)
-    number_of_downloads_by_region = collections.defaultdict(int)
-    for region, bytes_sent, download in zip(all_regions, all_bytes_sent, all_downloads):
-        summarized_activity_by_region[region] += bytes_sent
-        number_of_requests_by_region[region] += 1
-        number_of_downloads_by_region[region] += download
-
-    if len(summarized_activity_by_region) == 0:
+    summary_table = _assemble_activity_summary(
+        keys=all_regions,
+        bytes_sent=all_bytes_sent,
+        downloads=all_downloads,
+        number_of_views_by_key=number_of_views_by_region,
+        key_column_name="region",
+    )
+    if summary_table is None:
         return
 
-    all_regions_ordered = list(summarized_activity_by_region.keys())
-    summary_table = pandas.DataFrame(
-        data={
-            "region": all_regions_ordered,
-            "bytes_sent": list(summarized_activity_by_region.values()),
-            "number_of_requests": [number_of_requests_by_region[region] for region in all_regions_ordered],
-            "number_of_downloads": [number_of_downloads_by_region[region] for region in all_regions_ordered],
-            "number_of_views": [number_of_views_by_region[region] for region in all_regions_ordered],
-        }
-    )
     _write_summary_by_region(
         summary_table=summary_table,
         summary_file_path=summary_file_path,
