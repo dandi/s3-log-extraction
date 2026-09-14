@@ -114,6 +114,11 @@ line-length = 120
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+    # `select = ["ALL"]` opts in to rules that do not exist yet, so a few entries below name rules the
+    # pinned ruff does not apply. They fire once the quarterly pre-commit autoupdate moves past the
+    # version that promoted them out of preview, or widened them to reach this code: CPY001, PLR0917
+    # and S602
+
     # --- Conflicts with the formatter ---------------------------------------------------------------
     # `black` owns trailing commas, and ruff documents this rule as incompatible with a formatter
     "COM812",
@@ -157,8 +162,12 @@ ignore = [
     "FBT001",
     "FBT002",
     "PLR0913",
+    "PLR0917",
     # `random.shuffle` spreads the file order within a run. Nothing here is a security primitive
     "S311",
+    # The two `shell=True` calls run awk command strings this package builds itself, out of paths it
+    # was handed. Nothing from a log file reaches the shell
+    "S602",
     # SHA-1 content-addresses each validator's awk script. It is not used for security, and the digest
     # becomes part of every validation record's file name, so changing it would orphan every cache
     "S324",
@@ -188,6 +197,8 @@ ignore = [
     # Unused arguments are protocol conformance or signature compatibility
     "ARG001",
     "ARG002",
+    # Licensing is stated once in LICENSE.txt rather than repeated as a header on every file
+    "CPY001",
 
     # --- Worth revisiting, but each would change behavior ---------------------------------------------
     # `zip()` truncates to the shortest input. The summarize accumulations zip three lists that are
