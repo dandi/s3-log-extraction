@@ -8,6 +8,25 @@ import tqdm
 from ..config import get_cache_subdirectory
 
 
+def _hash_awk_script_file(script_path: pathlib.Path, /) -> int:
+    """
+    Compute a hash based on the contents of the AWK validation script.
+
+    Editing the rule therefore starts a fresh validation record, since the record file of a validator is
+    named after this value.
+
+    Returns
+    -------
+    int
+        Integer hash derived from the SHA-1 checksum of the AWK script file.
+    """
+    with script_path.open("rb") as file_stream:
+        byte_content = file_stream.read()
+
+    checksum = hashlib.sha1(string=byte_content).hexdigest()
+    return int(checksum, 16)
+
+
 class BaseValidator(abc.ABC):
     """Base class for all log validators."""
 

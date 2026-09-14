@@ -1,8 +1,7 @@
-import hashlib
 import pathlib
 import subprocess
 
-from ._base_validator import BaseValidator
+from ._base_validator import BaseValidator, _hash_awk_script_file
 
 
 class DownloadsLogicPreValidator(BaseValidator):
@@ -22,19 +21,7 @@ class DownloadsLogicPreValidator(BaseValidator):
     tqdm_description = "Pre-validating downloads field logic"
 
     def __hash__(self) -> int:
-        """
-        Compute a hash based on the contents of the AWK validation script.
-
-        Returns
-        -------
-        int
-            Integer hash derived from the SHA-1 checksum of the AWK script file.
-        """
-        with self._relative_awk_script_path.open("rb") as file_stream:
-            byte_content = file_stream.read()
-
-        checksum = hashlib.sha1(string=byte_content).hexdigest()
-        return int(checksum, 16)
+        return _hash_awk_script_file(self._relative_awk_script_path)
 
     # TODO: parallelize
     def __init__(self) -> None:

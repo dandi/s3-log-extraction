@@ -1,8 +1,7 @@
-import hashlib
 import pathlib
 import subprocess
 
-from ._base_validator import BaseValidator
+from ._base_validator import BaseValidator, _hash_awk_script_file
 
 
 class HttpEmptySplitPreValidator(BaseValidator):
@@ -22,11 +21,7 @@ class HttpEmptySplitPreValidator(BaseValidator):
     tqdm_description = "Pre-validating 'HTTP/1.' empty splits"
 
     def __hash__(self) -> int:
-        with self._relative_awk_script_path.open("rb") as file_stream:
-            byte_content = file_stream.read()
-
-        checksum = hashlib.sha1(string=byte_content).hexdigest()
-        return int(checksum, 16)
+        return _hash_awk_script_file(self._relative_awk_script_path)
 
     # TODO: parallelize
     def __init__(self) -> None:
