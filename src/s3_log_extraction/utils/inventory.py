@@ -11,7 +11,8 @@ from ..ip_utils._resolver import IpRegionResolver, RegionResolver
 
 
 class LogBucketStats(typing.TypedDict):
-    """Statistics for all objects in a local S3 Inventory.
+    """
+    Statistics for all objects in a local S3 Inventory.
 
     Attributes
     ----------
@@ -27,7 +28,8 @@ class LogBucketStats(typing.TypedDict):
 
 
 class ExtractionCompletionStats(typing.TypedDict):
-    """Completion statistics comparing processed records against inventory size.
+    """
+    Completion statistics comparing processed records against inventory size.
 
     Attributes
     ----------
@@ -46,7 +48,8 @@ class ExtractionCompletionStats(typing.TypedDict):
 
 
 class IpCategoryCount(typing.TypedDict):
-    """Count and percentage for a single IP classification category.
+    """
+    Count and percentage for a single IP classification category.
 
     Attributes
     ----------
@@ -61,7 +64,8 @@ class IpCategoryCount(typing.TypedDict):
 
 
 class IpStats(typing.TypedDict):
-    """Classification statistics of the IP addresses in the extraction cache.
+    """
+    Classification statistics of the IP addresses in the extraction cache.
 
     Attributes
     ----------
@@ -113,7 +117,8 @@ def get_ip_stats(
     use_encryption: bool = True,
     region_resolver: RegionResolver | None = None,
 ) -> IpStats:
-    """Return classification stats of the IP addresses in the extraction cache.
+    """
+    Return classification stats of the IP addresses in the extraction cache.
 
     Collects the unique IPs across all ``ips.txt`` files in the extraction cache, resolves each of them the
     same way the summaries do, and bins every one into one of these mutually-exclusive categories:
@@ -278,7 +283,8 @@ def _load_inventory_manifest(
 
 
 class _InventorySnapshot(typing.NamedTuple):
-    """The latest snapshot of a local S3 Inventory tree, resolved and ready to walk.
+    """
+    The latest snapshot of a local S3 Inventory tree, resolved and ready to walk.
 
     Attributes
     ----------

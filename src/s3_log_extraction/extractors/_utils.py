@@ -13,7 +13,8 @@ def _merge_file_into_extraction(
     destination_file_path: pathlib.Path,
     use_encryption: bool,
 ) -> None:
-    """Merge a single `.txt` file from `source_file_path` into `destination_file_path`.
+    """
+    Merge a single `.txt` file from `source_file_path` into `destination_file_path`.
 
     For ``ips.txt`` files, the existing encrypted destination is decrypted, merged with the new
     plaintext IPs, and re-encrypted. All other files are appended as raw bytes.
@@ -42,7 +43,8 @@ def _merge_dir_to_extraction(
     extraction_directory: pathlib.Path,
     use_encryption: bool,
 ) -> None:
-    """Merge all `.txt` files from `source_dir` into `extraction_directory`.
+    """
+    Merge all `.txt` files from `source_dir` into `extraction_directory`.
 
     For ``ips.txt`` files, existing encrypted content is decrypted, merged with new plaintext
     IPs, and re-encrypted. All other files are appended as raw bytes.

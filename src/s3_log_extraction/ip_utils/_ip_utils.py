@@ -6,7 +6,8 @@ from ..utils.encryption import read_text_from_file, write_text_to_file
 
 
 def _read_ips_from_file(file_path: pathlib.Path, use_encryption: bool = True) -> list[str]:
-    """Read and return stripped, non-empty IP address strings from a ``ips.txt`` file.
+    """
+    Read and return stripped, non-empty IP address strings from a ``ips.txt`` file.
 
     Parameters
     ----------
@@ -21,7 +22,8 @@ def _read_ips_from_file(file_path: pathlib.Path, use_encryption: bool = True) ->
 
 
 def _write_ips_to_file(file_path: pathlib.Path, ips: list[str], use_encryption: bool = True) -> None:
-    """Write IP address strings to a ``ips.txt`` file, optionally encrypting the content.
+    """
+    Write IP address strings to a ``ips.txt`` file, optionally encrypting the content.
 
     Parameters
     ----------

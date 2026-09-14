@@ -1,4 +1,5 @@
-"""Remote integration tests for IP geolocation.
+"""
+Remote integration tests for IP geolocation.
 
 These tests require real credentials and live network access.
 They are marked ``@pytest.mark.remote`` and are run only in the dedicated

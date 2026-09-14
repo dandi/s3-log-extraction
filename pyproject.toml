@@ -112,13 +112,107 @@ exclude = [
 line-length = 120
 
 [tool.ruff.lint]
-select = ["F", "E", "I"]
+select = ["ALL"]
 ignore = [
-    "F821",  # Only way to do annotation of lazy imports...
-    # Dormant today, since `RET` is not selected above. It is listed anyway because `fixable = ["ALL"]` means
-    # that selecting `RET` later would let `ruff --fix` silently collapse every named return in one pass, and
-    # those names are deliberate. See the rule in AGENTS.md for why.
+    # --- Conflicts with the formatter ---------------------------------------------------------------
+    # `black` owns trailing commas, and ruff documents this rule as incompatible with a formatter
+    "COM812",
+
+    # --- Docstring convention -----------------------------------------------------------------------
+    # Summaries are written on the line below the opening quotes, so prefer D213 over D212 and D211
+    # over D203. Each pair is mutually exclusive, and ruff warns when both halves are selected
+    "D203",
+    "D212",
+    # Blank-line and one-line placement inside a docstring is left to the author
+    "D200",
+    "D205",
+    "D413",
+    # Summaries read as descriptions rather than commands, and some begin by naming what they return
+    "D401",
+    "D404",
+    # Not every module carries a module-level docstring
+    "D100",
+
+    # --- Contradicts a rule in AGENTS.md ------------------------------------------------------------
+    # Internal imports are relative
+    "TID252",
+    # External dependencies are imported whole rather than under an alias
+    "ICN001",
+    # A result is bound to a named variable before being returned
     "RET504",
+    # Imports live at the top of a file, except the lazy ones that keep the optional `geolocation` and
+    # `remote` extras out of the base install. Those are annotated as strings, which reads to ruff as
+    # an undefined name and as a needlessly quoted annotation
+    "PLC0415",
+    "F821",
+    "UP037",
+
+    # --- Deliberate here ----------------------------------------------------------------------------
+    # Commands print to the terminal instead of logging
+    "T201",
+    # Status codes, column counts and other small literals read better inline than as named constants
+    "PLR2004",
+    # Boolean flags and long parameter lists are the published signatures of the API entry points.
+    # Reshaping them to satisfy a linter would be a breaking change
+    "FBT001",
+    "FBT002",
+    "PLR0913",
+    # `random.shuffle` spreads the file order within a run. Nothing here is a security primitive
+    "S311",
+    # SHA-1 content-addresses each validator's awk script. It is not used for security, and the digest
+    # becomes part of every validation record's file name, so changing it would orphan every cache
+    "S324",
+    # The result of `subprocess.run` is inspected by hand so the error can name the file that failed
+    "PLW1510",
+    # TODO comments are left without an author or a tracking link
+    "FIX002",
+    "TD002",
+    "TD003",
+    # `inplace=` is used on frames that are local and about to be written out
+    "PD002",
+    # Exception messages are built at the raise site rather than in one-off exception subclasses
+    "EM101",
+    "EM102",
+    "TRY003",
+    # Non-ASCII characters appear in prose deliberately
+    "RUF002",
+    # The few remaining `open()` calls are deliberate
+    "PTH123",
+    # Imports are not split into `TYPE_CHECKING` blocks
+    "TC001",
+    "TC002",
+    "TC003",
+    # Annotations are extensive but not required on every private helper
+    "ANN003",
+    "ANN202",
+    # Unused arguments are protocol conformance or signature compatibility
+    "ARG001",
+    "ARG002",
+
+    # --- Worth revisiting, but each would change behavior ---------------------------------------------
+    # `zip()` truncates to the shortest input. The summarize accumulations zip three lists that are
+    # built in step with one another, so `strict=True` would be a correctness assertion rather than a
+    # style fix, and would newly raise where today it silently drops. Left as-is deliberately
+    "B905",
+    # The published service range listings are fetched without a timeout, so a hung connection blocks
+    # the run. Adding one is a robustness improvement rather than a neutral edit
+    "S113",
+    # Timestamps are parsed and formatted naive, which is what the summaries have always published
+    "DTZ007",
+    "UP017",
+
+    # --- Mechanical, and not worth the churn on their own ----------------------------------------------
+    "B007",
+    "FURB116",
+    "PLC0206",
+    "PLC0207",
+    "PYI034",
+    "PYI041",
+    "RUF007",
+    "RUF015",
+    "RUF021",
+    "UP015",
+    "UP024",
 ]
 fixable = ["ALL"]
 
@@ -128,6 +222,31 @@ known-first-party = ["s3_log_extraction"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/s3_log_extraction/_hidden_top_level_imports.py" = ["F401"]  # Must perform imports here even if not exposed
+# The published testing helpers assert on behalf of their caller, which is the point of the module
+"src/s3_log_extraction/testing/_assertions.py" = ["S101"]
+# Tests assert (S101), reach into private names on purpose (SLF001), are not an importable package
+# (INP001), and do not carry module or function docstrings (D100, D103, D200). The rest are shapes
+# that read fine in a test and would only add noise to chase
+"tests/**/*.py" = [
+    "S101",
+    "SLF001",
+    "INP001",
+    "D100",
+    "D103",
+    "D200",
+    "ANN201",
+    "ARG005",
+    "B904",
+    "PT006",
+    "PT018",
+    "RUF003",
+    "RUF005",
+    "RUF010",
+    "S301",
+    "SIM117",
+]
+# `tools/` holds one-off maintenance scripts rather than an importable package
+"tools/**/*.py" = ["INP001", "D103", "T201"]
 
 
 [tool.codespell]
