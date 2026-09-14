@@ -616,6 +616,29 @@ def report(profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int =
             f"({100 * combined_sessions / max(total_sessions, 1):.2f}% of all)"
         )
 
+    # --- Selection axis: the fraction of each visit's assets the IP had never touched before. This is
+    #     the direct measure of "does this actor choose assets like a human?" A re-poller/monitor keeps
+    #     hitting the same handful (new ~= 0); a human mixes revisits with fresh picks (new in the middle);
+    #     an enumeration scanner marches through the archive touching each once (new ~= 1). Unlike coverage
+    #     and gap-CV, this separates the low-coverage, irregular-timing monitors those two axes miss. ---
+    if "new_asset_fraction_per_visit" in active.columns:
+        new_frac = active["new_asset_fraction_per_visit"]
+        repoller = new_frac <= 0.15
+        scanner = new_frac >= 0.85
+        mixed = ~repoller & ~scanner
+        print("\n  selection archetype by new-asset-fraction-per-visit (share of visited assets never seen before):")
+        for name, mask in [
+            ("re-poller/monitor (new<=15%)", repoller),
+            ("mixed/human      (15-85%)", mixed),
+            ("scanner/CI       (new>=85%)", scanner),
+        ]:
+            s = int(active.loc[mask, "n_sessions"].sum())
+            testing_ips = int((active.loc[mask, "testing_fraction"] > 0).sum()) if "testing_fraction" in active else 0
+            print(
+                f"    {name:<30}: {int(mask.sum()):>5,} IPs, {s:>12,} sessions "
+                f"({100 * s / max(total_sessions, 1):5.1f}% of all; {testing_ips} touch testing)"
+            )
+
     print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | test% | CV | domP | MB/sess):")
     cols = [
         "region_label",
@@ -684,7 +707,8 @@ def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: path
         return
     active["revisit"] = active["n_sessions"] / active["n_distinct_assets"].clip(lower=1)
 
-    fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.0))
+    fig, axes = plt.subplots(2, 2, figsize=(13.0, 10.0))
+    axes = axes.ravel()
     fig.suptitle(
         f"Threshold justification: per-IP distributions ({len(active):,} IPs ≥ {min_sessions} sessions)",
         fontsize=12,
@@ -729,7 +753,22 @@ def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: path
     ax.set_title("revisit — re-indexer tail", fontsize=9)
     ax.legend(fontsize=8)
 
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    # (c) selection — new-asset-fraction-per-visit, on a LINEAR 0..1 axis (it is already a fraction). This
+    #     is the axis expected to be genuinely multi-modal: a spike near 0 (re-pollers/monitors), a spike
+    #     near 1 (scanners/CI), and a human bulk in between. Valleys between those modes are defensible cuts.
+    ax = axes[3]
+    new_frac = active["new_asset_fraction_per_visit"].to_numpy(float)
+    new_frac = new_frac[np.isfinite(new_frac)]
+    if new_frac.size:
+        ax.hist(new_frac, bins=40, range=(0, 1), color="mediumpurple", alpha=0.85, edgecolor="none")
+    ax.axvline(0.15, color="crimson", ls="--", lw=0.9, label="15% (re-poller cut)")
+    ax.axvline(0.85, color="crimson", ls="--", lw=0.9, label="85% (scanner cut)")
+    ax.set_xlabel("new-asset fraction per visit (0 = pure re-poll, 1 = all new)")
+    ax.set_ylabel("IPs")
+    ax.set_title("(c) selection — multi-modal? re-poller vs human vs scanner", fontsize=9)
+    ax.legend(fontsize=8)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"Saved {out_path}")
 
