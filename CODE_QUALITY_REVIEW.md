@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 8 have been applied, thirty-two entries in all, and are marked APPLIED below. The remaining
-15 are still proposals awaiting approval.
+Groups 1 through 9 have been applied, thirty-five entries in all, and are marked APPLIED below. The remaining
+12 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -353,7 +353,7 @@ is real.
   stripped string raises `ValueError` identically from inside a helper.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`.
 
-#### DUP-8 — The optional-path conversion appears nine times in the CLI
+#### DUP-8 — APPLIED. The optional-path conversion appears nine times in the CLI
 
 - **Location**: `_command_line_interface/_cli.py` lines 122, 171, 226, 268, 302, 400, 442, 554, 618
 - **Issue**: `pathlib.Path(cache_directory) if cache_directory is not None else None` is written out nine times,
@@ -364,7 +364,7 @@ is real.
 - **Confidence it's safe**: **High**. A pure expression with no side effects, identical at every site.
 - **Verification**: `python -m pytest tests/test_cli_integration.py tests/test_log_bucket_stats.py -q`.
 
-#### DUP-9 — The `--cache` option declaration is repeated six times identically
+#### DUP-9 — APPLIED. The `--cache` option declaration is repeated six times identically
 
 - **Location**: `_command_line_interface/_cli.py` lines 152-162, 214-224, 243-253, 276-286, 365-375, 426-436
 - **Issue**: Six `rich_click.option` blocks share the same flag, the same destination name, the same
@@ -487,7 +487,7 @@ is real.
   call site passes today, which means diffing both templates field by field before merging.
 - **Verification**: `python -m pytest tests/test_downloads_logic_pre_validator.py tests/test_timestamps_parsing_pre_validator.py -q`.
 
-#### DUP-15 — The validator protocol list is written out three times
+#### DUP-15 — APPLIED. The validator protocol list is written out three times
 
 - **Location**: `_command_line_interface/_cli.py` (line 481 the `Choice` list, lines 486-488 the `Literal` annotation, lines 492-507 the `match` arms)
 - **Issue**: The same five protocol names appear three times in one function, and the `match` has five arms that
@@ -499,6 +499,8 @@ is real.
   output is unchanged. One behavior detail: the current `match` has no `case _`, so an unmatched protocol would
   silently do nothing, whereas a dict lookup would raise `KeyError`. That path is unreachable because
   `rich_click.Choice` rejects unknown values before the body runs, but it is the one difference to be aware of.
+  **Confirmed when applied**: `validate not_a_protocol /tmp` exits 2 with `SystemExit` from the `Choice`
+  conversion, never reaching the body, so the `KeyError` cannot be raised.
   The `Literal` annotation can keep its explicit form, since it is documentation rather than runtime behavior.
 - **Verification**: `s3logextraction validate --help` must be byte-identical, and
   `python -m pytest tests/test_cli_integration.py -q`.
@@ -1033,7 +1035,7 @@ All three touch the same 500-line module, and DUP-5 is the largest single consol
 Verification: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py -q`
 (about 90 tests).
 
-**Group 9 — CLI deduplication.** DUP-8, DUP-15, then DUP-9.
+**Group 9 — APPLIED. CLI deduplication.** DUP-8, DUP-15, then DUP-9.
 DUP-8 and DUP-15 are internal to the function bodies and cannot affect `--help`. DUP-9 changes how options are
 *declared*, so it is the one item in this review with a real risk of altering help output, and it goes last and
 alone.

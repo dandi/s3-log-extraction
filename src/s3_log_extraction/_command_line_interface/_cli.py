@@ -36,6 +36,29 @@ def _optional_path(value: str | None, /) -> pathlib.Path | None:
     return pathlib.Path(value) if value is not None else None
 
 
+def _cache_directory_option(command: typing.Callable) -> typing.Callable:
+    """
+    Attach the shared ``--cache`` option to a command.
+
+    This is the variant taken by commands that write into the cache directory. The three commands whose
+    ``--cache`` differs, in help text or in requiring the directory to already exist, declare their own.
+
+    Apply this where the literal option block would have gone: a decorator in a different position would
+    reorder the option in the rendered help.
+    """
+    return rich_click.option(
+        "--cache",
+        "cache_directory",
+        help=(
+            "Use a non-default cache directory for this command. "
+            "This overrides the configured cache directory without modifying saved config."
+        ),
+        required=False,
+        type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+        default=None,
+    )(command)
+
+
 # Protocol names offered by `s3logextraction validate`, in the order they are listed in its help text.
 _PRE_VALIDATORS: dict[str, type] = {
     "downloads_logic": DownloadsLogicPreValidator,
@@ -164,17 +187,7 @@ def _extract_cli(
     type=rich_click.IntRange(min=1),
     default=600,  # 10 minutes
 )
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str | None = None) -> None:
     """
     Stop the extraction processes if any are currently running in other windows.
@@ -225,17 +238,7 @@ def _reset_cli() -> None:
 
 # s3logextraction reset extraction
 @_reset_cli.command(name="extraction")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 def _reset_extraction_cli(cache_directory: str | None = None) -> None:
     reset_extraction(cache_directory=_optional_path(cache_directory))
 
@@ -254,17 +257,7 @@ def _update_ip_cli() -> None:
 
 # s3logextraction update ip database
 @_update_ip_cli.command(name="database")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 @rich_click.option(
     "--force",
     help="Download a fresh copy even if the cached database is not yet stale.",
@@ -287,17 +280,7 @@ def _update_ip_database_cli(cache_directory: str | None = None, force: bool = Fa
 
 # s3logextraction update ip coordinates
 @_update_ip_cli.command(name="coordinates")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 @rich_click.option(
     "--encryption",
     "use_encryption",
@@ -376,17 +359,7 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     default=REGION_DISCLOSURE_THRESHOLD,
     show_default=True,
 )
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 @rich_click.option(
     "--encryption",
     "use_encryption",
@@ -437,17 +410,7 @@ def _update_summaries_cli(
     type=rich_click.Choice(choices=["archive"]),
     default=None,
 )
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 def _update_totals_cli(
     mode: typing.Literal["archive"] | None = None,
     cache_directory: str | None = None,
