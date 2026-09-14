@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 11 have been applied, forty-one entries in all, and are marked APPLIED below. The remaining
-6 are still proposals awaiting approval.
+Groups 1 through 12 have been applied, forty-four entries in all, and are marked APPLIED below. DUP-16 is
+only partly applied, for the reason recorded under it. The remaining 3 were deliberately not scheduled.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -459,7 +459,7 @@ is real.
   call site, or pass the file list in. Do not unify it.
 - **Verification**: `python -m pytest tests/test_generic_extraction.py::test_extraction_parallel tests/test_cli_integration.py::test_cli_extraction_parallel -q`.
 
-#### DUP-13 — `_write_by_region_summary` is duplicated between two test modules
+#### DUP-13 — APPLIED. `_write_by_region_summary` is duplicated between two test modules
 
 - **Location**: `tests/test_ip_utils.py` (lines 69-75) and `tests/test_remote.py` (lines 44-50)
 - **Issue**: Identical seven-line helper, docstring included, in two files. It also hardcodes the by-region
@@ -471,7 +471,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_ip_utils.py -q` and `python -m pytest tests/test_remote.py --collect-only -q`
   (the latter is `remote`-marked and cannot run here, so at least confirm it still collects).
 
-#### DUP-14 — `_build_inventory_directory` is implemented three times with drifted signatures
+#### DUP-14 — APPLIED. `_build_inventory_directory` is implemented three times with drifted signatures
 
 - **Location**: `tests/test_log_bucket_stats.py` (line 19), `tests/test_remote_extractor_inventory.py` (line 62), and `tests/test_remote_validator.py` (line 15)
 - **Issue**: All three build a synthetic S3 inventory tree, and the bodies largely agree, but the signatures have
@@ -485,7 +485,7 @@ is real.
   confirm the generated trees are identical.
 - **Verification**: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py tests/test_remote_validator.py -q`.
 
-#### DUP-16 — Two divergent `_make_log_line` builders
+#### DUP-16 — PARTLY APPLIED. Two divergent `_make_log_line` builders
 
 - **Location**: `tests/test_downloads_logic_pre_validator.py` (line 16) and `tests/test_timestamps_parsing_pre_validator.py` (line 12)
 - **Issue**: Both build a synthetic S3 log line, under the same name, with different signatures:
@@ -497,6 +497,17 @@ is real.
 - **Confidence it's safe**: **Medium**. The merged builder must emit byte-identical lines for the arguments each
   call site passes today, which means diffing both templates field by field before merging.
 - **Verification**: `python -m pytest tests/test_downloads_logic_pre_validator.py tests/test_timestamps_parsing_pre_validator.py -q`.
+- **Outcome: the merge was NOT done, and should not be.** Diffing the templates field by field, as this entry
+  required, shows the two emit log lines of different shape: 27 fields against 25. The timestamps builder omits
+  `total_time` and `turn_around_time` entirely, so from the twelfth field onward the two lines are misaligned --
+  `"TestAgent"` sits at index 17 in one and index 15 in the other. A single builder "with every field defaulted"
+  cannot emit both shapes, because they differ in field *count*, not just in values; it would have to normalize
+  one of them, changing the input its awk script parses. That is not behavior-neutral, so the two builders stay.
+  Only the safe half was applied: the `datetime` parameter, which shadowed the standard library name, is renamed
+  to `bracketed_datetime` along with the parametrize labels and test arguments that carried it.
+
+  Whether the timestamps fixture *should* emit a full-width line is a real question, but answering it means
+  changing test inputs, which belongs in its own change rather than in a functionality-preserving cleanup.
 
 #### DUP-15 — APPLIED. The validator protocol list is written out three times
 
@@ -1064,7 +1075,7 @@ because by this point the duplication that obscures them has already gone.
 Verification: `python -m pytest tests/ -m "not remote" -q` in full, and diff the generated summary tree against
 `tests/expected_output/` directly.
 
-**Group 12 — Test-suite cleanup.** DUP-13, DUP-14, DUP-16, CL-18 (the test occurrences).
+**Group 12 — APPLIED. Test-suite cleanup.** DUP-13, DUP-14, DUP-16, CL-18 (the test occurrences).
 Last because it touches no production code and can land independently of everything above. No version bump and
 no `CHANGELOG.md` entry are needed for a `tests/`-only change, per the AGENTS.md bump rule.
 Verification: `python -m pytest tests/ -m "not remote" -q` must report the same count, 278 passed.

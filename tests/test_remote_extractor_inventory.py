@@ -8,6 +8,7 @@ import pathlib
 import unittest.mock
 
 import pytest
+from conftest import build_key_inventory_directory
 
 from s3_log_extraction.extractors._remote_s3_log_access_extractor import RemoteS3LogAccessExtractor
 from s3_log_extraction.utils.inventory import _extract_date_from_log_filename
@@ -59,86 +60,6 @@ def _make_extractor(tmp_path: pathlib.Path) -> RemoteS3LogAccessExtractor:
     return extractor
 
 
-def _build_inventory_directory(
-    tmp_path: pathlib.Path,
-    *,
-    source_bucket: str,
-    keys: list[str],
-    timestamp: str = "2024-01-05T01-00Z",
-    dt_partition: str = "dt=2024-01-05-01-00",
-    file_schema: str = "Bucket, Key",
-) -> pathlib.Path:
-    """
-    Create a minimal local AWS S3 Inventory directory structure.
-
-    Writes a single ``data/*.csv.gz`` file whose rows are
-    ``(source_bucket, key)`` for every *key* in *keys*.  The
-    ``hive/<dt_partition>/symlink.txt`` references that file and the
-    ``<timestamp>/manifest.json`` records the schema.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Root directory under which the inventory tree is created.
-    source_bucket : str
-        Value placed in the ``sourceBucket`` field of ``manifest.json``
-        and written into each CSV row.
-    keys : list[str]
-        Object keys to include in the inventory CSV file.
-    timestamp : str
-        Name of the timestamped manifest directory, e.g. ``"2024-01-05T01-00Z"``.
-    dt_partition : str
-        Name of the hive partition directory, e.g. ``"dt=2024-01-05-01-00"``.
-    file_schema : str
-        Comma-separated column names written into ``manifest.json``.
-
-    Returns
-    -------
-    pathlib.Path
-        The root of the created inventory directory.
-    """
-    inventory_dir = tmp_path / "inventory"
-    inventory_dir.mkdir(exist_ok=True)
-    data_dir = inventory_dir / "data"
-    data_dir.mkdir(exist_ok=True)
-    hive_dir = inventory_dir / "hive"
-    hive_dir.mkdir(exist_ok=True)
-
-    # Write CSV.gz data file
-    csv_buffer = io.BytesIO()
-    with gzip.open(csv_buffer, "wt", newline="") as gz:
-        writer = csv.writer(gz)
-        for key in keys:
-            writer.writerow([source_bucket, key])
-    uuid_filename = "test-uuid.csv.gz"
-    (data_dir / uuid_filename).write_bytes(csv_buffer.getvalue())
-
-    # Write manifest.json in the timestamp directory
-    timestamp_dir = inventory_dir / timestamp
-    timestamp_dir.mkdir(exist_ok=True)
-    manifest = {
-        "sourceBucket": source_bucket,
-        "fileFormat": "CSV",
-        "fileSchema": file_schema,
-        "files": [
-            {
-                "key": f"inventory/{source_bucket}/data/{uuid_filename}",
-                "size": len(csv_buffer.getvalue()),
-            }
-        ],
-    }
-    with (timestamp_dir / "manifest.json").open("w") as f:
-        json.dump(manifest, f)
-
-    # Write hive partition and symlink.txt
-    partition_dir = hive_dir / dt_partition
-    partition_dir.mkdir(exist_ok=True)
-    s3_data_ref = f"s3://inventory-bucket/inventory/{source_bucket}/data/{uuid_filename}"
-    (partition_dir / "symlink.txt").write_text(s3_data_ref + "\n")
-
-    return inventory_dir
-
-
 @pytest.mark.ai_generated
 def test_get_unprocessed_s3_urls_from_local_inventory_basic(tmp_path: pathlib.Path) -> None:
     """
@@ -153,7 +74,7 @@ def test_get_unprocessed_s3_urls_from_local_inventory_basic(tmp_path: pathlib.Pa
         "logs/2024/01/01/2024-01-01-00-05-00-BBBB",
         "logs/2024/01/02/2024-01-02-00-00-00-CCCC",
     ]
-    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
+    inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
     result = extractor._get_unprocessed_s3_urls_from_local_inventory(
         inventory_directory=inventory_dir,
@@ -181,7 +102,7 @@ def test_get_unprocessed_s3_urls_from_local_inventory_skips_already_done_urls(tm
         "2024/01/01/2024-01-01-00-00-00-AAAA",
         "2024/01/01/2024-01-01-00-05-00-BBBB",
     ]
-    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
+    inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
     result = extractor._get_unprocessed_s3_urls_from_local_inventory(
         inventory_directory=inventory_dir,
@@ -204,7 +125,7 @@ def test_get_unprocessed_s3_urls_from_local_inventory_ignores_non_matching_prefi
         "other/2024/01/01/2024-01-01-00-00-00-SKIP",
         "logs/2024/01/01/2024-01-01-00-00-00-KEEP",
     ]
-    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
+    inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
     result = extractor._get_unprocessed_s3_urls_from_local_inventory(
         inventory_directory=inventory_dir,
@@ -225,7 +146,7 @@ def test_get_unprocessed_s3_urls_from_local_inventory_uses_latest_partition(tmp_
 
     # Build an older partition with one set of keys
     older_keys = ["2024/01/01/2024-01-01-00-00-00-OLD"]
-    inventory_dir = _build_inventory_directory(
+    inventory_dir = build_key_inventory_directory(
         tmp_path,
         source_bucket=source_bucket,
         keys=older_keys,
@@ -378,7 +299,7 @@ def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested(
     ]
     all_keys = flat_keys + nested_keys
 
-    inventory_dir = _build_inventory_directory(tmp_path, source_bucket=source_bucket, keys=all_keys)
+    inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=all_keys)
 
     result = extractor._get_unprocessed_s3_urls_from_local_inventory(
         inventory_directory=inventory_dir,
@@ -417,7 +338,7 @@ def test_local_inventory_filename_only_record(
         "2026-01-05-00-00-00-AAAA",
     }
 
-    inventory_dir = _build_inventory_directory(
+    inventory_dir = build_key_inventory_directory(
         tmp_path,
         source_bucket=source_bucket,
         keys=[flat_key, nested_key, other_key],
