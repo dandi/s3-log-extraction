@@ -3,7 +3,7 @@ import pathlib
 
 import pandas
 
-from ._generate_summaries import _build_totals, _coerce_activity_columns, _count_regions_and_countries
+from ._utils import _build_totals, _coerce_activity_columns, _count_regions_and_countries
 from ..config import get_cache_subdirectory
 
 
