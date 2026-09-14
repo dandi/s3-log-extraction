@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 9 have been applied, thirty-five entries in all, and are marked APPLIED below. The remaining
-12 are still proposals awaiting approval.
+Groups 1 through 10 have been applied, thirty-seven entries in all, and are marked APPLIED below. The remaining
+10 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -209,7 +209,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`, which covers both the archive and
   per-dataset totals paths and pins output bytes against `tests/expected_output/`.
 
-#### DUP-2 — `_run_extraction` is byte-identical in both extractors
+#### DUP-2 — APPLIED. `_run_extraction` is byte-identical in both extractors
 
 - **Location**: `extractors/_s3_log_access_extractor.py` (lines 220-232) and `extractors/_remote_s3_log_access_extractor.py` (lines 386-398)
 - **Issue**: Thirteen lines, identical in every character including the `gawk --file` command string, the
@@ -429,7 +429,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`, which covers the archive mode
   including the withheld-by-region case.
 
-#### DUP-12 — The child-process copy-back loop is duplicated
+#### DUP-12 — APPLIED. The child-process copy-back loop is duplicated
 
 - **Location**: `extractors/_s3_log_access_extractor.py` (lines 151-169) and `extractors/_remote_s3_log_access_extractor.py` (lines 166-184)
 - **Issue**: The `tqdm` block labelled "Copying files from child processes" is identical in both, down to all six
@@ -442,6 +442,11 @@ is real.
   def _merge_worker_output_into_extraction(*, temporary_directory: pathlib.Path,
                                            extraction_directory: pathlib.Path, use_encryption: bool) -> None:
   ```
+
+  **Note, when applied.** The signature sketched above would have to gather `files_to_copy` itself, which is
+  exactly the expression that must *not* be unified. The applied helper therefore takes `files_to_copy` as an
+  argument, which is the second option this finding offers, leaving each extractor's own gathering expression
+  at its call site.
 - **Confidence it's safe**: **High** for the loop body, which is identical. Note that the two `files_to_copy`
   expressions that *feed* the loop are **not** identical: the remote extractor filters with
   `if path.is_file() is True` (line 164) and the local one does not (line 150). Leave that expression at each
@@ -1042,7 +1047,7 @@ alone.
 Verification: capture `--help` for every command and subcommand before the group and diff after, requiring a
 byte-identical file. Then `python -m pytest tests/test_cli_integration.py tests/test_log_bucket_stats.py -q`.
 
-**Group 10 — `extractors/` deduplication.** DUP-2, DUP-12.
+**Group 10 — APPLIED. `extractors/` deduplication.** DUP-2, DUP-12.
 The two provable extractions only. The broader inheritance refactor (NV-8) is explicitly *not* in this group.
 Verification: `python -m pytest tests/test_generic_extraction.py tests/test_cli_integration.py -q`, which runs
 real `gawk` subprocesses in both serial and parallel modes.

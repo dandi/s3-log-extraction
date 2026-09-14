@@ -12,7 +12,7 @@ import natsort
 import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
-from ._utils import _deploy_subprocess, _merge_dir_to_extraction, _merge_file_into_extraction
+from ._utils import _merge_dir_to_extraction, _merge_worker_output_into_extraction, _run_awk_extraction
 from ..config import get_cache_directory, get_cache_subdirectory
 from ..utils import _handle_max_workers
 
@@ -144,25 +144,12 @@ class S3LogAccessExtractor:
                     )
 
                     files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
-                    for file_path in tqdm.tqdm(
-                        iterable=files_to_copy,
-                        total=len(files_to_copy),
-                        desc="Copying files from child processes",
-                        unit="files",
-                        smoothing=0,
-                        position=1,
-                        leave=False,
-                    ):
-                        relative_parts = file_path.relative_to(self.temporary_directory).parts[1:]
-                        relative_file_path = pathlib.Path(*relative_parts)
-                        destination_file_path = self.extraction_directory / relative_file_path
-                        destination_file_path.parent.mkdir(parents=True, exist_ok=True)
-                        _merge_file_into_extraction(
-                            source_file_path=file_path,
-                            destination_file_path=destination_file_path,
-                            use_encryption=self.use_encryption,
-                        )
-                        file_path.unlink()
+                    _merge_worker_output_into_extraction(
+                        files_to_copy=files_to_copy,
+                        temporary_directory=self.temporary_directory,
+                        extraction_directory=self.extraction_directory,
+                        use_encryption=self.use_encryption,
+                    )
 
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
@@ -214,15 +201,9 @@ class S3LogAccessExtractor:
             file_stream.write(content)
 
     def _run_extraction(self, *, file_path: pathlib.Path, extraction_directory: pathlib.Path | None = None) -> None:
-        if extraction_directory is not None:
-            self._awk_env["EXTRACTION_DIRECTORY"] = str(extraction_directory)
-
-        absolute_script_path = str(self._relative_script_path.absolute())
-        absolute_file_path = str(file_path.absolute())
-
-        gawk_command = f"gawk --file {absolute_script_path} {absolute_file_path}"
-        _deploy_subprocess(
-            command=gawk_command,
-            environment_variables=self._awk_env,
-            error_message=f"Extraction failed on {file_path}.",
+        _run_awk_extraction(
+            script_path=self._relative_script_path,
+            file_path=file_path,
+            awk_env=self._awk_env,
+            extraction_directory=extraction_directory,
         )
