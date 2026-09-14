@@ -91,6 +91,23 @@ class IpStats(typing.TypedDict):
     github: IpCategoryCount
 
 
+def _categorize_region(region: str, /) -> str:
+    """Reduce a resolved region label to the category it is counted under in ``IpStats``."""
+    match region:
+        case "unknown":
+            return "unknown"
+        case "bogon":
+            return "bogon"
+        case _ if region.startswith("VPN"):
+            return "vpn"
+        case _ if region.startswith(("AWS", "GCP")):
+            return "cloud_service"
+        case _ if region.startswith("GitHub"):
+            return "github"
+        case _:
+            return "determined"
+
+
 def get_ip_stats(
     cache_directory: str | pathlib.Path | None = None,
     use_encryption: bool = True,
@@ -134,34 +151,19 @@ def get_ip_stats(
             extracted_ips.update(_read_ips_from_file(file_path=ips_file, use_encryption=use_encryption))
     extracted_ip_count = len(extracted_ips)
 
-    def _categorize(region: str) -> str:
-        match region:
-            case "unknown":
-                return "unknown"
-            case "bogon":
-                return "bogon"
-            case _ if region.startswith("VPN"):
-                return "vpn"
-            case _ if region.startswith(("AWS", "GCP")):
-                return "cloud_service"
-            case _ if region.startswith("GitHub"):
-                return "github"
-            case _:
-                return "determined"
-
     counts: collections.Counter[str] = collections.Counter()
     if extracted_ips:
         owns_resolver = region_resolver is None
         if owns_resolver:
             region_resolver = IpRegionResolver(cache_directory=cache_directory)
         try:
-            counts.update(_categorize(region_resolver.resolve(ip)) for ip in extracted_ips)
+            counts.update(_categorize_region(region_resolver.resolve(ip)) for ip in extracted_ips)
         finally:
             if owns_resolver:
                 region_resolver.close()
 
-    def _pct(n: int) -> float:
-        return (n / extracted_ip_count * 100) if extracted_ip_count > 0 else 0.0
+    def _pct(count: int) -> float:
+        return (count / extracted_ip_count * 100) if extracted_ip_count > 0 else 0.0
 
     return IpStats(
         extracted_ip_count=extracted_ip_count,
@@ -172,6 +174,34 @@ def get_ip_stats(
         cloud_service=IpCategoryCount(count=counts["cloud_service"], percent=_pct(counts["cloud_service"])),
         github=IpCategoryCount(count=counts["github"], percent=_pct(counts["github"])),
     )
+
+
+def _format_date_if_valid(year: str, month: str, day: str) -> str | None:
+    """
+    Format three components as ``YYYY-MM-DD`` when they have the shape of a calendar date.
+
+    Only the shape is validated -- four digits, then two, then two -- not whether the date exists, so a
+    path or filename that merely looks like a date is accepted exactly as it always has been.
+
+    Parameters
+    ----------
+    year : str
+        Candidate four-digit year component.
+    month : str
+        Candidate two-digit month component.
+    day : str
+        Candidate two-digit day component.
+
+    Returns
+    -------
+    str or None
+        The date string ``"YYYY-MM-DD"``, or ``None`` when any component has the wrong shape.
+    """
+    if len(year) != 4 or len(month) != 2 or len(day) != 2:
+        return None
+    if not (year.isdigit() and month.isdigit() and day.isdigit()):
+        return None
+    return f"{year}-{month}-{day}"
 
 
 def _extract_date_from_log_filename(filename: str) -> str | None:
@@ -196,12 +226,7 @@ def _extract_date_from_log_filename(filename: str) -> str | None:
     parts = filename.split("-")
     if len(parts) < 3:
         return None
-    year_str, month_str, day_str = parts[0], parts[1], parts[2]
-    if len(year_str) != 4 or len(month_str) != 2 or len(day_str) != 2:
-        return None
-    if not (year_str.isdigit() and month_str.isdigit() and day_str.isdigit()):
-        return None
-    return f"{year_str}-{month_str}-{day_str}"
+    return _format_date_if_valid(parts[0], parts[1], parts[2])
 
 
 def _load_inventory_manifest(
@@ -250,6 +275,102 @@ def _load_inventory_manifest(
     symlink_path = latest_partition / "symlink.txt"
 
     return source_bucket, file_schema, symlink_path
+
+
+class _InventorySnapshot(typing.NamedTuple):
+    """The latest snapshot of a local S3 Inventory tree, resolved and ready to walk.
+
+    Attributes
+    ----------
+    directory : pathlib.Path
+        Root of the inventory tree, coerced from whatever the caller passed.
+    source_bucket : str
+        Bucket the inventoried keys belong to, from ``manifest.json``.
+    file_schema : list of str
+        Column names of the inventory CSV files, in order.
+    key_index : int
+        Position of the ``Key`` column within ``file_schema``.
+    symlink_lines : list of str
+        S3 paths of the ``data/*.csv.gz`` files making up the snapshot, in the order listed.
+    """
+
+    directory: pathlib.Path
+    source_bucket: str
+    file_schema: list[str]
+    key_index: int
+    symlink_lines: list[str]
+
+
+def _load_inventory_snapshot(inventory_directory: pathlib.Path, /) -> _InventorySnapshot:
+    """
+    Resolve the latest inventory snapshot of a local S3 Inventory tree.
+
+    The schema is resolved before any row is read, so that a caller can tell a column is present even when
+    the snapshot holds no rows at all.
+
+    Parameters
+    ----------
+    inventory_directory : path-like
+        Root of the pre-downloaded S3 inventory tree.
+
+    Returns
+    -------
+    _InventorySnapshot
+        The resolved snapshot.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no ``dt=*`` hive partitions are found.
+    ValueError
+        If the ``Key`` column is absent from the inventory schema.
+    """
+    inventory_directory = pathlib.Path(inventory_directory)
+    source_bucket, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
+
+    if "Key" not in file_schema:
+        message = f"'Key' column not found in inventory schema: {file_schema}"
+        raise ValueError(message)
+    key_index = file_schema.index("Key")
+
+    # Read symlink.txt — each line is an S3 path to a data/*.csv.gz file.
+    symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
+
+    return _InventorySnapshot(
+        directory=inventory_directory,
+        source_bucket=source_bucket,
+        file_schema=file_schema,
+        key_index=key_index,
+        symlink_lines=symlink_lines,
+    )
+
+
+def _iter_inventory_rows(snapshot: _InventorySnapshot, /) -> typing.Iterator[list[str]]:
+    """
+    Yield every row of a snapshot that is long enough to carry a key.
+
+    Rows are produced lazily, in the order the data files are listed and the order they hold, because these
+    files run to millions of rows and are never held in memory all at once.
+
+    Parameters
+    ----------
+    snapshot : _InventorySnapshot
+        The snapshot to walk, from ``_load_inventory_snapshot``.
+
+    Yields
+    ------
+    list of str
+        One inventory row.
+    """
+    for s3_data_path in snapshot.symlink_lines:
+        uuid_filename = s3_data_path.split("/")[-1]
+        local_csv_gz_path = snapshot.directory / "data" / uuid_filename
+        with gzip.open(local_csv_gz_path, "rt", newline="") as gz_file:
+            reader = csv.reader(gz_file)
+            for row in reader:
+                if len(row) <= snapshot.key_index:
+                    continue
+                yield row
 
 
 def _read_s3_urls_from_local_inventory(
@@ -316,63 +437,38 @@ def _read_s3_urls_from_local_inventory(
     ValueError
         If the ``Key`` column is absent from the inventory schema.
     """
-    inventory_directory = pathlib.Path(inventory_directory)
-    source_bucket, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
-
-    if "Key" not in file_schema:
-        message = f"'Key' column not found in inventory schema: {file_schema}"
-        raise ValueError(message)
-    key_index = file_schema.index("Key")
-
-    # Read symlink.txt — each line is an S3 path to a data/*.csv.gz file.
-    symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
+    snapshot = _load_inventory_snapshot(inventory_directory)
 
     # Parse each local CSV.gz file referenced by the symlink.
     s3_root_prefix = s3_root.rstrip("/") + "/"
     inventory: dict[str, list[str]] = collections.defaultdict(list)
-    for s3_data_path in symlink_lines:
-        uuid_filename = s3_data_path.split("/")[-1]
-        local_csv_gz_path = inventory_directory / "data" / uuid_filename
-        with gzip.open(local_csv_gz_path, "rt", newline="") as gz_file:
-            reader = csv.reader(gz_file)
-            for row in reader:
-                if len(row) <= key_index:
-                    continue
-                key = row[key_index]
-                s3_url = f"s3://{source_bucket}/{key}"
-                if not s3_url.startswith(s3_root_prefix):
-                    continue
-                relative_path = s3_url[len(s3_root_prefix) :]
-                parts = relative_path.split("/")
+    for row in _iter_inventory_rows(snapshot):
+        key = row[snapshot.key_index]
+        s3_url = f"s3://{snapshot.source_bucket}/{key}"
+        if not s3_url.startswith(s3_root_prefix):
+            continue
+        relative_path = s3_url[len(s3_root_prefix) :]
+        parts = relative_path.split("/")
 
-                # Strategy 1: path-based date extraction for year/month/day/... structure.
-                # Validate that the first three components look like a calendar date so that
-                # deeply-nested paths (e.g. account-id/region/bucket/year/month/day/logfile)
-                # are not misidentified.
-                date = None
-                if len(parts) >= 4:
-                    year, month, day = parts[0], parts[1], parts[2]
-                    if (
-                        len(year) == 4
-                        and year.isdigit()
-                        and len(month) == 2
-                        and month.isdigit()
-                        and len(day) == 2
-                        and day.isdigit()
-                    ):
-                        date = f"{year}-{month}-{day}"
+        # Strategy 1: path-based date extraction for year/month/day/... structure.
+        # Validate that the first three components look like a calendar date so that
+        # deeply-nested paths (e.g. account-id/region/bucket/year/month/day/logfile)
+        # are not misidentified.
+        date = None
+        if len(parts) >= 4:
+            date = _format_date_if_valid(parts[0], parts[1], parts[2])
 
-                # Strategy 2: filename-based date extraction as a fallback.
-                # Handles flat files stored directly in the bucket root as well as
-                # files nested under a non-date prefix (e.g. account-id/region/bucket/).
-                # S3 server access log filenames always start with YYYY-MM-DD-HH-MM-SS-*.
-                if date is None:
-                    date = _extract_date_from_log_filename(parts[-1])
+        # Strategy 2: filename-based date extraction as a fallback.
+        # Handles flat files stored directly in the bucket root as well as
+        # files nested under a non-date prefix (e.g. account-id/region/bucket/).
+        # S3 server access log filenames always start with YYYY-MM-DD-HH-MM-SS-*.
+        if date is None:
+            date = _extract_date_from_log_filename(parts[-1])
 
-                if date is None:
-                    continue
+        if date is None:
+            continue
 
-                inventory[date].append(s3_url)
+        inventory[date].append(s3_url)
 
     return dict(inventory)
 
@@ -421,31 +517,16 @@ def get_log_bucket_stats(
     ValueError
         If the ``Key`` column is absent from the inventory schema.
     """
-    inventory_directory = pathlib.Path(inventory_directory)
-    _, file_schema, symlink_path = _load_inventory_manifest(inventory_directory)
-
-    if "Key" not in file_schema:
-        message = f"'Key' column not found in inventory schema: {file_schema}"
-        raise ValueError(message)
-    key_index = file_schema.index("Key")
-    size_index = file_schema.index("Size") if "Size" in file_schema else None
-
-    symlink_lines = [line.strip() for line in symlink_path.read_text().splitlines() if line.strip()]
+    snapshot = _load_inventory_snapshot(inventory_directory)
+    size_index = snapshot.file_schema.index("Size") if "Size" in snapshot.file_schema else None
 
     file_count = 0
     total_size_bytes: int | None = 0 if size_index is not None else None
 
-    for s3_data_path in symlink_lines:
-        uuid_filename = s3_data_path.split("/")[-1]
-        local_csv_gz_path = inventory_directory / "data" / uuid_filename
-        with gzip.open(local_csv_gz_path, "rt", newline="") as gz_file:
-            reader = csv.reader(gz_file)
-            for row in reader:
-                if len(row) <= key_index:
-                    continue
-                file_count += 1
-                if size_index is not None and len(row) > size_index:
-                    total_size_bytes += int(row[size_index])  # type: ignore[operator]
+    for row in _iter_inventory_rows(snapshot):
+        file_count += 1
+        if size_index is not None and len(row) > size_index:
+            total_size_bytes += int(row[size_index])  # type: ignore[operator]
 
     return LogBucketStats(file_count=file_count, total_size_bytes=total_size_bytes)
 

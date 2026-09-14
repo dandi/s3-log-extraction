@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 7 have been applied, twenty-nine entries in all, and are marked APPLIED below. The remaining
-18 are still proposals awaiting approval.
+Groups 1 through 8 have been applied, thirty-two entries in all, and are marked APPLIED below. The remaining
+15 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -288,7 +288,7 @@ is real.
   heuristic validator still works with a restricted environment, since that is the case the `env` detail
   protects.
 
-#### DUP-5 — The S3 inventory walk is implemented twice
+#### DUP-5 — APPLIED. The S3 inventory walk is implemented twice
 
 - **Location**: `utils/inventory.py`, `_read_s3_urls_from_local_inventory` (lines 320-341) and `get_log_bucket_stats` (lines 425-446)
 - **Issue**: About fifteen lines repeat in both functions: the `pathlib.Path` coercion, the
@@ -305,12 +305,21 @@ is real.
 
   A generator rather than a list keeps the current memory behavior, which matters because these files hold
   millions of rows.
+
+  **Correction, found while applying.** The signature proposed above is wrong for one case. If the schema is
+  only ever learned from a yielded row, then an inventory that declares a `Size` column but holds no rows
+  yields nothing, `size_index` is never computed, and `get_log_bucket_stats` returns `total_size_bytes=None`
+  where it currently returns `0`. No test covers that shape. What was applied instead resolves the snapshot
+  eagerly (`_load_inventory_snapshot`, returning a small `_InventorySnapshot` named tuple carrying the
+  directory, bucket, schema, key index and data-file list) and iterates rows lazily from it
+  (`_iter_inventory_rows`), so the schema is known before the first row and laziness is still preserved.
 - **Confidence it's safe**: **High**. Both sites open the same files in the same order (`symlink_lines` order)
   and apply the same skip rule, so rows arrive in the same sequence. The `ValueError` message is identical in
   both, so a single copy in the helper preserves it. The one asymmetry is that `get_log_bucket_stats` also needs
   `size_index`, which it can still compute from the yielded schema.
 - **Verification**: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py -q`
-  (about 90 tests covering both functions against synthetic inventory trees).
+  (28 tests covering both functions against synthetic inventory trees; the "about 90" written here originally
+  was an overestimate).
 
 #### DUP-6 — APPLIED. The totals dictionary and requester parsing are duplicated
 
@@ -573,7 +582,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`. The golden `by_asset.tsv` files pin
   the `asset_path` values.
 
-#### CON-5 — Lift the two closures out of `get_ip_stats`
+#### CON-5 — APPLIED (partly). Lift the two closures out of `get_ip_stats`
 
 - **Location**: `utils/inventory.py` (lines 138-151 `_categorize`, lines 164-165 `_pct`)
 - **Issue**: `_categorize` is a 14-line `match` statement nested inside a public function. It closes over nothing,
@@ -585,6 +594,10 @@ is real.
   cannot change its result. **Medium** for `_pct`, only because it means threading `extracted_ip_count` through
   at six call sites.
 - **Verification**: `python -m pytest tests/test_log_bucket_stats.py -q`.
+- **What was applied**: `_categorize` was hoisted to module level as `_categorize_region`. `_pct` was left as a
+  closure, which this finding explicitly allows, with its parameter renamed from `n` to `count`; hoisting it
+  would have threaded `extracted_ip_count` through six call sites for a one-line function, which reads worse
+  than it reads now.
 
 #### CON-6 — Cache the subregion-to-CIDR index instead of rebuilding it per region
 
@@ -758,7 +771,7 @@ is real.
   not change. `BaseValidator.validate_directory` coerces with `pathlib.Path(directory)` on its own anyway.
 - **Verification**: `python -m pytest tests/test_cli_integration.py -q`.
 
-#### CL-13 — Two spellings of the same date validation in one module
+#### CL-13 — APPLIED. Two spellings of the same date validation in one module
 
 - **Location**: `utils/inventory.py`, `_extract_date_from_log_filename` (lines 197-205) against the inline check in `_read_s3_urls_from_local_inventory` (lines 354-364)
 - **Issue**: Both validate that three components are a 4-digit year, a 2-digit month, and a 2-digit day, then
@@ -1015,7 +1028,7 @@ Verification: before and after,
 must print the same string. Then
 `python -m pytest tests/test_downloads_logic_pre_validator.py tests/test_extraction_heuristic_pre_validator.py -q`.
 
-**Group 8 — `utils/inventory.py` deduplication.** DUP-5, CON-5, CL-13.
+**Group 8 — APPLIED. `utils/inventory.py` deduplication.** DUP-5, CON-5, CL-13.
 All three touch the same 500-line module, and DUP-5 is the largest single consolidation win in the codebase.
 Verification: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py -q`
 (about 90 tests).
