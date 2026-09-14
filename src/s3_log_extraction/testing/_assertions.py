@@ -5,8 +5,8 @@ def assert_expected_extraction_content(
     extractor_name: str,
     output_directory: pathlib.Path,
     expected_output_directory: pathlib.Path,
-    relative_output_files: pathlib.Path,
-    relative_expected_files: pathlib.Path,
+    relative_output_files: set[pathlib.Path],
+    relative_expected_files: set[pathlib.Path],
 ) -> None:
     """Check if the expected content and records match the actual content and records."""
     record_files = {
@@ -66,7 +66,7 @@ def assert_filetree_matches(test_dir: pathlib.Path, expected_dir: pathlib.Path) 
         f"Missing files in test: {expected_files - test_files}"
     )
 
-    for relative_file_path in relative_expected_file_contents.keys():
+    for relative_file_path in relative_expected_file_contents:
         test_content = relative_test_file_contents[relative_file_path]
         expected_content = relative_expected_file_contents[relative_file_path]
 

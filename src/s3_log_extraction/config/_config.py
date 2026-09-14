@@ -31,7 +31,7 @@ def get_config() -> dict[str, typing.Any]:
     dict
         The configuration for S3 log extraction.
     """
-    config = {}
+    config: dict[str, typing.Any] = {}
     if not S3_LOG_EXTRACTION_CONFIG_FILE_PATH.exists():
         with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="w") as file_stream:
             json.dump(obj=config, fp=file_stream, indent=2, sort_keys=True)

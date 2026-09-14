@@ -2,10 +2,81 @@ import abc
 import hashlib
 import pathlib
 import random
+import subprocess
 
 import tqdm
 
 from ..config import get_cache_subdirectory
+
+
+def _hash_awk_script_file(script_path: pathlib.Path, /) -> int:
+    """
+    Compute a hash based on the contents of the AWK validation script.
+
+    Editing the rule therefore starts a fresh validation record, since the record file of a validator is
+    named after this value.
+
+    Returns
+    -------
+    int
+        Integer hash derived from the SHA-1 checksum of the AWK script file.
+    """
+    with script_path.open("rb") as file_stream:
+        byte_content = file_stream.read()
+
+    checksum = hashlib.sha1(string=byte_content).hexdigest()
+    checksum_int = int(checksum, 16)
+    return checksum_int
+
+
+def _run_awk_validation(
+    *,
+    script_path: pathlib.Path,
+    file_path: pathlib.Path,
+    failure_label: str,
+    environment_variables: dict[str, str] | None = None,
+) -> None:
+    """
+    Run a pre-validator's AWK script over a single log file, raising if the script reports a violation.
+
+    Parameters
+    ----------
+    script_path : pathlib.Path
+        The AWK script carrying the validation rule.
+    file_path : pathlib.Path
+        The raw S3 log file to validate.
+    failure_label : str
+        Leading phrase of the error message, naming the rule that failed.
+    environment_variables : dict of str to str, optional
+        Passed to the subprocess unchanged. The default of ``None`` lets the child inherit this process's
+        environment, which is what every pre-validator but the extraction heuristic relies on. A mapping
+        *replaces* that environment rather than adding to it, so it is deliberately never merged with
+        ``os.environ``.
+
+    Raises
+    ------
+    RuntimeError
+        If the AWK script exits with a non-zero return code.
+    """
+    absolute_awk_script_path = str(script_path.absolute())
+    absolute_file_path = str(file_path.absolute())
+
+    awk_command = f"awk --file {absolute_awk_script_path} {absolute_file_path}"
+    result = subprocess.run(
+        args=awk_command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        env=environment_variables,
+    )
+    if result.returncode != 0:
+        message = (
+            f"\n{failure_label} pre-check failed.\n "
+            f"Log file: {absolute_file_path}\n"
+            f"Error code {result.returncode}\n\n"
+            f"stderr: {result.stderr}\n"
+        )
+        raise RuntimeError(message)
 
 
 class BaseValidator(abc.ABC):

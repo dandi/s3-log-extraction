@@ -1,9 +1,7 @@
-import hashlib
 import os
 import pathlib
-import subprocess
 
-from ._base_validator import BaseValidator
+from ._base_validator import BaseValidator, _hash_awk_script_file, _run_awk_validation
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):
@@ -19,15 +17,10 @@ class ExtractionHeuristicPreValidator(BaseValidator):
     tqdm_description = "Pre-validating extraction heuristic"
 
     def __hash__(self) -> int:
-        with self._relative_awk_script_path.open("rb") as file_stream:
-            byte_content = file_stream.read()
-
-        checksum = hashlib.sha1(string=byte_content).hexdigest()
-        checksum_int = int(checksum, 16)
-        return checksum_int
+        return _hash_awk_script_file(self._relative_awk_script_path)
 
     # TODO: parallelize
-    def __init__(self):
+    def __init__(self) -> None:
         self._excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX") or "^$"
 
         # TODO: does this hold after bundling?
@@ -38,22 +31,9 @@ class ExtractionHeuristicPreValidator(BaseValidator):
         super().__init__()
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
-        absolute_awk_script_path = str(self._relative_awk_script_path.absolute())
-        absolute_file_path = str(file_path.absolute())
-
-        awk_command = f"awk --file {absolute_awk_script_path} {absolute_file_path}"
-        result = subprocess.run(
-            args=awk_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            env={"EXCLUDED_IP_REGEX": self._excluded_ip_regex},
+        _run_awk_validation(
+            script_path=self._relative_awk_script_path,
+            file_path=file_path,
+            failure_label="Extraction heuristic",
+            environment_variables={"EXCLUDED_IP_REGEX": self._excluded_ip_regex},
         )
-        if result.returncode != 0:
-            message = (
-                f"\nExtraction heuristic pre-check failed.\n "
-                f"Log file: {absolute_file_path}\n"
-                f"Error code {result.returncode}\n\n"
-                f"stderr: {result.stderr}\n"
-            )
-            raise RuntimeError(message)

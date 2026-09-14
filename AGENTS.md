@@ -1,6 +1,6 @@
 # Agent instructions
 
-- Always run `pre-commit` before committing and pushing changes
+- Always run `pre-commit` before committing and pushing changes. The hooks run on commit and may auto-fix files; when they do, stage those fixes and commit again, repeating until `pre-commit` passes cleanly. Pushing and updating the pull request must not create new commits of its own
 - To the best of your ability, ensure tests are passing
 - Follow assertion style (actual on left, expected on right)
 - Always mark AI-generated tests with `ai_generated` Pytest marker
@@ -8,7 +8,8 @@
 - For tests, avoid importing private-marked API functions (those with leading underscores) and always favor importing what is publicly exposed through `__init__.py` files
 - Bump the version in `pyproject.toml` once per pull request when either any file under `src/` changes (excluding `tests/` and `docs/`), or `pyproject.toml` itself changes.; do NOT bump for changes that are purely CI/workflow, documentation, or configuration (e.g., GitHub Actions workflows, `AGENTS.md`, `README.md` badges).
 - For API signatures, require keyword arguments for multi-input functions using `(*, ...)`. For any function with exactly one caller-supplied parameter (excluding `self` and `cls`), require positional-only usage with the `/` designator
-- Leave a short description of the change or addition in the top `## Upcoming` section of the `CHANGELOG.md` under the appropriate subsection (`### 🚀 Enhancement`, `### 🐛 Bug Fix`, `### 📝 Documentation`, `### 🔩 Dependency Updates`, or `### 🏠 Internal`) as a new item (line starts with `-`); create the subsection if it does not yet exist; include the GitHub PR link at the end of each entry in the format `([#N](https://github.com/stamped-principles/stamped-checklist/pull/N)`
+- Leave a short description of the change or addition in the top `## Upcoming` section of the `CHANGELOG.md` under the appropriate subsection (`### 🚀 Enhancement`, `### 🐛 Bug Fix`, `### 📝 Documentation`, `### 🔩 Dependency Updates`, or `### 🏠 Internal`) as a new item (line starts with `-`); create the subsection if it does not yet exist; include the GitHub PR link at the end of each entry in the format `([#N](https://github.com/dandi/s3-log-extraction/pull/N))`
+- Keep every changelog entry short: one paragraph on a single line, at most four sentences and roughly seventy words. Say what changed and what it affects for someone deciding whether the release matters to them. How it was implemented, why alternatives were rejected, what was measured to verify it, and any other reasoning belong in the pull request, which the entry already links to. The entries under `v1.10.2` and earlier are the reference for length; if an entry runs longer than those, cut it rather than reformatting it
 - PR titles should be human-readable and in the past tense; they should NOT use conventional commit style
 - Always add new imports to the top of the file rather than locally scoped inside a function; the only exception is if it is needed to avoid a circular dependency
 - Never include code other than imports, `__all__`, simple import errors, or magic `__dir__` overrides in any `__init__.py` file
@@ -20,3 +21,10 @@
 - Do not add compatibility aliases when renaming functions. Update all call sites to the canonical name instead
 - Favor defining one-word names for CLI flags, then map those onto longer more explicit keyword arguments at the API level
 - Never make up IPs to use the testing suite; always use bogon types
+- Write NumPy-style docstrings for every public function, class, and method, and use PEP 484 type hints throughout
+- Prefer binding a result to a named variable before returning it, rather than returning the expression directly. The name records how to interpret the value as output, and it leaves a breakpoint where the final state of the locals is still visible. `ruff`'s `RET504` enforces the opposite, so it is listed under `[tool.ruff.lint] ignore`; leave it there
+- Do not factor a short expression into a helper merely because it repeats. A one-line coercion or guard reads better written out at each site than behind a name the reader has to jump away to look up, and that redirection costs more than the duplication saves. Reserve shared helpers for blocks that carry enough logic that a drift between copies would be a defect
+- Do not comment a configuration line to explain why a standard setting is set the standard way. A comment earns its place only by saying something a reader could not infer from the setting itself, such as a constraint that is not visible locally or a reason the obvious alternative was rejected. This applies to `pyproject.toml`, `.pre-commit-config.yaml`, workflows and Dockerfiles alike. If a comment would go stale the moment the setting changes, delete it rather than maintain it
+- Prefer the environment that is already installed. Install or upgrade a package only when the change genuinely cannot be completed otherwise, and when you must, pin the version and explain the need in the pull request body
+- Keep commits small and purposeful. Avoid sweeping style-only changes unless they are the point of the change
+- You may edit GitHub Actions or other CI workflows when a fix genuinely requires it, but explain the rationale in the pull request

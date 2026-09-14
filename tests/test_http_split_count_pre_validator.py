@@ -49,7 +49,8 @@ def test_http_split_count_empty_file(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.ai_generated
 def test_http_split_count_multiple_occurrences(tmp_path: pathlib.Path) -> None:
-    """Validator should raise RuntimeError when 'HTTP/1.' occurs more than once on a line.
+    """
+    Validator should raise RuntimeError when 'HTTP/1.' occurs more than once on a line.
 
     A user agent that embeds the HTTP pattern is the realistic way a second occurrence sneaks in.
     """

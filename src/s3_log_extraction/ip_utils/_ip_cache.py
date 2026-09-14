@@ -13,7 +13,8 @@ def load_ip_cache(
     cache_directory: str | pathlib.Path | None = None,
     use_encryption: bool = True,
 ) -> dict[str, str]:
-    """Load an IP cache file from the ``ips`` subdirectory of the cache directory.
+    """
+    Load an IP cache file from the ``ips`` subdirectory of the cache directory.
 
     Parameters
     ----------
@@ -44,7 +45,8 @@ def write_ip_cache(
     cache_directory: str | pathlib.Path | None = None,
     use_encryption: bool = True,
 ) -> None:
-    """Write data to an IP cache file, optionally encrypting the content.
+    """
+    Write data to an IP cache file, optionally encrypting the content.
 
     Parameters
     ----------

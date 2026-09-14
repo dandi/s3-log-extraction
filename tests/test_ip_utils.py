@@ -9,9 +9,16 @@ import warnings
 import geoip2.errors
 import pytest
 import yaml
+from conftest import write_by_region_summary
 
 import s3_log_extraction
-from s3_log_extraction.ip_utils import IpRegionResolver, MappingRegionResolver, RegionResolver
+from s3_log_extraction.ip_utils import (
+    IpRegionResolver,
+    MappingRegionResolver,
+    RegionResolver,
+    country_alpha_2_to_alpha_3,
+    get_region_coordinates,
+)
 from s3_log_extraction.ip_utils._geolite2 import (
     GEOLITE2_DATABASE_FILE_NAME,
     GEOLITE2_MAX_DATABASE_AGE_IN_DAYS,
@@ -19,7 +26,6 @@ from s3_log_extraction.ip_utils._geolite2 import (
     open_geolite2_database,
     update_geolite2_database,
 )
-from s3_log_extraction.ip_utils._region_codes import country_alpha_2_to_alpha_3, get_region_coordinates
 
 # Loose bounding boxes (south, north, west, east) used to check that a coordinate lands in the right place
 _CALIFORNIA_BOX = (32.0, 42.5, -125.0, -114.0)
@@ -64,15 +70,6 @@ def _make_reader(city_responses: dict[str, object]) -> unittest.mock.MagicMock:
     reader.city.side_effect = city
     reader.__enter__.return_value = reader
     return reader
-
-
-def _write_by_region_summary(summary_file_path: pathlib.Path, regions: list[str]) -> None:
-    """Write a minimal published by-region summary listing the given region labels."""
-    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
-    rows = "\n".join(f"{region}\t1\t1\t0\t1" for region in regions)
-    summary_file_path.write_text(
-        f"region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\tnumber_of_views\n{rows}\n"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -565,8 +562,8 @@ def test_update_region_code_coordinates_locates_published_regions(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
 ) -> None:
     """Every label of the published by-region summaries is located from the bundled tables; unknown ones reported."""
-    _write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=["USA/CA", "bogon", "XX/YY"])
-    _write_by_region_summary(tmp_path / "summaries" / "archive" / "by_region.tsv", regions=["USA/CA", "AUS", "missing"])
+    write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=["USA/CA", "bogon", "XX/YY"])
+    write_by_region_summary(tmp_path / "summaries" / "archive" / "by_region.tsv", regions=["USA/CA", "AUS", "missing"])
 
     with unittest.mock.patch("requests.get") as mock_get:
         s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)
@@ -593,7 +590,7 @@ def test_update_region_code_coordinates_without_summaries(tmp_path: pathlib.Path
 @pytest.mark.ai_generated
 def test_update_region_code_coordinates_locates_services_with_geolite2(tmp_path: pathlib.Path) -> None:
     """Cloud service regions are located by geolocating an address from their range, once, not from the tables."""
-    _write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=["AWS/us-west-2", "GitHub"])
+    write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=["AWS/us-west-2", "GitHub"])
 
     reader = _make_reader(city_responses={"52.0.0.0": _make_city_response(latitude=45.8399, longitude=-119.7006)})
 

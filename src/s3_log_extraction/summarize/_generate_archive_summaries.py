@@ -4,9 +4,55 @@ import beartype
 import natsort
 import pandas
 
-from ._generate_summaries import _write_summary_by_region
+from ._utils import _coerce_activity_columns, _write_summary_by_region
 from .globals import REGION_DISCLOSURE_THRESHOLD
 from ..config import get_cache_subdirectory
+
+
+def _read_dataset_summaries(*, summary_directory: pathlib.Path, pattern: str) -> list[pandas.DataFrame]:
+    """
+    Read every per-dataset summary matching ``pattern``, with its activity columns coerced.
+
+    The archive's own summaries are skipped, so that aggregating does not fold a previous archive result back
+    into itself.
+    """
+    summaries = [
+        pandas.read_table(filepath_or_buffer=summary_file_path)
+        for summary_file_path in summary_directory.rglob(pattern=pattern)
+        if summary_file_path.parent.name != "archive"
+    ]
+    for summary in summaries:
+        _coerce_activity_columns(summary)
+    return summaries
+
+
+def _aggregate_dataset_summaries(*, summaries: list[pandas.DataFrame], key_column_name: str) -> pandas.DataFrame:
+    """
+    Sum the activity columns of per-dataset summaries by their key column.
+
+    Rows are naturally sorted by that key. ``summaries`` must be non-empty: an empty list raises from
+    ``pandas.concat``, which is what the by-day aggregation has always done when no dataset has been
+    summarized. The by-region caller guards against that case itself, because a dataset whose by-region
+    summary has not cleared the disclosure threshold legitimately has nothing to contribute.
+    """
+    concatenated = pandas.concat(objs=summaries, ignore_index=True)
+
+    pre_aggregated = concatenated.groupby(by=key_column_name, as_index=False)[
+        ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
+    ].sum()
+    pre_aggregated.sort_values(by=key_column_name, key=natsort.natsort_keygen(), inplace=True)
+
+    aggregated = pre_aggregated.reindex(
+        columns=(key_column_name, "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
+    )
+    return aggregated.astype(
+        dtype={
+            "bytes_sent": "int64",
+            "number_of_requests": "int64",
+            "number_of_downloads": "int64",
+            "number_of_views": "int64",
+        }
+    )
 
 
 @beartype.beartype
@@ -47,35 +93,10 @@ def generate_archive_summaries(
     archive_directory = summary_directory / "archive"
     archive_directory.mkdir(exist_ok=True)
 
-    # TODO: deduplicate code into common helpers across tools
     # By day
-    all_dataset_summaries_by_day = [
-        pandas.read_table(filepath_or_buffer=dataset_by_day_summary_file_path)
-        for dataset_by_day_summary_file_path in summary_directory.rglob(pattern="by_day.tsv")
-        if dataset_by_day_summary_file_path.parent.name != "archive"
-    ]
-    for summary in all_dataset_summaries_by_day:
-        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
-            if column_name not in summary.columns:  # Summarized before views were reported
-                summary[column_name] = 0
-            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
-    aggregated_dataset_summaries_by_day = pandas.concat(objs=all_dataset_summaries_by_day, ignore_index=True)
-
-    pre_aggregated = aggregated_dataset_summaries_by_day.groupby(by="date", as_index=False)[
-        ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
-    ].sum()
-    pre_aggregated.sort_values(by="date", key=natsort.natsort_keygen(), inplace=True)
-
-    aggregated_activity_by_day = pre_aggregated.reindex(
-        columns=("date", "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
-    )
-    aggregated_activity_by_day = aggregated_activity_by_day.astype(
-        dtype={
-            "bytes_sent": "int64",
-            "number_of_requests": "int64",
-            "number_of_downloads": "int64",
-            "number_of_views": "int64",
-        }
+    all_dataset_summaries_by_day = _read_dataset_summaries(summary_directory=summary_directory, pattern="by_day.tsv")
+    aggregated_activity_by_day = _aggregate_dataset_summaries(
+        summaries=all_dataset_summaries_by_day, key_column_name="date"
     )
 
     archive_summary_by_day_file_path = archive_directory / "by_day.tsv"
@@ -84,36 +105,16 @@ def generate_archive_summaries(
     )
 
     # By region
-    all_dataset_summaries_by_region = [
-        pandas.read_table(filepath_or_buffer=dataset_by_region_summary_file_path)
-        for dataset_by_region_summary_file_path in summary_directory.rglob(pattern="by_region.tsv")
-        if dataset_by_region_summary_file_path.parent.name != "archive"
-    ]
-    for summary in all_dataset_summaries_by_region:
-        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
-            if column_name not in summary.columns:  # Summarized before views were reported
-                summary[column_name] = 0
-            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
+    all_dataset_summaries_by_region = _read_dataset_summaries(
+        summary_directory=summary_directory, pattern="by_region.tsv"
+    )
 
-    # Datasets whose by-region summary has not yet cleared the disclosure threshold have nothing to aggregate
+    # Datasets whose by-region summary has not yet cleared the disclosure threshold have nothing to aggregate.
+    # The by-day aggregation above has no such guard and raises instead when nothing has been summarized;
+    # that asymmetry is existing behavior and is deliberately kept.
     if all_dataset_summaries_by_region:
-        aggregated_dataset_summaries_by_region = pandas.concat(objs=all_dataset_summaries_by_region, ignore_index=True)
-
-        pre_aggregated = aggregated_dataset_summaries_by_region.groupby(by="region", as_index=False)[
-            ["bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views"]
-        ].sum()
-        pre_aggregated.sort_values(by="region", key=natsort.natsort_keygen(), inplace=True)
-
-        aggregated_activity_by_region = pre_aggregated.reindex(
-            columns=("region", "bytes_sent", "number_of_requests", "number_of_downloads", "number_of_views")
-        )
-        aggregated_activity_by_region = aggregated_activity_by_region.astype(
-            dtype={
-                "bytes_sent": "int64",
-                "number_of_requests": "int64",
-                "number_of_downloads": "int64",
-                "number_of_views": "int64",
-            }
+        aggregated_activity_by_region = _aggregate_dataset_summaries(
+            summaries=all_dataset_summaries_by_region, key_column_name="region"
         )
 
         _write_summary_by_region(
@@ -148,7 +149,7 @@ def generate_archive_summaries(
                 .sum()
                 .reindex(columns=["week_start", *asset_type_columns])
             )
-            archive_summary = archive_summary.astype(dtype={column_name: "int64" for column_name in asset_type_columns})
+            archive_summary = archive_summary.astype(dtype=dict.fromkeys(asset_type_columns, "int64"))
             archive_summary.sort_values(by="week_start", key=natsort.natsort_keygen(), inplace=True)
 
             archive_summary_file_path = archive_directory / "by_asset_type_per_week.tsv"
