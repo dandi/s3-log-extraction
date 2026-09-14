@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 6 have been applied, twenty-seven entries in all, and are marked APPLIED below. The remaining
-20 are still proposals awaiting approval.
+Groups 1 through 7 have been applied, twenty-nine entries in all, and are marked APPLIED below. The remaining
+18 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -231,7 +231,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_extraction.py tests/test_cli_integration.py -q`
   exercises the local path end to end through gawk.
 
-#### DUP-3 — Five identical `__hash__` bodies in the pre-validators
+#### DUP-3 — APPLIED. Five identical `__hash__` bodies in the pre-validators
 
 - **Location**: `validate/_downloads_logic_pre_validator.py` (lines 24-38), `validate/_extraction_heuristic_pre_validator.py` (21-27), `validate/_http_empty_split_pre_validator.py` (24-30), `validate/_http_split_count_pre_validator.py` (23-29), `validate/_timestamps_parsing_pre_validator.py` (20-26)
 - **Issue**: All five compute the same thing in the same four statements: open
@@ -259,7 +259,7 @@ is real.
   `python -c "from s3_log_extraction.validate import DownloadsLogicPreValidator as V; print(hex(hash(V()))[2:])"`
   before and after must print the same string.
 
-#### DUP-4 — Five near-identical `_run_validation` bodies
+#### DUP-4 — APPLIED. Five near-identical `_run_validation` bodies
 
 - **Location**: the same five files as DUP-3 (`_run_validation` at lines 47-78, 40-59, 39-57, 38-56, 35-53 respectively)
 - **Issue**: Each builds `awk --file <script> <log file>`, runs it through `subprocess.run(shell=True,
@@ -1007,7 +1007,7 @@ mechanical.
 Verification: `python -m pytest tests/test_generic_summaries.py -q` (the largest test module, 1,111 lines, with
 golden-file comparison against `tests/expected_output/`).
 
-**Group 7 — `validate/` deduplication.** DUP-3, then DUP-4.
+**Group 7 — APPLIED. `validate/` deduplication.** DUP-3, then DUP-4.
 DUP-3 first and separately, because the hash value determines record file names and so deserves its own
 verification step. DUP-4 second, and it carries the `env` caveat that must not be got wrong.
 Verification: before and after,

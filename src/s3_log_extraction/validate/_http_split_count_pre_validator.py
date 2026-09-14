@@ -1,7 +1,6 @@
 import pathlib
-import subprocess
 
-from ._base_validator import BaseValidator, _hash_awk_script_file
+from ._base_validator import BaseValidator, _hash_awk_script_file, _run_awk_validation
 
 
 class HttpSplitCountPreValidator(BaseValidator):
@@ -30,21 +29,8 @@ class HttpSplitCountPreValidator(BaseValidator):
         super().__init__()
 
     def _run_validation(self, file_path: pathlib.Path) -> None:
-        absolute_awk_script_path = str(self._relative_awk_script_path.absolute())
-        absolute_file_path = str(file_path.absolute())
-
-        awk_command = f"awk --file {absolute_awk_script_path} {absolute_file_path}"
-        result = subprocess.run(
-            args=awk_command,
-            shell=True,
-            capture_output=True,
-            text=True,
+        _run_awk_validation(
+            script_path=self._relative_awk_script_path,
+            file_path=file_path,
+            failure_label="HTTP split count",
         )
-        if result.returncode != 0:
-            message = (
-                f"\nHTTP split count pre-check failed.\n "
-                f"Log file: {absolute_file_path}\n"
-                f"Error code {result.returncode}\n\n"
-                f"stderr: {result.stderr}\n"
-            )
-            raise RuntimeError(message)
