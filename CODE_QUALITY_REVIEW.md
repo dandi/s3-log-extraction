@@ -62,6 +62,12 @@ its two guards unreachable.
 Groups 1 through 12 have been applied, forty-four entries in all, and are marked APPLIED below. DUP-16 is
 only partly applied, for the reason recorded under it. The remaining 3 were deliberately not scheduled.
 
+Two of the forty-four were then **rejected by the maintainer on review and reverted**: CL-1, which collapsed
+22 named returns into expressions, and DUP-8, which hid a one-line path coercion behind a helper. Both are
+marked REVERTED below, with the reasoning kept under each. Both were readability judgments this review got
+wrong, and the preferences they ran against are now written into `AGENTS.md` so a later pass does not
+rediscover them. Forty-two stand.
+
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
 | Dead code | 5 | 1 | 0 | 6 |
@@ -353,7 +359,15 @@ is real.
   stripped string raises `ValueError` identically from inside a helper.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`.
 
-#### DUP-8 — APPLIED. The optional-path conversion appears nine times in the CLI
+#### DUP-8 — APPLIED, THEN REVERTED AT THE AUTHOR'S REQUEST. The optional-path conversion appears nine times in the CLI
+
+> **Rejected on review: "the redirection actually makes it harder to read."** The expression is one line, and
+> a reader who meets `_optional_path(cache_directory)` has to jump to another part of the file to learn that it
+> is a ternary. Nine copies of a trivial coercion cost less than that indirection, and there is no logic in it
+> that could drift between copies. The helper is removed and all nine sites are written out again. The
+> principle is recorded in `AGENTS.md`: reserve shared helpers for blocks where a drift between copies would
+> be a defect. DUP-15's `_PRE_VALIDATORS` mapping, from the same commit, stands — it removes a genuine
+> triplication of the five protocol names across a `Choice` list, an annotation, and five `match` arms.
 
 - **Location**: `_command_line_interface/_cli.py` lines 122, 171, 226, 268, 302, 400, 442, 554, 618
 - **Issue**: `pathlib.Path(cache_directory) if cache_directory is not None else None` is written out nine times,
@@ -654,7 +668,22 @@ is real.
 
 ### Cleanup
 
-#### CL-1 — APPLIED. 22 assignments immediately before a `return`
+#### CL-1 — APPLIED, THEN REVERTED AT THE AUTHOR'S REQUEST. 22 assignments immediately before a `return`
+
+> **This finding was wrong, and the maintainer rejected it on review.** Binding a result to a named variable
+> before returning it is a deliberate convention of this project, not noise: the name records how to read the
+> value as output, and it leaves a line where a debugger can still see the final state of the locals. All 22
+> sites are restored to their original form, and the preference is now written down in `AGENTS.md` so that no
+> later pass re-derives this finding. `RET504` is listed under `[tool.ruff.lint] ignore` to the same end,
+> which matters because `select` is now `ALL` and `fixable` is `ALL`, so a single `ruff --fix` would otherwise
+> collapse every one of them again. Five of the 22 sites had since been merged into one helper by DUP-4, so
+> the revert touches 18.
+>
+> The entry below is left as originally written, since the report is a record of what was found rather than
+> only of what survived. Note in particular that its confidence rationale — "flagged mechanically by `ruff
+> check --select RET504`" — was itself misleading: `select` was `["F", "E", "I"]` at the time, so `RET504`
+> was never actually part of this project's rule set. The rule had to be opted into specially to produce the
+> finding. That is style judgment presented as a lint result.
 
 - **Location**: `validate/_base_validator.py:19`; `validate/_downloads_logic_pre_validator.py:38`;
   `validate/_extraction_heuristic_pre_validator.py:27`; `validate/_http_empty_split_pre_validator.py:30`;

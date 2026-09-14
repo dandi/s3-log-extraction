@@ -25,7 +25,8 @@ def _hash_awk_script_file(script_path: pathlib.Path, /) -> int:
         byte_content = file_stream.read()
 
     checksum = hashlib.sha1(string=byte_content).hexdigest()
-    return int(checksum, 16)
+    checksum_int = int(checksum, 16)
+    return checksum_int
 
 
 def _run_awk_validation(
@@ -85,7 +86,8 @@ class BaseValidator(abc.ABC):
 
     def __hash__(self) -> int:
         checksum = hashlib.sha1(string=self._run_validation.__code__.co_code).hexdigest()
-        return int(checksum, 16)
+        checksum_int = int(checksum, 16)
+        return checksum_int
 
     def __init__(self) -> None:
         self.records_directory = get_cache_subdirectory(name="records")

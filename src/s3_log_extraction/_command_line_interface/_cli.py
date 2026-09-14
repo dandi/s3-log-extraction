@@ -31,11 +31,6 @@ from ..validate import (
 )
 
 
-def _optional_path(value: str | None, /) -> pathlib.Path | None:
-    """Coerce an optional command line path to a ``pathlib.Path``, leaving ``None`` as ``None``."""
-    return pathlib.Path(value) if value is not None else None
-
-
 def _cache_directory_option(command: typing.Callable) -> typing.Callable:
     """
     Attach the shared ``--cache`` option to a command.
@@ -157,7 +152,7 @@ def _extract_cli(
 
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
-    cache_path = _optional_path(cache_directory)
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
 
     match mode:
         case "remote":
@@ -196,7 +191,7 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
     """
     stop_extraction(
-        cache_directory=_optional_path(cache_directory),
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
         max_timeout_in_seconds=max_timeout_in_seconds,
     )
 
@@ -240,7 +235,7 @@ def _reset_cli() -> None:
 @_reset_cli.command(name="extraction")
 @_cache_directory_option
 def _reset_extraction_cli(cache_directory: str | None = None) -> None:
-    reset_extraction(cache_directory=_optional_path(cache_directory))
+    reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
 
 
 # s3logextraction update
@@ -272,7 +267,7 @@ def _update_ip_database_cli(cache_directory: str | None = None, force: bool = Fa
     The `summaries` command runs this automatically, so it is only needed to force a refresh.
     """
     database_path = update_geolite2_database(
-        cache_directory=_optional_path(cache_directory),
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
         force=force,
     )
     print(f"GeoLite2 database is up to date at {database_path}")
@@ -296,7 +291,7 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     cloud service regions are located with the GeoLite2 database.
     """
     update_region_code_coordinates(
-        cache_directory=_optional_path(cache_directory),
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
         use_encryption=use_encryption,
     )
 
@@ -384,7 +379,7 @@ def _update_summaries_cli(
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
     """
-    cache_path = _optional_path(cache_directory)
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
         case "archive":
             parsed_asset_types_in_order = asset_types_in_order.split(",") if asset_types_in_order is not None else None
@@ -416,7 +411,7 @@ def _update_totals_cli(
     cache_directory: str | None = None,
 ) -> None:
     """Generate grand totals of all extracted data."""
-    cache_path = _optional_path(cache_directory)
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
         case "archive":
             generate_archive_totals(cache_directory=cache_path)
@@ -510,7 +505,7 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
     way the summaries resolve them.
     """
     inventory_path = pathlib.Path(inventory_directory)
-    cache_path = _optional_path(cache_directory)
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
 
     stats = get_log_bucket_stats(inventory_directory=inventory_path)
     rich_click.echo(f"File count      : {stats['file_count']}")
@@ -574,7 +569,7 @@ def _completion_cli(inventory_directory: str, cache_directory: str | None = None
     """
     completion = get_extraction_completion(
         inventory_directory=pathlib.Path(inventory_directory),
-        cache_directory=_optional_path(cache_directory),
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
     )
     rich_click.echo(f"Processed files  : {completion['processed_file_count']}")
     rich_click.echo(f"Inventory files  : {completion['inventory_file_count']}")

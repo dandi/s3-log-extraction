@@ -34,7 +34,8 @@ def load_ip_cache(
         return {}
 
     content = read_text_from_file(file_path=cache_file_path, use_encryption=use_encryption)
-    return yaml.safe_load(stream=content) or {}
+    data = yaml.safe_load(stream=content) or {}
+    return data
 
 
 def write_ip_cache(

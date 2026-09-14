@@ -14,11 +14,12 @@ def get_running_pids() -> set[str]:
 
     This is used to identify which processes are currently running and may need to be stopped.
     """
-    return {
+    running_pids = {
         str(process.info["pid"])
         for process in psutil.process_iter(attrs=["name", "pid"])
         if process.info["name"] == "s3logextraction"
     } - {str(os.getpid())}
+    return running_pids
 
 
 def stop_extraction(cache_directory: str | pathlib.Path | None = None, max_timeout_in_seconds: int = 600) -> None:

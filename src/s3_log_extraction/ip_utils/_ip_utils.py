@@ -46,22 +46,30 @@ def _request_cidr_range(service_name: str) -> dict | list[str]:
 
     match service_name:
         case "GitHub":
-            return requests.get(url="https://api.github.com/meta").json()
+            github_cidr_request = requests.get(url="https://api.github.com/meta").json()
+
+            return github_cidr_request
         case "AWS":
-            return requests.get(url="https://ip-ranges.amazonaws.com/ip-ranges.json").json()
+            aws_cidr_request = requests.get(url="https://ip-ranges.amazonaws.com/ip-ranges.json").json()
+
+            return aws_cidr_request
         case "GCP":
-            return requests.get(url="https://www.gstatic.com/ipranges/cloud.json").json()
+            gcp_cidr_request = requests.get(url="https://www.gstatic.com/ipranges/cloud.json").json()
+
+            return gcp_cidr_request
         case "Azure":
             raise NotImplementedError("Azure CIDR address fetching is not yet implemented!")
         case "VPN":
             # Very nice public and maintained listing! Hope this stays stable.
-            return (
+            vpn_cidr_request = (
                 requests.get(
                     url="https://raw.githubusercontent.com/josephrocca/is-vpn/main/vpn-or-datacenter-ipv4-ranges.txt"
                 )
                 .content.decode("utf-8")
                 .splitlines()
             )
+
+            return vpn_cidr_request
         case _:
             raise ValueError(f"Service name '{service_name}' is not supported!")  # pragma: no cover
 
@@ -84,7 +92,7 @@ def _get_cidr_address_ranges_and_subregions(*, service_name: str) -> list[tuple[
             # The meta document lists the ranges of each GitHub product next to other metadata (domains, SSH keys,
             # PGP keys, ...) under keys that GitHub adds to over time, so the ranges are recognized by their shape
             # rather than by key: any string in a list that parses as an IPv4 network. IPv6 ranges are not handled.
-            return [
+            github_cidr_addresses_and_subregions = [
                 (cidr_address, None)
                 for value in cidr_request.values()
                 if isinstance(value, list)
@@ -92,18 +100,27 @@ def _get_cidr_address_ranges_and_subregions(*, service_name: str) -> list[tuple[
                 if _is_ipv4_network(cidr_address)
             ]
 
+            return github_cidr_addresses_and_subregions
         # Note: these endpoints also return the 'locations' of the specific subnet, such as 'us-east-2'
         case "AWS":
-            return [(prefix["ip_prefix"], prefix.get("region", None)) for prefix in cidr_request["prefixes"]]
+            aws_cidr_addresses_and_subregions = [
+                (prefix["ip_prefix"], prefix.get("region", None)) for prefix in cidr_request["prefixes"]
+            ]
+
+            return aws_cidr_addresses_and_subregions
         case "GCP":
-            return [
+            gcp_cidr_addresses_and_subregions = [
                 (prefix["ipv4Prefix"], prefix.get("scope", None))
                 for prefix in cidr_request["prefixes"]
                 if "ipv4Prefix" in prefix  # Not handling IPv6 yet
             ]
+
+            return gcp_cidr_addresses_and_subregions
         case "Azure":
             raise NotImplementedError("Azure CIDR address fetching is not yet implemented!")  # pragma: no cover
         case "VPN":
-            return [(cidr_address, None) for cidr_address in cidr_request]
+            vpn_cidr_addresses_and_subregions = [(cidr_address, None) for cidr_address in cidr_request]
+
+            return vpn_cidr_addresses_and_subregions
         case _:
             raise ValueError(f"Service name '{service_name}' is not supported!")  # pragma: no cover

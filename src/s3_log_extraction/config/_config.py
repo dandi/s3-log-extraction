@@ -37,7 +37,9 @@ def get_config() -> dict[str, typing.Any]:
             json.dump(obj=config, fp=file_stream, indent=2, sort_keys=True)
 
     with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="r") as file_stream:
-        return json.load(fp=file_stream)
+        config = json.load(fp=file_stream)
+
+    return config
 
 
 def set_cache_directory(directory: str | pathlib.Path) -> None:
