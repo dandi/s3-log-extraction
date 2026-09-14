@@ -31,9 +31,9 @@ import pathlib
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 plt.rcParams.update(
     {"font.size": 10, "axes.grid": True, "grid.alpha": 0.25, "axes.edgecolor": "#888", "axes.linewidth": 0.8}
@@ -300,7 +300,7 @@ def print_summary(df: pd.DataFrame) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", required=True, type=pathlib.Path, help="CSV from build_dataset.py")
-    parser.add_argument("--out-dir", default=pathlib.Path("."), type=pathlib.Path, help="Directory for figures")
+    parser.add_argument("--out-dir", default=pathlib.Path(), type=pathlib.Path, help="Directory for figures")
     args = parser.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)

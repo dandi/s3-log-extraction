@@ -189,7 +189,7 @@ def attribute_band_intervals(intervals_df: pd.DataFrame, lo_seconds: float, hi_s
     the bot signature), those are the testing assets to exclude.
     """
     band = intervals_df[(intervals_df["interval"] >= lo_seconds) & (intervals_df["interval"] <= hi_seconds)]
-    result = {"n_in_band": int(len(band)), "top_assets": None, "top_ips": None, "same_asset_fraction": None}
+    result = {"n_in_band": len(band), "top_assets": None, "top_ips": None, "same_asset_fraction": None}
     if len(band) == 0 or "asset_after" not in band.columns:
         return result
 
