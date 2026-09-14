@@ -31,6 +31,21 @@ from ..validate import (
 )
 
 
+def _optional_path(value: str | None, /) -> pathlib.Path | None:
+    """Coerce an optional command line path to a ``pathlib.Path``, leaving ``None`` as ``None``."""
+    return pathlib.Path(value) if value is not None else None
+
+
+# Protocol names offered by `s3logextraction validate`, in the order they are listed in its help text.
+_PRE_VALIDATORS: dict[str, type] = {
+    "downloads_logic": DownloadsLogicPreValidator,
+    "http_empty_split": HttpEmptySplitPreValidator,
+    "http_split_count": HttpSplitCountPreValidator,
+    "extraction_heuristic": ExtractionHeuristicPreValidator,
+    "timestamps_parsing": TimestampsParsingPreValidator,
+}
+
+
 # s3logextraction
 @rich_click.group()
 def s3logextraction_cli():
@@ -119,7 +134,7 @@ def _extract_cli(
 
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
-    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    cache_path = _optional_path(cache_directory)
 
     match mode:
         case "remote":
@@ -168,7 +183,7 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
     """
     stop_extraction(
-        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        cache_directory=_optional_path(cache_directory),
         max_timeout_in_seconds=max_timeout_in_seconds,
     )
 
@@ -222,7 +237,7 @@ def _reset_cli() -> None:
     default=None,
 )
 def _reset_extraction_cli(cache_directory: str | None = None) -> None:
-    reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
+    reset_extraction(cache_directory=_optional_path(cache_directory))
 
 
 # s3logextraction update
@@ -264,7 +279,7 @@ def _update_ip_database_cli(cache_directory: str | None = None, force: bool = Fa
     The `summaries` command runs this automatically, so it is only needed to force a refresh.
     """
     database_path = update_geolite2_database(
-        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        cache_directory=_optional_path(cache_directory),
         force=force,
     )
     print(f"GeoLite2 database is up to date at {database_path}")
@@ -298,7 +313,7 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     cloud service regions are located with the GeoLite2 database.
     """
     update_region_code_coordinates(
-        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        cache_directory=_optional_path(cache_directory),
         use_encryption=use_encryption,
     )
 
@@ -396,7 +411,7 @@ def _update_summaries_cli(
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
     """
-    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    cache_path = _optional_path(cache_directory)
     match mode:
         case "archive":
             parsed_asset_types_in_order = asset_types_in_order.split(",") if asset_types_in_order is not None else None
@@ -438,7 +453,7 @@ def _update_totals_cli(
     cache_directory: str | None = None,
 ) -> None:
     """Generate grand totals of all extracted data."""
-    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    cache_path = _optional_path(cache_directory)
     match mode:
         case "archive":
             generate_archive_totals(cache_directory=cache_path)
@@ -474,9 +489,7 @@ def _generate_benchmark_cli(directory: str) -> None:
 @s3logextraction_cli.command(name="validate")
 @rich_click.argument(
     "protocol",
-    type=rich_click.Choice(
-        ["downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]
-    ),
+    type=rich_click.Choice(list(_PRE_VALIDATORS)),
 )
 @rich_click.argument("directory", type=rich_click.Path(writable=False))
 def _validate_cli(
@@ -486,22 +499,8 @@ def _validate_cli(
     directory: str,
 ) -> None:
     """Run a pre-validation protocol."""
-    match protocol:
-        case "downloads_logic":
-            validator = DownloadsLogicPreValidator()
-            validator.validate_directory(directory=directory)
-        case "http_empty_split":
-            validator = HttpEmptySplitPreValidator()
-            validator.validate_directory(directory=directory)
-        case "http_split_count":
-            validator = HttpSplitCountPreValidator()
-            validator.validate_directory(directory=directory)
-        case "extraction_heuristic":
-            validator = ExtractionHeuristicPreValidator()
-            validator.validate_directory(directory=directory)
-        case "timestamps_parsing":
-            validator = TimestampsParsingPreValidator()
-            validator.validate_directory(directory=directory)
+    validator = _PRE_VALIDATORS[protocol]()
+    validator.validate_directory(directory=directory)
 
 
 # s3logextraction stats --inventory <path> [--cache <path>]
@@ -548,7 +547,7 @@ def _stats_cli(inventory_directory: str, cache_directory: str | None = None, use
     way the summaries resolve them.
     """
     inventory_path = pathlib.Path(inventory_directory)
-    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    cache_path = _optional_path(cache_directory)
 
     stats = get_log_bucket_stats(inventory_directory=inventory_path)
     rich_click.echo(f"File count      : {stats['file_count']}")
@@ -612,7 +611,7 @@ def _completion_cli(inventory_directory: str, cache_directory: str | None = None
     """
     completion = get_extraction_completion(
         inventory_directory=pathlib.Path(inventory_directory),
-        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        cache_directory=_optional_path(cache_directory),
     )
     rich_click.echo(f"Processed files  : {completion['processed_file_count']}")
     rich_click.echo(f"Inventory files  : {completion['inventory_file_count']}")
