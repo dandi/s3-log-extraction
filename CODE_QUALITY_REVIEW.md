@@ -59,8 +59,8 @@ its two guards unreachable.
 
 ### Findings by category
 
-Groups 1 through 5 have been applied, twenty-three entries in all, and are marked APPLIED below. The remaining
-24 are still proposals awaiting approval.
+Groups 1 through 6 have been applied, twenty-seven entries in all, and are marked APPLIED below. The remaining
+20 are still proposals awaiting approval.
 
 | Category | High confidence | Medium | Low | Total |
 | --- | --- | --- | --- | --- |
@@ -177,7 +177,7 @@ is real.
 
 ### Duplication
 
-#### DUP-1 — The activity-column coercion loop appears four times verbatim
+#### DUP-1 — APPLIED. The activity-column coercion loop appears four times verbatim
 
 - **Location**: `summarize/_generate_archive_summaries.py` (lines 57-61 and 92-96), `summarize/_generate_archive_totals.py` (lines 41-44), `summarize/_generate_all_dataset_totals.py` (lines 41-44)
 - **Issue**: All four sites contain the identical four lines, comment included:
@@ -312,7 +312,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_log_bucket_stats.py tests/test_remote_extractor_inventory.py -q`
   (about 90 tests covering both functions against synthetic inventory trees).
 
-#### DUP-6 — The totals dictionary and requester parsing are duplicated
+#### DUP-6 — APPLIED. The totals dictionary and requester parsing are duplicated
 
 - **Location**: `summarize/_generate_archive_totals.py` (lines 59-71) and `summarize/_generate_all_dataset_totals.py` (lines 51-65)
 - **Issue**: The seven-key totals dict is character-for-character identical in both, as is the requester-count
@@ -332,7 +332,7 @@ is real.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`, which asserts on the contents of both
   JSON files.
 
-#### DUP-7 — `[int(value.strip()) for value in X.read_text().splitlines()]` six times
+#### DUP-7 — APPLIED. `[int(value.strip()) for value in X.read_text().splitlines()]` six times
 
 - **Location**: `summarize/_generate_summaries.py` lines 494, 498, 549, 556, 608, 612
 - **Issue**: Six identical comprehensions reading a per-request integer file. Paired with the `timestamps`
@@ -797,7 +797,7 @@ is real.
   Confirmed with `grep -rn "_collect_unique_ips" src/ tests/`.
 - **Verification**: `python -m pytest tests/test_generic_summaries.py -q`.
 
-#### CL-16 — A redundant `isinstance` on a value that is always `str`
+#### CL-16 — APPLIED (via DUP-6). A redundant `isinstance` on a value that is always `str`
 
 - **Location**: `summarize/_generate_archive_totals.py` (line 60)
 - **Issue**: `number_of_requesters` is assigned on line 59 from `read_text().strip()`, so it is unconditionally a
@@ -1000,7 +1000,7 @@ Both are import relocations with no logic change, and both were verified by expe
 Verification: `python -c "import s3_log_extraction"` succeeds, then
 `python -m pytest tests/ -m "not remote" -q`.
 
-**Group 6 — `summarize/` deduplication.** DUP-1, DUP-6, DUP-7, then CL-16 as a consequence of DUP-6.
+**Group 6 — APPLIED. `summarize/` deduplication.** DUP-1, DUP-6, DUP-7, then CL-16 as a consequence of DUP-6.
 These four all land in `summarize/` and all reduce to "extract one helper, update its call sites". Doing them
 together avoids three separate rounds of touching the same four files. DUP-1 first, since it is the most
 mechanical.

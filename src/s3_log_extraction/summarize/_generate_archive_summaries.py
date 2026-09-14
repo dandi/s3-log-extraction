@@ -4,7 +4,7 @@ import beartype
 import natsort
 import pandas
 
-from ._generate_summaries import _write_summary_by_region
+from ._generate_summaries import _coerce_activity_columns, _write_summary_by_region
 from .globals import REGION_DISCLOSURE_THRESHOLD
 from ..config import get_cache_subdirectory
 
@@ -55,10 +55,7 @@ def generate_archive_summaries(
         if dataset_by_day_summary_file_path.parent.name != "archive"
     ]
     for summary in all_dataset_summaries_by_day:
-        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
-            if column_name not in summary.columns:  # Summarized before views were reported
-                summary[column_name] = 0
-            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
+        _coerce_activity_columns(summary)
     aggregated_dataset_summaries_by_day = pandas.concat(objs=all_dataset_summaries_by_day, ignore_index=True)
 
     pre_aggregated = aggregated_dataset_summaries_by_day.groupby(by="date", as_index=False)[
@@ -90,10 +87,7 @@ def generate_archive_summaries(
         if dataset_by_region_summary_file_path.parent.name != "archive"
     ]
     for summary in all_dataset_summaries_by_region:
-        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
-            if column_name not in summary.columns:  # Summarized before views were reported
-                summary[column_name] = 0
-            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
+        _coerce_activity_columns(summary)
 
     # Datasets whose by-region summary has not yet cleared the disclosure threshold have nothing to aggregate
     if all_dataset_summaries_by_region:

@@ -3,7 +3,7 @@ import pathlib
 
 import pandas
 
-from ._generate_summaries import _count_regions_and_countries
+from ._generate_summaries import _build_totals, _coerce_activity_columns, _count_regions_and_countries
 from ..config import get_cache_subdirectory
 
 
@@ -38,31 +38,21 @@ def generate_all_dataset_totals(
         if not summary_file_path.exists():
             continue
         summary = pandas.read_table(filepath_or_buffer=summary_file_path)
-        for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
-            if column_name not in summary.columns:  # Summarized before views were reported
-                summary[column_name] = 0
-            summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
+        _coerce_activity_columns(summary)
 
         number_of_unique_regions, number_of_unique_countries = _count_regions_and_countries(
             summary_directory / dataset_id / "by_region.tsv"
         )
 
         requester_count_file_path = summary_directory / dataset_id / "requester_count.tsv"
-        number_of_requesters: str | int = (
-            requester_count_file_path.read_text().strip() if requester_count_file_path.exists() else 0
+        all_dataset_totals[dataset_id] = _build_totals(
+            summary_table=summary,
+            number_of_unique_regions=number_of_unique_regions,
+            number_of_unique_countries=number_of_unique_countries,
+            number_of_requesters=(
+                requester_count_file_path.read_text().strip() if requester_count_file_path.exists() else 0
+            ),
         )
-        if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
-            number_of_requesters = int(number_of_requesters)
-
-        all_dataset_totals[dataset_id] = {
-            "total_bytes_sent": int(summary["bytes_sent"].sum()),
-            "number_of_unique_regions": number_of_unique_regions,
-            "number_of_unique_countries": number_of_unique_countries,
-            "total_number_of_requests": int(summary["number_of_requests"].sum()),
-            "total_number_of_downloads": int(summary["number_of_downloads"].sum()),
-            "number_of_requesters": number_of_requesters,
-            "total_number_of_views": int(summary["number_of_views"].sum()),
-        }
 
     top_level_summary_file_path = summary_directory / "totals.json"
     with top_level_summary_file_path.open(mode="w") as file_stream:

@@ -4,7 +4,7 @@ import pathlib
 import beartype
 import pandas
 
-from ._generate_summaries import _count_regions_and_countries
+from ._generate_summaries import _build_totals, _coerce_activity_columns, _count_regions_and_countries
 from ..config import get_cache_subdirectory
 
 
@@ -38,10 +38,7 @@ def generate_archive_totals(
         raise FileNotFoundError(message)
 
     summary = pandas.read_table(filepath_or_buffer=summary_file_path)
-    for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
-        if column_name not in summary.columns:  # Summarized before views were reported
-            summary[column_name] = 0
-        summary[column_name] = pandas.to_numeric(summary[column_name], errors="coerce").fillna(0).astype("int64")
+    _coerce_activity_columns(summary)
 
     number_of_unique_regions, number_of_unique_countries = _count_regions_and_countries(
         archive_directory / "by_region.tsv"
@@ -56,19 +53,12 @@ def generate_archive_totals(
         )
         raise FileNotFoundError(message)
 
-    number_of_requesters: str | int = requester_count_file_path.read_text().strip()
-    if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
-        number_of_requesters = int(number_of_requesters)
-
-    archive_totals = {
-        "total_bytes_sent": int(summary["bytes_sent"].sum()),
-        "number_of_unique_regions": number_of_unique_regions,
-        "number_of_unique_countries": number_of_unique_countries,
-        "total_number_of_requests": int(summary["number_of_requests"].sum()),
-        "total_number_of_downloads": int(summary["number_of_downloads"].sum()),
-        "number_of_requesters": number_of_requesters,
-        "total_number_of_views": int(summary["number_of_views"].sum()),
-    }
+    archive_totals = _build_totals(
+        summary_table=summary,
+        number_of_unique_regions=number_of_unique_regions,
+        number_of_unique_countries=number_of_unique_countries,
+        number_of_requesters=requester_count_file_path.read_text().strip(),
+    )
 
     archive_totals_file_path = summary_directory / "archive_totals.json"
     with archive_totals_file_path.open(mode="w") as file_stream:

@@ -22,6 +22,55 @@ from ..ip_utils import (
 from ..ip_utils._ip_utils import _read_ips_from_file
 
 
+def _read_integers_from_file(file_path: pathlib.Path, /) -> list[int]:
+    """Read one integer per line from an extraction file such as ``bytes_sent.txt`` or ``download.txt``."""
+    return [int(value.strip()) for value in file_path.read_text().splitlines()]
+
+
+def _coerce_activity_columns(summary_table: pandas.DataFrame, /) -> None:
+    """
+    Make the activity columns of a summary read back as ``int64``, in place.
+
+    A summary written before views were reported has no ``number_of_views`` column, so the missing
+    activity columns are backfilled with zero before the whole set is coerced.
+    """
+    for column_name in ("number_of_requests", "number_of_downloads", "number_of_views"):
+        if column_name not in summary_table.columns:  # Summarized before views were reported
+            summary_table[column_name] = 0
+        summary_table[column_name] = (
+            pandas.to_numeric(summary_table[column_name], errors="coerce").fillna(0).astype("int64")
+        )
+
+
+def _build_totals(
+    *,
+    summary_table: pandas.DataFrame,
+    number_of_unique_regions: int,
+    number_of_unique_countries: int,
+    number_of_requesters: str | int,
+) -> dict[str, str | int]:
+    """
+    Build the published totals of one by-day summary, shared by the archive and per-dataset totals.
+
+    The seven keys here are the schema of both ``totals.json`` and ``archive_totals.json``.
+    ``number_of_requesters`` is taken as it was read: a count written by an earlier version may be a
+    sentinel string such as ``"<50"``, which carries no number and is passed through unchanged, and the
+    per-dataset totals pass the integer zero for a dataset with no requester count file at all.
+    """
+    if isinstance(number_of_requesters, str) and not number_of_requesters.startswith("<"):
+        number_of_requesters = int(number_of_requesters)
+
+    return {
+        "total_bytes_sent": int(summary_table["bytes_sent"].sum()),
+        "number_of_unique_regions": number_of_unique_regions,
+        "number_of_unique_countries": number_of_unique_countries,
+        "total_number_of_requests": int(summary_table["number_of_requests"].sum()),
+        "total_number_of_downloads": int(summary_table["number_of_downloads"].sum()),
+        "number_of_requesters": number_of_requesters,
+        "total_number_of_views": int(summary_table["number_of_views"].sum()),
+    }
+
+
 def _read_summary_value(value: str | int | float, /) -> int:
     """
     Read a single value of a by-region summary that was written previously.
@@ -492,11 +541,11 @@ def _summarize_dataset_by_day(
         all_dates.extend(dates)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
-        bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
+        bytes_sent = _read_integers_from_file(bytes_sent_file_path)
         all_bytes_sent.extend(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
+        downloads = _read_integers_from_file(download_file_path)
         all_downloads.extend(downloads)
 
     summarized_activity_by_day = collections.defaultdict(int)
@@ -546,14 +595,14 @@ def _summarize_dataset_by_asset(
         if not bytes_sent_file_path.exists():
             continue
 
-        bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
+        bytes_sent = _read_integers_from_file(bytes_sent_file_path)
 
         asset_path = str(asset_directory.relative_to(extraction_base_path))
         summarized_activity_by_asset[asset_path] += sum(bytes_sent)
         number_of_requests_by_asset[asset_path] += len(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
+        downloads = _read_integers_from_file(download_file_path)
         number_of_downloads_by_asset[asset_path] += sum(downloads)
 
         number_of_views_by_asset[asset_path] += len(views_by_asset_directory.get(asset_directory, []))
@@ -605,11 +654,11 @@ def _summarize_dataset_by_region(
         all_regions.extend(regions)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
-        bytes_sent = [int(value.strip()) for value in bytes_sent_file_path.read_text().splitlines()]
+        bytes_sent = _read_integers_from_file(bytes_sent_file_path)
         all_bytes_sent.extend(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        downloads = [int(value.strip()) for value in download_file_path.read_text().splitlines()]
+        downloads = _read_integers_from_file(download_file_path)
         all_downloads.extend(downloads)
 
     summarized_activity_by_region = collections.defaultdict(int)
