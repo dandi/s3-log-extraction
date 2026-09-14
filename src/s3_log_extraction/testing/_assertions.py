@@ -5,8 +5,8 @@ def assert_expected_extraction_content(
     extractor_name: str,
     output_directory: pathlib.Path,
     expected_output_directory: pathlib.Path,
-    relative_output_files: pathlib.Path,
-    relative_expected_files: pathlib.Path,
+    relative_output_files: set[pathlib.Path],
+    relative_expected_files: set[pathlib.Path],
 ) -> None:
     """Check if the expected content and records match the actual content and records."""
     record_files = {

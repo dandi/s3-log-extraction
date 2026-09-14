@@ -249,6 +249,35 @@ known-first-party = ["s3_log_extraction"]
 "tools/**/*.py" = ["INP001", "D103", "T201"]
 
 
+[tool.mypy]
+python_version = "3.14"
+files = ["src/s3_log_extraction"]
+# The optional `geolocation` and `remote` extras ship no stubs, and are deliberately absent from a base
+# install, so their imports cannot be resolved here
+ignore_missing_imports = true
+
+# These ten modules are not yet clean. The errors in them are narrowing rather than defects: a subprocess
+# helper whose return is `str | None` only on a path none of these callers take, resolvers that mypy cannot
+# see are non-None after the branch that constructs them, and the lazily imported optional extras that are
+# annotated as strings. They are listed one by one, rather than silenced with a blanket rule, so that the
+# debt stays visible and can be paid down a module at a time. The other thirty-three modules are checked,
+# as is anything added later.
+[[tool.mypy.overrides]]
+module = [
+    "s3_log_extraction._command_line_interface._cli",
+    "s3_log_extraction.extractors._remote_s3_log_access_extractor",
+    "s3_log_extraction.ip_utils._geolite2",
+    "s3_log_extraction.ip_utils._ip_utils",
+    "s3_log_extraction.ip_utils._region_codes",
+    "s3_log_extraction.ip_utils._resolver",
+    "s3_log_extraction.ip_utils._update_region_code_coordinates",
+    "s3_log_extraction.summarize._generate_summaries",
+    "s3_log_extraction.testing._assertions",
+    "s3_log_extraction.utils.inventory",
+]
+ignore_errors = true
+
+
 [tool.codespell]
 skip = "*/ip_utils/_data/*"  # Three-letter ISO 3166 codes look like misspelled words
 

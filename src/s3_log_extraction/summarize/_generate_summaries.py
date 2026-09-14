@@ -279,7 +279,7 @@ def _collect_asset_views(
             datetime.datetime.strptime(timestamp, TIMESTAMP_FORMAT).replace(tzinfo=datetime.timezone.utc)
         )
 
-    views = []
+    views: list[tuple[str, str]] = []
     for ip, parsed_timestamps in parsed_timestamps_per_ip.items():
         parsed_timestamps.sort()
         session_starts = [parsed_timestamps[0]] + [
@@ -552,9 +552,9 @@ def _assemble_activity_summary(
         The assembled summary, or ``None`` when there was nothing to aggregate, in which case the caller
         writes no file at all.
     """
-    summarized_activity = collections.defaultdict(int)
-    number_of_requests = collections.defaultdict(int)
-    number_of_downloads = collections.defaultdict(int)
+    summarized_activity: collections.defaultdict[str, int] = collections.defaultdict(int)
+    number_of_requests: collections.defaultdict[str, int] = collections.defaultdict(int)
+    number_of_downloads: collections.defaultdict[str, int] = collections.defaultdict(int)
     for key, key_bytes_sent, download in zip(keys, bytes_sent, downloads):
         summarized_activity[key] += key_bytes_sent
         number_of_requests[key] += 1
@@ -584,7 +584,7 @@ def _summarize_dataset_by_day(
     all_dates = []
     all_bytes_sent = []
     all_downloads = []
-    number_of_views_by_day = collections.defaultdict(int)
+    number_of_views_by_day: collections.defaultdict[str, int] = collections.defaultdict(int)
     for asset_directory in asset_directories:
         for view_date, _ in views_by_asset_directory.get(asset_directory, []):
             number_of_views_by_day[view_date] += 1
@@ -638,10 +638,10 @@ def _summarize_dataset_by_asset(
     # by walking up from the summary file, which only worked while both trees shared a cache directory.
     extraction_base_path = extraction_directory / dataset_id
 
-    summarized_activity_by_asset = collections.defaultdict(int)
-    number_of_requests_by_asset = collections.defaultdict(int)
-    number_of_downloads_by_asset = collections.defaultdict(int)
-    number_of_views_by_asset = collections.defaultdict(int)
+    summarized_activity_by_asset: collections.defaultdict[str, int] = collections.defaultdict(int)
+    number_of_requests_by_asset: collections.defaultdict[str, int] = collections.defaultdict(int)
+    number_of_downloads_by_asset: collections.defaultdict[str, int] = collections.defaultdict(int)
+    number_of_views_by_asset: collections.defaultdict[str, int] = collections.defaultdict(int)
     for asset_directory in asset_directories:
         # TODO: Could add a step here to track which object IDs have been processed, and if encountered again
         # Just copy the file over instead of reprocessing
@@ -691,7 +691,7 @@ def _summarize_dataset_by_region(
     all_regions = []
     all_bytes_sent = []
     all_downloads = []
-    number_of_views_by_region = collections.defaultdict(int)
+    number_of_views_by_region: collections.defaultdict[str, int] = collections.defaultdict(int)
     for asset_directory in asset_directories:
         # A view is made by a single requester, so it belongs to the region of that one IP
         for _, view_ip in views_by_asset_directory.get(asset_directory, []):
