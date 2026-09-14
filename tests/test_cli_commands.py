@@ -42,7 +42,8 @@ def isolated_records_directory(monkeypatch: pytest.MonkeyPatch, tmp_path: pathli
 
 @pytest.fixture
 def clean_logs_directory(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A directory of well-formed `.log` files, which is what the validators traverse a directory for.
+    """
+    A directory of well-formed `.log` files, which is what the validators traverse a directory for.
 
     The bundled example logs deliberately contain aberrant lines for the extraction tests, so they are not
     usable here.

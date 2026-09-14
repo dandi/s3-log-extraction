@@ -1,4 +1,5 @@
-"""Acquisition of the MaxMind GeoLite2-City database used for IP geolocation.
+"""
+Acquisition of the MaxMind GeoLite2-City database used for IP geolocation.
 
 GeoLite2 is a free, locally-queried database rather than a metered web API. It is refreshed by MaxMind twice a
 week, and downloading it requires a (free) MaxMind account: the account ID and a license key are read from the

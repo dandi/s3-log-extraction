@@ -46,7 +46,8 @@ def _estimate_entropy_bits(password: str, /) -> float:
 
 
 def validate_password_strength(password: str, /) -> None:
-    """Raise a ``ValueError`` if the password is too weak to be used for encryption.
+    """
+    Raise a ``ValueError`` if the password is too weak to be used for encryption.
 
     The checks are intentionally heuristic: they enforce a minimum length, a minimum number of distinct
     characters, and a minimum estimated entropy. They are designed to block weak human-chosen passwords
@@ -79,7 +80,8 @@ def validate_password_strength(password: str, /) -> None:
 
 
 def get_key() -> bytes:
-    """Parse the full byte key for the given password.
+    """
+    Parse the full byte key for the given password.
 
     The key is derived from the `S3_LOG_EXTRACTION_PASSWORD` environment variable using PBKDF2-HMAC-SHA256,
     a deliberately expensive key derivation function that is resistant to brute-force attacks.
@@ -152,7 +154,8 @@ def decrypt_bytes(encrypted_data: bytes) -> bytes:
 
 
 def read_text_from_file(*, file_path: pathlib.Path, use_encryption: bool) -> str:
-    """Read text from a file, optionally decrypting its contents.
+    """
+    Read text from a file, optionally decrypting its contents.
 
     Parameters
     ----------
@@ -172,7 +175,8 @@ def read_text_from_file(*, file_path: pathlib.Path, use_encryption: bool) -> str
 
 
 def write_text_to_file(*, file_path: pathlib.Path, text: str, use_encryption: bool) -> None:
-    """Write text to a file, optionally encrypting its contents.
+    """
+    Write text to a file, optionally encrypting its contents.
 
     Parameters
     ----------

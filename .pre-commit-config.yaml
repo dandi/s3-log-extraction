@@ -31,3 +31,14 @@ repos:
   - id: codespell
     additional_dependencies:
     - tomli
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v2.3.1
+  hooks:
+  - id: mypy
+    pass_filenames: false
+    args: []
+    additional_dependencies:
+    - pandas-stubs
+    - types-PyYAML
+    - types-requests

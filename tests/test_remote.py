@@ -1,4 +1,5 @@
-"""Remote integration tests for IP geolocation.
+"""
+Remote integration tests for IP geolocation.
 
 These tests require real credentials and live network access.
 They are marked ``@pytest.mark.remote`` and are run only in the dedicated
@@ -13,6 +14,7 @@ import shutil
 
 import pytest
 import yaml
+from conftest import write_by_region_summary
 
 import s3_log_extraction
 
@@ -61,15 +63,6 @@ def _fail_if_maxmind_rejected(exc: Exception) -> None:
             "Please verify that the GitHub secrets contain a valid account ID and a license key with GeoLite2 "
             "download permission from https://www.maxmind.com/en/accounts/current/license-key"
         )
-
-
-def _write_by_region_summary(summary_file_path: pathlib.Path, regions: list[str]) -> None:
-    """Write a minimal published by-region summary listing the given region labels."""
-    summary_file_path.parent.mkdir(parents=True, exist_ok=True)
-    rows = "\n".join(f"{region}\t1\t1\t0\t1" for region in regions)
-    summary_file_path.write_text(
-        f"region\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\tnumber_of_views\n{rows}\n"
-    )
 
 
 @pytest.fixture(scope="session")
@@ -165,7 +158,7 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geoli
     assert seeded_database_path.exists(), "The resolver did not read the database from its own cache directory"
 
     # The resolved label must also have coordinates in the bundled tables, so that the heat maps can place it
-    _write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region])
+    write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region])
     s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)
     coordinates = yaml.safe_load((tmp_path / "ips" / "region_codes_to_coordinates.yaml").read_text()) or {}
     assert region in coordinates, f"Expected '{region}' to have coordinates, got keys: {list(coordinates.keys())}"
@@ -193,7 +186,7 @@ def test_update_region_code_coordinates_locates_aws_region_remote(
     _assert_maxmind_credentials_are_set()
     _seed_geolite2_database(cache_directory=tmp_path, source_path=shared_geolite2_database)
 
-    _write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region_code])
+    write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region_code])
 
     try:
         s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)

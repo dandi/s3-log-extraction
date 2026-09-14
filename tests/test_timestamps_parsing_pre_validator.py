@@ -9,13 +9,13 @@ from s3_log_extraction.validate import TimestampsParsingPreValidator
 _LOG_SUFFIX = ' - 10 10 "-" "TestAgent" - - - - - - - - -'
 
 
-def _make_log_line(datetime: str, request_type: str = "REST.GET.OBJECT", status: str = "200") -> str:
+def _make_log_line(bracketed_datetime: str, request_type: str = "REST.GET.OBJECT", status: str = "200") -> str:
     """
     Build a synthetic S3 log line with the specified bracketed datetime, request type, and status.
 
     Parameters
     ----------
-    datetime : str
+    bracketed_datetime : str
         The bracketed datetime field, e.g. ``"[01/Jan/2020:00:00:00 +0000]"``.
     request_type : str
         The operation field, e.g. ``"REST.GET.OBJECT"``.
@@ -28,24 +28,24 @@ def _make_log_line(datetime: str, request_type: str = "REST.GET.OBJECT", status:
         A single S3 log line string.
     """
     return (
-        f"abc123 bucket {datetime} 192.0.2.1 - REQ123 {request_type} test/file.dat "
+        f"abc123 bucket {bracketed_datetime} 192.0.2.1 - REQ123 {request_type} test/file.dat "
         f'"GET /test/file.dat HTTP/1.1" {status}{_LOG_SUFFIX}\n'
     )
 
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    "datetime",
+    "bracketed_datetime",
     [
         "[01/Jan/2020:00:00:00 +0000]",
         "[15/Jun/2021:13:45:59 +0000]",
         "[31/Dec/2022:23:59:59 -0500]",
     ],
 )
-def test_timestamps_parsing_valid(tmp_path: pathlib.Path, datetime: str) -> None:
+def test_timestamps_parsing_valid(tmp_path: pathlib.Path, bracketed_datetime: str) -> None:
     """Validator should pass when the timestamp parses to the expected 12-character form."""
     log_file = tmp_path / "valid.log"
-    log_file.write_text(_make_log_line(datetime=datetime))
+    log_file.write_text(_make_log_line(bracketed_datetime=bracketed_datetime))
 
     validator = TimestampsParsingPreValidator()
 
@@ -56,7 +56,7 @@ def test_timestamps_parsing_valid(tmp_path: pathlib.Path, datetime: str) -> None
 def test_timestamps_parsing_skips_non_get_request(tmp_path: pathlib.Path) -> None:
     """Validator should skip lines whose request type is not 'REST.GET.OBJECT', even with a bad timestamp."""
     log_file = tmp_path / "non_get.log"
-    log_file.write_text(_make_log_line(datetime="[bad +0000]", request_type="REST.PUT.OBJECT"))
+    log_file.write_text(_make_log_line(bracketed_datetime="[bad +0000]", request_type="REST.PUT.OBJECT"))
 
     validator = TimestampsParsingPreValidator()
 
@@ -68,7 +68,7 @@ def test_timestamps_parsing_skips_non_get_request(tmp_path: pathlib.Path) -> Non
 def test_timestamps_parsing_skips_non_success_status(tmp_path: pathlib.Path, status: str) -> None:
     """Validator should skip lines without a 2xx status, even with a bad timestamp."""
     log_file = tmp_path / "non_success.log"
-    log_file.write_text(_make_log_line(datetime="[bad +0000]", status=status))
+    log_file.write_text(_make_log_line(bracketed_datetime="[bad +0000]", status=status))
 
     validator = TimestampsParsingPreValidator()
 
@@ -77,16 +77,16 @@ def test_timestamps_parsing_skips_non_success_status(tmp_path: pathlib.Path, sta
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    "datetime",
+    "bracketed_datetime",
     [
         "[01/Xyz/2020:00:00:00 +0000]",  # Unrecognized month abbreviation
         "[truncated +0000]",  # Far too short to slice the expected pieces out of
     ],
 )
-def test_timestamps_parsing_aberrant(tmp_path: pathlib.Path, datetime: str) -> None:
+def test_timestamps_parsing_aberrant(tmp_path: pathlib.Path, bracketed_datetime: str) -> None:
     """Validator should raise RuntimeError when a 2xx GET line has an unparsable timestamp."""
     log_file = tmp_path / "aberrant.log"
-    log_file.write_text(_make_log_line(datetime=datetime))
+    log_file.write_text(_make_log_line(bracketed_datetime=bracketed_datetime))
 
     validator = TimestampsParsingPreValidator()
 

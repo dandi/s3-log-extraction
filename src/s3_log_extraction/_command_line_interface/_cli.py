@@ -31,6 +31,39 @@ from ..validate import (
 )
 
 
+def _cache_directory_option(command: typing.Callable) -> typing.Callable:
+    """
+    Attach the shared ``--cache`` option to a command.
+
+    This is the variant taken by commands that write into the cache directory. The three commands whose
+    ``--cache`` differs, in help text or in requiring the directory to already exist, declare their own.
+
+    Apply this where the literal option block would have gone: a decorator in a different position would
+    reorder the option in the rendered help.
+    """
+    return rich_click.option(
+        "--cache",
+        "cache_directory",
+        help=(
+            "Use a non-default cache directory for this command. "
+            "This overrides the configured cache directory without modifying saved config."
+        ),
+        required=False,
+        type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+        default=None,
+    )(command)
+
+
+# Protocol names offered by `s3logextraction validate`, in the order they are listed in its help text.
+_PRE_VALIDATORS: dict[str, type] = {
+    "downloads_logic": DownloadsLogicPreValidator,
+    "http_empty_split": HttpEmptySplitPreValidator,
+    "http_split_count": HttpSplitCountPreValidator,
+    "extraction_heuristic": ExtractionHeuristicPreValidator,
+    "timestamps_parsing": TimestampsParsingPreValidator,
+}
+
+
 # s3logextraction
 @rich_click.group()
 def s3logextraction_cli():
@@ -149,17 +182,7 @@ def _extract_cli(
     type=rich_click.IntRange(min=1),
     default=600,  # 10 minutes
 )
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str | None = None) -> None:
     """
     Stop the extraction processes if any are currently running in other windows.
@@ -177,7 +200,6 @@ def _stop_extraction_cli(max_timeout_in_seconds: int = 600, cache_directory: str
 @s3logextraction_cli.group(name="config")
 def _config_cli() -> None:
     """Configuration options, such as cache management."""
-    pass
 
 
 # s3logextraction config cache
@@ -211,17 +233,7 @@ def _reset_cli() -> None:
 
 # s3logextraction reset extraction
 @_reset_cli.command(name="extraction")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 def _reset_extraction_cli(cache_directory: str | None = None) -> None:
     reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
 
@@ -240,17 +252,7 @@ def _update_ip_cli() -> None:
 
 # s3logextraction update ip database
 @_update_ip_cli.command(name="database")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 @rich_click.option(
     "--force",
     help="Download a fresh copy even if the cached database is not yet stale.",
@@ -273,17 +275,7 @@ def _update_ip_database_cli(cache_directory: str | None = None, force: bool = Fa
 
 # s3logextraction update ip coordinates
 @_update_ip_cli.command(name="coordinates")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 @rich_click.option(
     "--encryption",
     "use_encryption",
@@ -362,17 +354,7 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     default=REGION_DISCLOSURE_THRESHOLD,
     show_default=True,
 )
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 @rich_click.option(
     "--encryption",
     "use_encryption",
@@ -423,17 +405,7 @@ def _update_summaries_cli(
     type=rich_click.Choice(choices=["archive"]),
     default=None,
 )
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Use a non-default cache directory for this command. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
-    default=None,
-)
+@_cache_directory_option
 def _update_totals_cli(
     mode: typing.Literal["archive"] | None = None,
     cache_directory: str | None = None,
@@ -451,14 +423,12 @@ def _update_totals_cli(
 @s3logextraction_cli.group(name="testing")
 def _testing_cli() -> None:
     """Testing utilities for the S3 log extraction."""
-    pass
 
 
 # s3logextraction testing generate benchmark
 @_testing_cli.group(name="generate")
 def _testing_generate_cli() -> None:
     """Generate various types of mock data for testing purposes."""
-    pass
 
 
 # s3logextraction testing generate benchmark
@@ -477,34 +447,18 @@ def _generate_benchmark_cli(directory: str) -> None:
 @s3logextraction_cli.command(name="validate")
 @rich_click.argument(
     "protocol",
-    type=rich_click.Choice(
-        ["downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"]
-    ),
+    type=rich_click.Choice(list(_PRE_VALIDATORS)),
 )
 @rich_click.argument("directory", type=rich_click.Path(writable=False))
 def _validate_cli(
     protocol: typing.Literal[
         "downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"
     ],
-    directory: pathlib.Path,
+    directory: str,
 ) -> None:
     """Run a pre-validation protocol."""
-    match protocol:
-        case "downloads_logic":
-            validator = DownloadsLogicPreValidator()
-            validator.validate_directory(directory=directory)
-        case "http_empty_split":
-            validator = HttpEmptySplitPreValidator()
-            validator.validate_directory(directory=directory)
-        case "http_split_count":
-            validator = HttpSplitCountPreValidator()
-            validator.validate_directory(directory=directory)
-        case "extraction_heuristic":
-            validator = ExtractionHeuristicPreValidator()
-            validator.validate_directory(directory=directory)
-        case "timestamps_parsing":
-            validator = TimestampsParsingPreValidator()
-            validator.validate_directory(directory=directory)
+    validator = _PRE_VALIDATORS[protocol]()
+    validator.validate_directory(directory=directory)
 
 
 # s3logextraction stats --inventory <path> [--cache <path>]

@@ -1,3 +1,4 @@
+import functools
 import pathlib
 
 import natsort
@@ -99,6 +100,23 @@ def update_region_code_coordinates(
         print(message)
 
 
+@functools.cache
+def _get_subregion_to_cidr_address(service_name: str) -> dict[str, str]:
+    """
+    Map each subregion of a cloud service to one of its published CIDR ranges.
+
+    The range listing itself is already cached, but this inversion was being rebuilt for every region looked
+    up, over a list that runs to several thousand entries for AWS. Where a subregion appears more than once
+    the last entry wins, which is what the inline comprehension did.
+
+    The returned mapping is shared between callers and must not be mutated.
+    """
+    cidr_addresses_and_subregions = _get_cidr_address_ranges_and_subregions(service_name=service_name)
+    return {
+        listed_subregion: listed_cidr_address for listed_cidr_address, listed_subregion in cidr_addresses_and_subregions
+    }
+
+
 def _get_service_coordinates_from_geolite2(
     *,
     country_and_region_code: str,
@@ -115,8 +133,7 @@ def _get_service_coordinates_from_geolite2(
     if not subregion:
         return None
 
-    cidr_addresses_and_subregions = _get_cidr_address_ranges_and_subregions(service_name=service_name)
-    subregion_to_cidr_address = {subregion: cidr_address for cidr_address, subregion in cidr_addresses_and_subregions}
+    subregion_to_cidr_address = _get_subregion_to_cidr_address(service_name)
     if subregion not in subregion_to_cidr_address:
         return None
 
