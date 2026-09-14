@@ -36,8 +36,6 @@ repos:
   rev: v2.3.1
   hooks:
   - id: mypy
-    # `files` and the per-module exceptions are set in pyproject.toml, so the hook is handed nothing and
-    # reads them from there. Without this it would pass the hook's own changed-file list instead
     pass_filenames: false
     args: []
     additional_dependencies:
