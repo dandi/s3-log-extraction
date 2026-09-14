@@ -811,6 +811,9 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
         print("\n(no active IPs for behavior tables)")
         return
     active["view_sessions"] = active["n_sessions"]
+    # download/stream ratio is +inf for a pure-downloader (no streams); drop those from the mean so a
+    # single pure-downloader doesn't blow the per-service average up to infinity.
+    active["download_stream_ratio_finite"] = active["download_stream_ratio"].replace(np.inf, np.nan)
 
     # --- Per source category (service) ---
     grouped = active.groupby("service")
@@ -824,7 +827,7 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
             "avg_visit_duration_s": grouped["avg_visit_duration_s"].mean(),
             "avg_files_per_visit": grouped["avg_files_per_visit"].mean(),
             "mean_new_asset_fraction_per_visit": grouped["new_asset_fraction_per_visit"].mean(),
-            "mean_download_stream_ratio": grouped["download_stream_ratio"].replace(np.inf, np.nan).mean(),
+            "mean_download_stream_ratio": grouped["download_stream_ratio_finite"].mean(),
             "mean_active_timespan_days": grouped["active_timespan_days"].mean(),
             "mean_distinct_active_days": grouped["distinct_active_days"].mean(),
             "mean_presence_density": grouped["presence_density"].mean(),
