@@ -25,6 +25,10 @@ GEOLITE2_MAX_DATABASE_AGE_IN_DAYS = 7
 
 _CREDENTIAL_ENVIRONMENT_VARIABLES = ("MAXMIND_ACCOUNT_ID", "MAXMIND_LICENSE_KEY")
 
+# MaxMind answers a request made after the account's daily download allowance is spent with this status.
+# The allowance is a property of the account rather than of this package, and it resets on its own.
+_DOWNLOAD_QUOTA_EXHAUSTED_STATUS_CODE = 429
+
 
 def get_geolite2_database_path(*, cache_directory: str | pathlib.Path | None = None) -> pathlib.Path:
     """
@@ -80,6 +84,13 @@ def update_geolite2_database(
     -------
     pathlib.Path
         The path of the database file.
+
+    Notes
+    -----
+    A MaxMind account has a daily download allowance. When that allowance is spent and a copy of the database is
+    already in the cache directory, this returns the copy with a warning rather than raising, on the same terms
+    as a stale copy that cannot be refreshed for want of credentials. When no copy is there to fall back on, the
+    refusal is raised, since there is then nothing to geolocate with.
     """
     database_path = get_geolite2_database_path(cache_directory=cache_directory)
     if not force and database_path.exists() and not _is_database_stale(database_path=database_path):
@@ -94,9 +105,30 @@ def update_geolite2_database(
         )
         raise ValueError(message)
 
-    _download_geolite2_database(database_path=database_path, credentials=credentials)
+    import requests
+
+    try:
+        _download_geolite2_database(database_path=database_path, credentials=credentials)
+    except requests.HTTPError as exception:
+        if not _is_download_quota_exhausted(exception) or not database_path.exists():
+            raise
+        warnings.warn(
+            message=(
+                f"The daily {GEOLITE2_DATABASE_EDITION} download allowance of this MaxMind account is spent, so "
+                "the database could not be refreshed. Continuing with the copy already in the cache directory. "
+                "The allowance resets on its own."
+            ),
+            category=RuntimeWarning,
+            stacklevel=2,
+        )
 
     return database_path
+
+
+def _is_download_quota_exhausted(exception: "requests.HTTPError", /) -> bool:
+    """Whether MaxMind refused a download because the account's daily allowance is spent rather than for cause."""
+    response = getattr(exception, "response", None)
+    return getattr(response, "status_code", None) == _DOWNLOAD_QUOTA_EXHAUSTED_STATUS_CODE
 
 
 def _download_geolite2_database(*, database_path: pathlib.Path, credentials: tuple[str, str]) -> None:
