@@ -5,7 +5,7 @@ import pathlib
 import pandas
 import tqdm
 
-from ._utils import _write_summary_by_region
+from ._utils import _read_integers_from_file, _write_summary_by_region
 from .globals import (
     REGION_DISCLOSURE_THRESHOLD,
     SESSION_TIMEOUT_IN_SECONDS,
@@ -18,11 +18,6 @@ from ..ip_utils import (
     is_cloud_service_or_vpn_label,
 )
 from ..ip_utils._ip_utils import _read_ips_from_file
-
-
-def _read_integers_from_file(file_path: pathlib.Path, /) -> list[int]:
-    """Read one integer per line from an extraction file such as ``bytes_sent.txt`` or ``download.txt``."""
-    return [int(value.strip()) for value in file_path.read_text().splitlines()]
 
 
 def _collect_asset_views(

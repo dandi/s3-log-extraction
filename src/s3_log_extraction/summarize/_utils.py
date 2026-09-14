@@ -6,6 +6,11 @@ from .globals import REGION_DISCLOSURE_THRESHOLD, REGION_VALUE_COLUMN_NAMES
 from ..ip_utils import country_alpha_2_to_alpha_3, is_resolved_region
 
 
+def _read_integers_from_file(file_path: pathlib.Path, /) -> list[int]:
+    """Read one integer per line from an extraction file such as ``bytes_sent.txt`` or ``download.txt``."""
+    return [int(value.strip()) for value in file_path.read_text().splitlines()]
+
+
 def _coerce_activity_columns(summary_table: pandas.DataFrame, /) -> None:
     """
     Make the activity columns of a summary read back as ``int64``, in place.
