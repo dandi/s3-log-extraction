@@ -115,6 +115,10 @@ line-length = 120
 select = ["F", "E", "I"]
 ignore = [
     "F821",  # Only way to do annotation of lazy imports...
+    # Dormant today, since `RET` is not selected above. It is listed anyway because `fixable = ["ALL"]` means
+    # that selecting `RET` later would let `ruff --fix` silently collapse every named return in one pass, and
+    # those names are deliberate. See the rule in AGENTS.md for why.
+    "RET504",
 ]
 fixable = ["ALL"]
 
