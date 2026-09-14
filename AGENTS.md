@@ -1,6 +1,6 @@
 # Agent instructions
 
-- Always run `pre-commit` before committing and pushing changes
+- Always run `pre-commit` before committing and pushing changes. The hooks run on commit and may auto-fix files; when they do, stage those fixes and commit again, repeating until `pre-commit` passes cleanly. Pushing and updating the pull request must not create new commits of its own
 - To the best of your ability, ensure tests are passing
 - Follow assertion style (actual on left, expected on right)
 - Always mark AI-generated tests with `ai_generated` Pytest marker
@@ -20,3 +20,8 @@
 - Do not add compatibility aliases when renaming functions. Update all call sites to the canonical name instead
 - Favor defining one-word names for CLI flags, then map those onto longer more explicit keyword arguments at the API level
 - Never make up IPs to use the testing suite; always use bogon types
+- Write NumPy-style docstrings for every public function, class, and method, and use PEP 484 type hints throughout
+- Prefer binding a result to a named variable before returning it, rather than returning the expression directly. The name records how to interpret the value as output, and it leaves a breakpoint where the final state of the locals is still visible. `ruff`'s `RET504` enforces the opposite, so keep the `RET` rule set out of `[tool.ruff.lint] select`
+- Prefer the environment that is already installed. Install or upgrade a package only when the change genuinely cannot be completed otherwise, and when you must, pin the version and explain the need in the pull request body
+- Keep commits small and purposeful. Avoid sweeping style-only changes unless they are the point of the change
+- You may edit GitHub Actions or other CI workflows when a fix genuinely requires it, but explain the rationale in the pull request
