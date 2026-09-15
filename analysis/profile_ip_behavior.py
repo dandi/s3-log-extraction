@@ -986,7 +986,9 @@ def _fmt_duration(seconds: float) -> str:
     return f"{seconds:.0f}s"
 
 
-def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path, top_n: int = 100) -> None:
+def behavior_tables(
+    profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path, top_n: int = 100, min_visits: int = 3
+) -> None:
     """
     Emit two derived view-behavior tables and write them as CSVs next to ``out_path``:
 
@@ -1004,6 +1006,13 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
     # download/stream ratio is +inf for a pure-downloader (no streams); drop those from the mean so a
     # single pure-downloader doesn't blow the per-service average up to infinity.
     active["download_stream_ratio_finite"] = active["download_stream_ratio"].replace(np.inf, np.nan)
+    # The new-asset fraction is degenerate below `min_visits` (a single-visit IP scores 1.0 by
+    # construction), so it is averaged over only the IPs where it was actually measurable. Without this
+    # the services dominated by one-shot actors (AWS, GCP) report ~99% "all new" purely as an artifact.
+    # `n_ips_selection` records how many IPs back the figure, so a thin average is visible as thin.
+    active["new_asset_fraction_guarded"] = active["new_asset_fraction_per_visit"].where(
+        active["n_visits"] >= min_visits
+    )
 
     # --- Per source category (service) ---
     grouped = active.groupby("service")
@@ -1016,7 +1025,8 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
             "median_session_duration_s": grouped["median_session_duration_s"].mean(),
             "avg_visit_duration_s": grouped["avg_visit_duration_s"].mean(),
             "avg_files_per_visit": grouped["avg_files_per_visit"].mean(),
-            "mean_new_asset_fraction_per_visit": grouped["new_asset_fraction_per_visit"].mean(),
+            "n_ips_selection": grouped["new_asset_fraction_guarded"].count(),
+            "mean_new_asset_fraction_per_visit": grouped["new_asset_fraction_guarded"].mean(),
             "mean_download_stream_ratio": grouped["download_stream_ratio_finite"].mean(),
             "mean_active_timespan_days": grouped["active_timespan_days"].mean(),
             "mean_distinct_active_days": grouped["distinct_active_days"].mean(),
@@ -1032,16 +1042,17 @@ def behavior_tables(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib
         }
     ).sort_values("view_sessions", ascending=False)
 
-    print("\n=== View behavior per source category ===  (full columns in the CSV)")
+    print(f"\n=== View behavior per source category ===  (full columns in the CSV; new% over ≥{min_visits} visits)")
     print(
         f"    {'service':<11}{'IPs':>7}{'views':>12}{'visits':>9}{'avg_sess':>9}{'files/vis':>10}"
-        f"{'new%/vis':>9}{'span_d':>8}{'actdays':>8}{'off_hrs%':>9}{'wknd%':>7}{'test%':>7}"
+        f"{'new%/vis':>9}{'(nIPs)':>8}{'span_d':>8}{'actdays':>8}{'off_hrs%':>9}{'wknd%':>7}{'test%':>7}"
     )
     for service, r in per_service.iterrows():
+        new_pct = f"{100 * r.mean_new_asset_fraction_per_visit:>8.1f}%" if r.n_ips_selection else f"{'n/a':>9}"
         print(
             f"    {service:<11}{int(r.n_ips):>7,}{int(r.view_sessions):>12,}{int(r.visits):>9,}"
             f"{_fmt_duration(r.avg_session_duration_s):>9}{r.avg_files_per_visit:>10.1f}"
-            f"{100 * r.mean_new_asset_fraction_per_visit:>8.1f}%{r.mean_active_timespan_days:>8.0f}"
+            f"{new_pct}{int(r.n_ips_selection):>8,}{r.mean_active_timespan_days:>8.0f}"
             f"{r.mean_distinct_active_days:>8.0f}{100 * r.mean_off_hours_fraction:>8.1f}%"
             f"{100 * r.mean_weekend_fraction:>6.1f}%{r.testing_session_pct:>6.1f}%"
         )
@@ -1186,7 +1197,7 @@ def main() -> None:
         mirror_files_per_visit=args.mirror_files_per_visit,
         min_visits=args.min_visits,
     )
-    behavior_tables(profiles, min_sessions=args.min_sessions, out_path=args.out)
+    behavior_tables(profiles, min_sessions=args.min_sessions, out_path=args.out, min_visits=args.min_visits)
     try:
         plot(profiles, min_sessions=args.min_sessions, out_path=args.out)
         distributions_path = args.out.with_name(f"{args.out.stem}_distributions{args.out.suffix}")
