@@ -511,7 +511,13 @@ def build_ip_profiles(
     return pd.DataFrame(rows)
 
 
-def report(profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int = 10, top_n: int = 25) -> None:
+def report(
+    profiles: pd.DataFrame,
+    min_sessions: int,
+    testing_regular_min: int = 10,
+    top_n: int = 25,
+    mirror_files_per_visit: float = 500.0,
+) -> None:
     total_sessions = int(profiles["n_sessions"].sum())
     print(f"\n=== Per-IP behavioral profiles ({len(profiles):,} IPs, {total_sessions:,} sessions) ===")
 
@@ -621,21 +627,33 @@ def report(profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int =
     #     hitting the same handful (new ~= 0); a human mixes revisits with fresh picks (new in the middle);
     #     an enumeration scanner marches through the archive touching each once (new ~= 1). Unlike coverage
     #     and gap-CV, this separates the low-coverage, irregular-timing monitors those two axes miss. ---
+    #
+    #     The new-asset fraction ALONE over-counts scanners, because a one-shot casual visitor (a handful of
+    #     assets, touched once, never returned) is also "all new". Volume separates them: a bulk mirror takes
+    #     thousands of files per visit, a casual visitor a few. So the archetype is read off BOTH axes —
+    #     new-asset fraction and files-per-visit (``mirror_files_per_visit``). ---
     if "new_asset_fraction_per_visit" in active.columns:
         new_frac = active["new_asset_fraction_per_visit"]
+        files_per_visit = active["avg_files_per_visit"]
         repoller = new_frac <= 0.15
-        scanner = new_frac >= 0.85
-        mixed = ~repoller & ~scanner
-        print("\n  selection archetype by new-asset-fraction-per-visit (share of visited assets never seen before):")
+        all_new = new_frac >= 0.85
+        bulk = all_new & (files_per_visit >= mirror_files_per_visit)
+        one_shot = all_new & (files_per_visit < mirror_files_per_visit)
+        mixed = ~repoller & ~all_new
+        print(
+            "\n  selection archetype by new-asset-fraction-per-visit x files-per-visit "
+            f"(mirror cut: >= {mirror_files_per_visit:,g} files/visit):"
+        )
         for name, mask in [
             ("re-poller/monitor (new<=15%)", repoller),
-            ("mixed/human      (15-85%)", mixed),
-            ("scanner/CI       (new>=85%)", scanner),
+            ("mixed/human       (15-85%)", mixed),
+            ("bulk mirror       (new>=85%, many files)", bulk),
+            ("one-shot casual   (new>=85%, few files)", one_shot),
         ]:
             s = int(active.loc[mask, "n_sessions"].sum())
             testing_ips = int((active.loc[mask, "testing_fraction"] > 0).sum()) if "testing_fraction" in active else 0
             print(
-                f"    {name:<30}: {int(mask.sum()):>5,} IPs, {s:>12,} sessions "
+                f"    {name:<41}: {int(mask.sum()):>5,} IPs, {s:>12,} sessions "
                 f"({100 * s / max(total_sessions, 1):5.1f}% of all; {testing_ips} touch testing)"
             )
 
@@ -769,6 +787,86 @@ def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: path
     ax.legend(fontsize=8)
 
     fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Saved {out_path}")
+
+
+def plot_selection_plane(
+    profiles: pd.DataFrame, min_sessions: int, mirror_files_per_visit: float, out_path: pathlib.Path
+) -> None:
+    """
+    The two-axis selection plane: new-asset fraction per visit (x) against files per visit (y).
+
+    The new-asset fraction alone cannot separate a bulk mirror from a one-shot casual visitor — both are
+    "all new". Volume does: a mirror takes thousands of files per visit, a casual visitor a few. On this
+    plane the archetypes occupy distinct corners:
+
+      * right + high  — bulk mirror / enumeration sweep (all new, thousands of files per visit)
+      * right + low   — one-shot casual visitor (all new, but only a handful of files)
+      * left  (any y) — re-poller / monitor (re-takes the same assets, nothing new)
+      * middle        — human working pattern (mixes revisits with fresh picks)
+
+    The companion panel is the files-per-visit distribution, which is what justifies (or refutes) the
+    horizontal cut between "mirror" and "casual".
+    """
+    import matplotlib.pyplot as plt
+
+    active = profiles[profiles["n_sessions"] >= min_sessions].copy()
+    if active.empty or "new_asset_fraction_per_visit" not in active.columns:
+        print("  (nothing to plot for the selection plane)")
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(15.0, 6.5), gridspec_kw={"width_ratios": [1.6, 1.0]})
+    fig.suptitle(
+        f"Selection plane: what an actor chooses, and how much of it ({len(active):,} IPs ≥ {min_sessions} sessions)",
+        fontsize=12,
+        fontweight="bold",
+    )
+
+    ax = axes[0]
+    scatter = ax.scatter(
+        active["new_asset_fraction_per_visit"],
+        active["avg_files_per_visit"].clip(lower=0.5),
+        c=np.log10(active["n_sessions"].clip(lower=1)),
+        s=6 + 30 * np.log10(active["n_sessions"].clip(lower=1)),
+        cmap="viridis",
+        alpha=0.6,
+        linewidths=0,
+    )
+    ax.set_yscale("log")
+    ax.axvline(0.15, color="crimson", ls="--", lw=0.9)
+    ax.axvline(0.85, color="crimson", ls="--", lw=0.9)
+    ax.axhline(mirror_files_per_visit, color="crimson", ls=":", lw=1.0)
+    ax.set_xlabel("new-asset fraction per visit  (0 = pure re-poll, 1 = all new)")
+    ax.set_ylabel("files per visit (log)")
+    ax.set_title("archetype corners: mirror (top-right), casual (bottom-right), monitor (left)", fontsize=9)
+    for x, y, text in [
+        (0.94, 0.94, "bulk mirror"),
+        (0.94, 0.04, "one-shot casual"),
+        (0.02, 0.94, "re-poller / monitor"),
+        (0.42, 0.94, "human"),
+    ]:
+        ax.text(x, y, text, transform=ax.transAxes, fontsize=8, ha="right" if x > 0.5 else "left", va="top", alpha=0.75)
+    fig.colorbar(scatter, ax=ax, label="log₁₀ sessions")
+
+    ax = axes[1]
+    fpv = active["avg_files_per_visit"].to_numpy(float)
+    fpv = fpv[np.isfinite(fpv) & (fpv > 0)]
+    if fpv.size:
+        ax.hist(np.log10(fpv), bins=60, color="steelblue", alpha=0.85, edgecolor="none")
+    ax.axvline(
+        np.log10(mirror_files_per_visit),
+        color="crimson",
+        ls=":",
+        lw=1.0,
+        label=f"{mirror_files_per_visit:,g} files/visit (mirror cut)",
+    )
+    ax.set_xlabel("files per visit (log₁₀)")
+    ax.set_ylabel("IPs")
+    ax.set_title("is there a valley separating mirrors from human-scale visits?", fontsize=9)
+    ax.legend(fontsize=8)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"Saved {out_path}")
 
@@ -965,6 +1063,13 @@ def main() -> None:
         help="An IP with >= this many testing-asset sessions is a 'regular' testing accessor (a poller), "
         "distinct from an archive scanner that touches the testing blobs once incidentally.",
     )
+    parser.add_argument(
+        "--mirror-files-per-visit",
+        type=float,
+        default=500.0,
+        help="An all-new IP taking >= this many files per visit is a bulk mirror rather than a one-shot casual "
+        "visitor. Tune it against the files-per-visit panel of the selection-plane plot.",
+    )
     parser.add_argument("--cache-parquet", action="store_true", help="Cache the per-IP table (salted IP hash) in cache")
     parser.add_argument("--rebuild-cache", action="store_true")
     parser.add_argument("--max-assets", type=int, default=None, help="Layout-independent smoke test over the first N")
@@ -1014,12 +1119,24 @@ def main() -> None:
         print("No IPs found.")
         return
 
-    report(profiles, min_sessions=args.min_sessions, testing_regular_min=args.testing_regular_min)
+    report(
+        profiles,
+        min_sessions=args.min_sessions,
+        testing_regular_min=args.testing_regular_min,
+        mirror_files_per_visit=args.mirror_files_per_visit,
+    )
     behavior_tables(profiles, min_sessions=args.min_sessions, out_path=args.out)
     try:
         plot(profiles, min_sessions=args.min_sessions, out_path=args.out)
         distributions_path = args.out.with_name(f"{args.out.stem}_distributions{args.out.suffix}")
         plot_distributions(profiles, min_sessions=args.min_sessions, out_path=distributions_path)
+        selection_path = args.out.with_name(f"{args.out.stem}_selection_plane{args.out.suffix}")
+        plot_selection_plane(
+            profiles,
+            min_sessions=args.min_sessions,
+            mirror_files_per_visit=args.mirror_files_per_visit,
+            out_path=selection_path,
+        )
         testing_path = args.out.with_name(f"{args.out.stem}_testing_conditional{args.out.suffix}")
         plot_testing_conditional(
             profiles,
