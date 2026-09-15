@@ -723,9 +723,7 @@ def plot(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> N
     print(f"Saved {out_path}")
 
 
-def plot_distributions(
-    profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path, min_visits: int = 3
-) -> None:
+def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path, min_visits: int = 3) -> None:
     """
     The distributions that would justify (or refute) a threshold on each axis.
 
