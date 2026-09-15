@@ -517,6 +517,7 @@ def report(
     testing_regular_min: int = 10,
     top_n: int = 25,
     mirror_files_per_visit: float = 500.0,
+    min_visits: int = 3,
 ) -> None:
     total_sessions = int(profiles["n_sessions"].sum())
     print(f"\n=== Per-IP behavioral profiles ({len(profiles):,} IPs, {total_sessions:,} sessions) ===")
@@ -632,9 +633,22 @@ def report(
     #     assets, touched once, never returned) is also "all new". Volume separates them: a bulk mirror takes
     #     thousands of files per visit, a casual visitor a few. So the archetype is read off BOTH axes —
     #     new-asset fraction and files-per-visit (``mirror_files_per_visit``). ---
+    #
+    #     GUARD: the new-asset fraction is degenerate for an IP with a single visit (everything it saw was
+    #     new by definition, so it scores 1.0 while saying nothing), and coarsely quantized for two or three.
+    #     Those IPs are excluded here rather than counted as scanners, and the excluded volume is reported so
+    #     the size of what the guard removes stays visible.
     if "new_asset_fraction_per_visit" in active.columns:
-        new_frac = active["new_asset_fraction_per_visit"]
-        files_per_visit = active["avg_files_per_visit"]
+        enough_visits = active["n_visits"] >= min_visits
+        dropped = active.loc[~enough_visits, "n_sessions"].sum()
+        print(
+            f"\n  (selection axis needs >= {min_visits} visits to be meaningful; "
+            f"{int((~enough_visits).sum()):,} of {len(active):,} active IPs excluded, "
+            f"holding {int(dropped):,} sessions = {100 * dropped / max(total_sessions, 1):.1f}% of all)"
+        )
+        selection_set = active[enough_visits]
+        new_frac = selection_set["new_asset_fraction_per_visit"]
+        files_per_visit = selection_set["avg_files_per_visit"]
         repoller = new_frac <= 0.15
         all_new = new_frac >= 0.85
         bulk = all_new & (files_per_visit >= mirror_files_per_visit)
@@ -650,8 +664,8 @@ def report(
             ("bulk mirror       (new>=85%, many files)", bulk),
             ("one-shot casual   (new>=85%, few files)", one_shot),
         ]:
-            s = int(active.loc[mask, "n_sessions"].sum())
-            testing_ips = int((active.loc[mask, "testing_fraction"] > 0).sum()) if "testing_fraction" in active else 0
+            s = int(selection_set.loc[mask, "n_sessions"].sum())
+            testing_ips = int((selection_set.loc[mask, "testing_fraction"] > 0).sum())
             print(
                 f"    {name:<41}: {int(mask.sum()):>5,} IPs, {s:>12,} sessions "
                 f"({100 * s / max(total_sessions, 1):5.1f}% of all; {testing_ips} touch testing)"
@@ -709,7 +723,9 @@ def plot(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> N
     print(f"Saved {out_path}")
 
 
-def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> None:
+def plot_distributions(
+    profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path, min_visits: int = 3
+) -> None:
     """
     The distributions that would justify (or refute) a threshold on each axis.
 
@@ -774,16 +790,42 @@ def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: path
     # (c) selection — new-asset-fraction-per-visit, on a LINEAR 0..1 axis (it is already a fraction). This
     #     is the axis expected to be genuinely multi-modal: a spike near 0 (re-pollers/monitors), a spike
     #     near 1 (scanners/CI), and a human bulk in between. Valleys between those modes are defensible cuts.
+    #     The axis is DEGENERATE for an IP with a single visit: everything it touched was new by
+    #     definition, so it scores exactly 1.0 while carrying no information. Low visit counts also
+    #     quantize it (2 visits can only score 0, 0.5 or 1). Both histograms are drawn — every IP, and
+    #     only those with enough visits for the measure to mean anything — so that the share of the
+    #     spike at 1.0 that is an artifact is visible rather than assumed.
     ax = axes[3]
     new_frac = active["new_asset_fraction_per_visit"].to_numpy(float)
     new_frac = new_frac[np.isfinite(new_frac)]
+    guarded = active[active["n_visits"] >= min_visits]
+    guarded_frac = guarded["new_asset_fraction_per_visit"].to_numpy(float)
+    guarded_frac = guarded_frac[np.isfinite(guarded_frac)]
     if new_frac.size:
-        ax.hist(new_frac, bins=40, range=(0, 1), color="mediumpurple", alpha=0.85, edgecolor="none")
-    ax.axvline(0.15, color="crimson", ls="--", lw=0.9, label="15% (re-poller cut)")
-    ax.axvline(0.85, color="crimson", ls="--", lw=0.9, label="85% (scanner cut)")
+        ax.hist(
+            new_frac,
+            bins=40,
+            range=(0, 1),
+            color="mediumpurple",
+            alpha=0.35,
+            edgecolor="none",
+            label=f"all IPs (n={new_frac.size:,})",
+        )
+    if guarded_frac.size:
+        ax.hist(
+            guarded_frac,
+            bins=40,
+            range=(0, 1),
+            color="rebeccapurple",
+            alpha=0.9,
+            edgecolor="none",
+            label=f"≥ {min_visits} visits (n={guarded_frac.size:,})",
+        )
+    ax.axvline(0.15, color="crimson", ls="--", lw=0.9)
+    ax.axvline(0.85, color="crimson", ls="--", lw=0.9)
     ax.set_xlabel("new-asset fraction per visit (0 = pure re-poll, 1 = all new)")
     ax.set_ylabel("IPs")
-    ax.set_title("(c) selection — multi-modal? re-poller vs human vs scanner", fontsize=9)
+    ax.set_title("(c) selection — does the spike at 1.0 survive the visit guard?", fontsize=9)
     ax.legend(fontsize=8)
 
     fig.tight_layout(rect=[0, 0, 1, 0.96])
@@ -792,7 +834,11 @@ def plot_distributions(profiles: pd.DataFrame, min_sessions: int, out_path: path
 
 
 def plot_selection_plane(
-    profiles: pd.DataFrame, min_sessions: int, mirror_files_per_visit: float, out_path: pathlib.Path
+    profiles: pd.DataFrame,
+    min_sessions: int,
+    mirror_files_per_visit: float,
+    out_path: pathlib.Path,
+    min_visits: int = 3,
 ) -> None:
     """
     The two-axis selection plane: new-asset fraction per visit (x) against files per visit (y).
@@ -815,10 +861,19 @@ def plot_selection_plane(
     if active.empty or "new_asset_fraction_per_visit" not in active.columns:
         print("  (nothing to plot for the selection plane)")
         return
+    # The x axis is degenerate below `min_visits` (a single-visit IP scores 1.0 by construction), so those
+    # IPs are dropped rather than plotted into the scanner corner as though they had been measured.
+    n_before = len(active)
+    active = active[active["n_visits"] >= min_visits]
+    if active.empty:
+        print("  (no IPs survive the visit guard for the selection plane)")
+        return
 
     fig, axes = plt.subplots(1, 2, figsize=(15.0, 6.5), gridspec_kw={"width_ratios": [1.6, 1.0]})
     fig.suptitle(
-        f"Selection plane: what an actor chooses, and how much of it ({len(active):,} IPs ≥ {min_sessions} sessions)",
+        f"Selection plane: what an actor chooses, and how much of it "
+        f"({len(active):,} IPs ≥ {min_sessions} sessions and ≥ {min_visits} visits; "
+        f"{n_before - len(active):,} dropped by the visit guard)",
         fontsize=12,
         fontweight="bold",
     )
@@ -1070,6 +1125,13 @@ def main() -> None:
         help="An all-new IP taking >= this many files per visit is a bulk mirror rather than a one-shot casual "
         "visitor. Tune it against the files-per-visit panel of the selection-plane plot.",
     )
+    parser.add_argument(
+        "--min-visits",
+        type=int,
+        default=3,
+        help="The selection axis (new-asset fraction) is degenerate below this many visits -- a single-visit "
+        "IP scores 1.0 by construction -- so such IPs are excluded from it.",
+    )
     parser.add_argument("--cache-parquet", action="store_true", help="Cache the per-IP table (salted IP hash) in cache")
     parser.add_argument("--rebuild-cache", action="store_true")
     parser.add_argument("--max-assets", type=int, default=None, help="Layout-independent smoke test over the first N")
@@ -1124,18 +1186,22 @@ def main() -> None:
         min_sessions=args.min_sessions,
         testing_regular_min=args.testing_regular_min,
         mirror_files_per_visit=args.mirror_files_per_visit,
+        min_visits=args.min_visits,
     )
     behavior_tables(profiles, min_sessions=args.min_sessions, out_path=args.out)
     try:
         plot(profiles, min_sessions=args.min_sessions, out_path=args.out)
         distributions_path = args.out.with_name(f"{args.out.stem}_distributions{args.out.suffix}")
-        plot_distributions(profiles, min_sessions=args.min_sessions, out_path=distributions_path)
+        plot_distributions(
+            profiles, min_sessions=args.min_sessions, out_path=distributions_path, min_visits=args.min_visits
+        )
         selection_path = args.out.with_name(f"{args.out.stem}_selection_plane{args.out.suffix}")
         plot_selection_plane(
             profiles,
             min_sessions=args.min_sessions,
             mirror_files_per_visit=args.mirror_files_per_visit,
             out_path=selection_path,
+            min_visits=args.min_visits,
         )
         testing_path = args.out.with_name(f"{args.out.stem}_testing_conditional{args.out.suffix}")
         plot_testing_conditional(
