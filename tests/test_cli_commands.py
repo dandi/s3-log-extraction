@@ -133,32 +133,32 @@ def test_cli_config_cache_set(runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.ai_generated
-def test_cli_config_scratch_set_and_reset(
+def test_cli_config_tmp_set_and_reset(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    """Setting the scratch directory should persist it, and resetting should clear it again."""
+    """Setting the base temporary directory should persist it, and resetting should clear it again."""
     config_file_path = tmp_path / "config.yaml"
     monkeypatch.setattr("s3_log_extraction.config._config.S3_LOG_EXTRACTION_CONFIG_FILE_PATH", config_file_path)
-    new_scratch_directory = tmp_path / "new_scratch"
+    new_base_temporary_directory = tmp_path / "new_tmp"
 
     set_result = runner.invoke(
-        s3_log_extraction.s3logextraction_cli, ["config", "scratch", "set", str(new_scratch_directory)]
+        s3_log_extraction.s3logextraction_cli, ["config", "tmp", "set", str(new_base_temporary_directory)]
     )
 
     assert set_result.exit_code == 0, set_result.output
-    assert s3_log_extraction.config.get_config() == {"scratch_directory": str(new_scratch_directory)}
-    assert new_scratch_directory.is_dir() is True
+    assert s3_log_extraction.config.get_config() == {"base_temporary_directory": str(new_base_temporary_directory)}
+    assert new_base_temporary_directory.is_dir() is True
 
-    reset_result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["config", "scratch", "reset"])
+    reset_result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["config", "tmp", "reset"])
 
     assert reset_result.exit_code == 0, reset_result.output
     assert s3_log_extraction.config.get_config() == {}
 
 
 @pytest.mark.ai_generated
-def test_cli_extract_with_scratch(runner: CliRunner, tmp_path: pathlib.Path) -> None:
-    """The extract command should work under the given scratch directory and clean up after itself."""
-    scratch_directory = tmp_path / "scratch"
+def test_cli_extract_with_tmp(runner: CliRunner, tmp_path: pathlib.Path) -> None:
+    """The extract command should work under the given base temporary directory and clean up after itself."""
+    base_temporary_directory = tmp_path / "tmp"
 
     result = runner.invoke(
         s3_log_extraction.s3logextraction_cli,
@@ -169,16 +169,16 @@ def test_cli_extract_with_scratch(runner: CliRunner, tmp_path: pathlib.Path) -> 
             "2",
             "--cache",
             str(tmp_path),
-            "--scratch",
-            str(scratch_directory),
+            "--tmp",
+            str(base_temporary_directory),
             "--encryption",
             "false",
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert scratch_directory.is_dir() is True
-    assert list(scratch_directory.iterdir()) == []
+    assert base_temporary_directory.is_dir() is True
+    assert list(base_temporary_directory.iterdir()) == []
 
 
 @pytest.mark.ai_generated

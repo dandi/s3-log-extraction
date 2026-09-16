@@ -4,7 +4,7 @@
 
 ### 🚀 Enhancement
 
-- Extraction runs can now be pointed at a master scratch directory, with `s3logextraction config scratch set <directory>` or the `--scratch` option of `extract`. Each run creates its working directory beneath it instead of under the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
+- The base directory that extraction runs create their temporary directories inside is now configurable, with `s3logextraction config tmp set <directory>` or the `--tmp` option of `extract`. Runs otherwise use the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
 ### 🐛 Bug Fix
 

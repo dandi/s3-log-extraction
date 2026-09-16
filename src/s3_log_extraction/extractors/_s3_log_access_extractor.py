@@ -12,12 +12,12 @@ import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import (
-    _create_scratch_directory,
+    _create_temporary_directory,
     _merge_dir_to_extraction,
     _merge_worker_output_into_extraction,
     _run_awk_extraction,
 )
-from ..config import get_cache_directory, get_cache_subdirectory, get_scratch_directory
+from ..config import get_base_temporary_directory, get_cache_directory, get_cache_subdirectory
 from ..utils import _handle_max_workers
 
 
@@ -44,9 +44,9 @@ class S3LogAccessExtractor:
         Defaults to the configured cache directory.
     use_encryption : bool, optional
         Whether to encrypt IP addresses in the extraction output. Defaults to `True`.
-    scratch_directory : pathlib.Path | None, optional
-        The master directory to create this run's working directory beneath.
-        Defaults to the configured master scratch directory, and to the system temporary directory when
+    base_temporary_directory : pathlib.Path | None, optional
+        The base directory to create this run's temporary directory inside.
+        Defaults to the configured base temporary directory, and to the system temporary directory when
         none is configured.
     """
 
@@ -55,7 +55,7 @@ class S3LogAccessExtractor:
         *,
         cache_directory: pathlib.Path | None = None,
         use_encryption: bool = True,
-        scratch_directory: pathlib.Path | None = None,
+        base_temporary_directory: pathlib.Path | None = None,
     ) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
         self.use_encryption = use_encryption
@@ -63,8 +63,8 @@ class S3LogAccessExtractor:
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_cache_subdirectory(cache_directory=self.cache_directory, name="records")
-        self.scratch_directory = scratch_directory or get_scratch_directory()
-        self.temporary_directory = _create_scratch_directory(self.scratch_directory)
+        self.base_temporary_directory = base_temporary_directory or get_base_temporary_directory()
+        self.temporary_directory = _create_temporary_directory(self.base_temporary_directory)
 
         class_name = self.__class__.__name__
         file_processing_start_record_file_name = f"{class_name}_file-processing-start.txt"
@@ -126,7 +126,7 @@ class S3LogAccessExtractor:
             batches = itertools.batched(iterable=files_to_extract, n=batch_size)
             number_of_batches = math.ceil(len(files_to_extract) / batch_size)
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-                # No scratch directory is made for the pool itself: every worker overrides EXTRACTION_DIRECTORY
+                # No directory is made for the pool itself: every worker overrides EXTRACTION_DIRECTORY
                 # with its own process-ID directory under `temporary_directory` before it runs the AWK script.
                 for batch in tqdm.tqdm(
                     iterable=batches,
@@ -191,7 +191,7 @@ class S3LogAccessExtractor:
             extraction_directory.mkdir(exist_ok=True)
         elif self.use_encryption:
             # For single-worker mode with encryption: use a per-call temp dir so we can use_encryption on merge
-            extraction_directory = _create_scratch_directory(self.scratch_directory)
+            extraction_directory = _create_temporary_directory(self.base_temporary_directory)
 
         file_path = pathlib.Path(file_path)
         if log_root is not None:

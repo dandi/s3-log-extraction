@@ -6,7 +6,12 @@ import typing
 
 import rich_click
 
-from ..config import reset_extraction, set_cache_directory, set_scratch_directory, unset_scratch_directory
+from ..config import (
+    reset_extraction,
+    set_base_temporary_directory,
+    set_cache_directory,
+    unset_base_temporary_directory,
+)
 from ..extractors import (
     RemoteS3LogAccessExtractor,
     S3LogAccessExtractor,
@@ -136,11 +141,11 @@ def s3logextraction_cli():
     default=True,
 )
 @rich_click.option(
-    "--scratch",
-    "scratch_directory",
+    "--tmp",
+    "base_temporary_directory",
     help=(
-        "Create this run's working directory under a non-default master scratch directory. "
-        "This overrides the configured scratch directory without modifying saved config."
+        "Create this run's temporary directory inside a non-default base directory. "
+        "This overrides the configured base temporary directory without modifying saved config."
     ),
     required=False,
     type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
@@ -154,7 +159,7 @@ def _extract_cli(
     mode: typing.Literal["remote"] | None = None,
     inventory_directory: str | None = None,
     use_encryption: bool = True,
-    scratch_directory: str | None = None,
+    base_temporary_directory: str | None = None,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -165,12 +170,14 @@ def _extract_cli(
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
-    scratch_path = pathlib.Path(scratch_directory) if scratch_directory is not None else None
+    base_temporary_path = pathlib.Path(base_temporary_directory) if base_temporary_directory is not None else None
 
     match mode:
         case "remote":
             extractor = RemoteS3LogAccessExtractor(
-                cache_directory=cache_path, use_encryption=use_encryption, scratch_directory=scratch_path
+                cache_directory=cache_path,
+                use_encryption=use_encryption,
+                base_temporary_directory=base_temporary_path,
             )
             extractor.extract_s3_bucket(
                 s3_root=directory,
@@ -180,7 +187,9 @@ def _extract_cli(
             )
         case _:
             extractor = S3LogAccessExtractor(
-                cache_directory=cache_path, use_encryption=use_encryption, scratch_directory=scratch_path
+                cache_directory=cache_path,
+                use_encryption=use_encryption,
+                base_temporary_directory=base_temporary_path,
             )
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
@@ -242,35 +251,35 @@ def _set_cache_cli(directory: str) -> None:
     set_cache_directory(directory=directory)
 
 
-# s3logextraction config scratch
-@_config_cli.group(name="scratch")
-def _scratch_cli() -> None:
+# s3logextraction config tmp
+@_config_cli.group(name="tmp")
+def _tmp_cli() -> None:
     pass
 
 
-# s3logextraction config scratch set < directory >
-@_scratch_cli.command(name="set")
+# s3logextraction config tmp set < directory >
+@_tmp_cli.command(name="set")
 @rich_click.argument("directory", type=rich_click.Path(writable=True))
-def _set_scratch_cli(directory: str) -> None:
+def _set_tmp_cli(directory: str) -> None:
     """
-    Set a non-default location for the master scratch directory.
+    Set a non-default base directory for the temporary directories of extraction runs.
 
-    DIRECTORY : The path to the folder that each extraction run creates its working directory beneath.
-        Without this setting, runs work under the system temporary directory, which on many systems is a
+    DIRECTORY : The path to the folder that each extraction run creates its temporary directory inside.
+        Without this setting, runs use the system temporary directory, which on many systems is a
         small RAM-backed '/tmp' that a large extraction can exhaust.
 
         Parallel runs write their per-worker output here before each batch is merged into the cache, and
         remote runs also download each raw log file here. Size it for a batch of logs and prefer a fast
         local disk.
     """
-    set_scratch_directory(directory)
+    set_base_temporary_directory(directory)
 
 
-# s3logextraction config scratch reset
-@_scratch_cli.command(name="reset")
-def _reset_scratch_cli() -> None:
-    """Forget the configured master scratch directory and go back to using the system temporary directory."""
-    unset_scratch_directory()
+# s3logextraction config tmp reset
+@_tmp_cli.command(name="reset")
+def _reset_tmp_cli() -> None:
+    """Forget the configured base temporary directory and go back to using the system temporary directory."""
+    unset_base_temporary_directory()
 
 
 # s3logextraction reset
