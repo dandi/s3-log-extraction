@@ -8,7 +8,10 @@ A "view session" is the shipped `number_of_views` unit: a maximal run of streami
 `download == 0`) requests from one IP to one asset with no gap over 8 hours.
 
 **Tooling:** `analysis/profile_ip_behavior.py`. IPs are stored only as a salted keyed hash and are
-shown in tables under stable pseudonyms (e.g. `ProudVireo22`), never as addresses.
+shown in tables under pseudonyms drawn uniformly at random, never as addresses. The pseudonyms are
+not derived from the addresses, so they carry no information about them; the registry linking the two
+is held only on the machine that produced it. Actors are therefore referred to here by role rather
+than by name.
 
 ---
 
@@ -22,7 +25,8 @@ shown in tables under stable pseudonyms (e.g. `ProudVireo22`), never as addresse
 | 25 | 69.1% |
 | 100 | 75.0% |
 
-A single IP (`ProudVireo22`, geolocated USA/NH) accounts for **54% of every view in the archive**.
+A single IP — geolocated USA/NH, called **the dominant actor** throughout — accounts for **54% of
+every view in the archive**.
 Its behavioral profile is unambiguous and is corroborated independently by every axis we measured:
 
 | property | value | reading |
@@ -75,7 +79,7 @@ are in `ip_behavior_distributions.png`.
   select 26 IPs holding 69.1% of views, but only because it happens to sit above the big actors.
 - **Session-gap CV** (timing irregularity). A single unimodal bulk centred near CV ≈ 1–10 with no
   valley anywhere near the candidate cut of 0.1. Only 1,096 IPs are flagged metronomic, and 81% of
-  that flagged volume is `ProudVireo22` alone.
+  that flagged volume is the dominant actor alone.
 - **Revisit rate** (sessions ÷ distinct assets). A spike at exactly 1 (touch-once is the norm) and a
   smooth tail. No structure to cut on.
 - **Selection entropy.** Retracted earlier in the analysis: it is ≈ 1.0 for nearly every high-activity
@@ -91,7 +95,7 @@ touched before — is the one axis with genuine multi-modal structure. It direct
 principle that authentic use is idiosyncratic in *what* it chooses: a monitor re-takes the same
 material (→ 0), a scanner marches through fresh material (→ 1), a human mixes the two.
 
-It also catches what coverage and CV miss. `ProudVireo22` has a *high* gap-CV (650) and only moderate
+It also catches what coverage and CV miss. The dominant actor has a *high* gap-CV (650) and only moderate
 coverage (8.6%), so it passes both of those filters — but its 8.7% new-asset fraction exposes it
 immediately.
 
@@ -153,7 +157,7 @@ the two axes that looked most promising both required retraction or heavy qualif
 **Do ship a named extreme-outlier exclusion**, justified per IP by the behavioral evidence table
 rather than by a population threshold. Concretely:
 
-1. Exclude `ProudVireo22`. One actor, 54% of all views, with five independent lines of evidence
+1. Exclude the dominant actor. One actor, 54% of all views, with five independent lines of evidence
    (§1). This is the single highest-value correction available and it is defensible in isolation.
 2. Review the next 24 by hand against their profile rows. Top-25 exclusion would remove 69.1% of
    views; each case should be argued individually, not by rule.

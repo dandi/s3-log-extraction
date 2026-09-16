@@ -161,4 +161,6 @@ fabric.properties
 # Local-only IP alias -> address mappings produced by analysis/resolve_ip_aliases.py.
 # These contain raw IP addresses (personal data) and must never be committed.
 *.PRIVATE.csv
+*.PRIVATE.json
 ip_aliases*.csv
+alias_registry*.json

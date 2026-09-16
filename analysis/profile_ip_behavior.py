@@ -60,6 +60,7 @@ import hashlib
 import math
 import os
 import pathlib
+import secrets
 import sys
 
 import numpy as np
@@ -225,13 +226,69 @@ _ALIAS_NOUNS = (
 )
 
 
-def _alias(ip_hash: str) -> str:
-    """A deterministic CamelCase pseudonym for a hashed IP (stable across runs, human-readable)."""
-    value = int(ip_hash[:12], 16)
-    adjective = _ALIAS_ADJECTIVES[value % len(_ALIAS_ADJECTIVES)]
-    noun = _ALIAS_NOUNS[(value // len(_ALIAS_ADJECTIVES)) % len(_ALIAS_NOUNS)]
-    suffix = (value // (len(_ALIAS_ADJECTIVES) * len(_ALIAS_NOUNS))) % 100
-    return f"{adjective}{noun}{suffix:02d}"
+ALIAS_REGISTRY_NAME = "alias_registry.PRIVATE.json"
+_ALIAS_SUFFIX_DIGITS = 4
+
+
+class AliasRegistry:
+    """
+    Random, locally-held pseudonyms for hashed IPs.
+
+    A pseudonym *derived* from the address — even through a keyed hash — is still a function of it,
+    so publishing one publishes a little information about the address. These are drawn uniformly at
+    random instead and carry none: the name says nothing whatsoever about the IP, and the only thing
+    connecting the two is this registry, which never leaves the machine that produced it.
+
+    That makes the registry the sole record of who is who, so it is persisted next to the analysis
+    cache (never in the repository, and gitignored) and reloaded on each run to keep names stable
+    across runs. Delete it and the names are gone for good: a rerun produces a fresh, unrelated set.
+
+    The name space is ``len(adjectives) * len(nouns) * 10 ** 4`` (9,000,000), far larger than the
+    number of addresses, and assignment refuses to reuse a name — so unlike a derived scheme there
+    are no collisions, and one name never stands for two different addresses.
+    """
+
+    def __init__(self, path: pathlib.Path | None = None) -> None:
+        self.path = path
+        self._hash_to_alias: dict[str, str] = {}
+        self._used: set[str] = set()
+        self._random = secrets.SystemRandom()
+        if path is not None and path.exists():
+            import json
+
+            self._hash_to_alias = json.loads(path.read_text(encoding="utf-8"))
+            self._used = set(self._hash_to_alias.values())
+            print(f"Loaded {len(self._hash_to_alias):,} existing pseudonyms from {path}")
+
+    def alias_for(self, ip_hash: str) -> str:
+        """Return this hash's pseudonym, drawing and recording a fresh random one if it has none."""
+        existing = self._hash_to_alias.get(ip_hash)
+        if existing is not None:
+            return existing
+        limit = len(_ALIAS_ADJECTIVES) * len(_ALIAS_NOUNS) * 10**_ALIAS_SUFFIX_DIGITS
+        if len(self._used) >= limit:  # pragma: no cover - would need 9M addresses
+            raise RuntimeError("The pseudonym space is exhausted; widen the word lists.")
+        while True:
+            candidate = (
+                f"{self._random.choice(_ALIAS_ADJECTIVES)}"
+                f"{self._random.choice(_ALIAS_NOUNS)}"
+                f"{self._random.randrange(10**_ALIAS_SUFFIX_DIGITS):0{_ALIAS_SUFFIX_DIGITS}d}"
+            )
+            if candidate not in self._used:
+                self._used.add(candidate)
+                self._hash_to_alias[ip_hash] = candidate
+                return candidate
+
+    def save(self) -> None:
+        """Persist the registry locally, readable only by its owner."""
+        if self.path is None:
+            return
+        import json
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(self._hash_to_alias, indent=0, sort_keys=True), encoding="utf-8")
+        self.path.chmod(0o600)
+        print(f"Saved {len(self._hash_to_alias):,} pseudonyms to {self.path} (local only; do not share or commit)")
 
 
 def _selection_entropy(per_asset_session_counts: list[int]) -> float:
@@ -451,7 +508,41 @@ def ip_features(
     }
 
 
-def _load_content_id_to_dandisets(path: pathlib.Path, wanted: set[str]) -> dict[str, tuple[str, ...]]:
+CONTENT_ID_MAP_URL = (
+    "https://raw.githubusercontent.com/dandi-cache/content-id-to-usage-dandiset-path/"
+    "refs/heads/dist/derivatives/content_id_to_usage_dandiset_path.jsonl.gz"
+)
+
+
+def _open_content_id_map(source: str):
+    """
+    Open the content-id mapping as a stream of text lines, from a URL or a local path.
+
+    The published derivative lives on the ``dist`` branch as gzip, so the default is streamed and
+    decompressed on the fly rather than staged on disk first. A local path (plain or ``.gz``) is
+    accepted too, for a pinned copy or an offline run.
+    """
+    import gzip
+    import io
+
+    if source.startswith(("http://", "https://")):
+        import requests
+
+        print(f"Streaming the content-id map from {source}")
+        response = requests.get(source, stream=True, timeout=120)
+        response.raise_for_status()
+        raw = response.raw
+        stream = gzip.GzipFile(fileobj=raw) if source.endswith(".gz") else raw
+        return io.TextIOWrapper(stream, encoding="utf-8")
+
+    path = pathlib.Path(source)
+    print(f"Reading the content-id map from {path}")
+    if path.suffix == ".gz":
+        return gzip.open(path, mode="rt", encoding="utf-8")
+    return path.open(encoding="utf-8")
+
+
+def _load_content_id_to_dandisets(source: str, wanted: set[str]) -> dict[str, tuple[str, ...]]:
     """
     Read the content-id to dandiset mapping, keeping only the content ids present in this cache.
 
@@ -463,7 +554,7 @@ def _load_content_id_to_dandisets(path: pathlib.Path, wanted: set[str]) -> dict[
     import json
 
     mapping: dict[str, tuple[str, ...]] = {}
-    with path.open(encoding="utf-8") as file_stream:
+    with _open_content_id_map(source) as file_stream:
         for line in tqdm.tqdm(file_stream, desc="Reading content-id map", unit=" lines"):
             stripped = line.strip()
             if not stripped:
@@ -489,7 +580,8 @@ def build_ip_profiles(
     testing_globs: list[str],
     min_sessions: int,
     max_assets: int | None = None,
-    content_id_map_path: pathlib.Path | None = None,
+    content_id_map_source: str | None = None,
+    alias_registry: "AliasRegistry | None" = None,
 ) -> pd.DataFrame:
     """Walk the cache once, accumulate per-IP session activity, and return the per-IP feature table."""
     import datetime
@@ -516,9 +608,9 @@ def build_ip_profiles(
     # actor saturates a dataset rather than merely touching many assets.
     asset_dandisets: list[tuple[str, ...]] = []
     dandiset_sizes: collections.Counter = collections.Counter()
-    if content_id_map_path is not None:
+    if content_id_map_source is not None:
         content_ids = {asset_dir.name for asset_dir in asset_dirs}
-        content_id_to_dandisets = _load_content_id_to_dandisets(content_id_map_path, content_ids)
+        content_id_to_dandisets = _load_content_id_to_dandisets(content_id_map_source, content_ids)
         for asset_dir in asset_dirs:
             dandisets = content_id_to_dandisets.get(asset_dir.name, ())
             asset_dandisets.append(dandisets)
@@ -581,6 +673,7 @@ def build_ip_profiles(
     total_testing_assets = sum(asset_is_testing)
     print(f"Resolving {len(records):,} distinct IPs ({total_testing_assets} testing assets present)...")
     key = _ip_hash_key()
+    registry = alias_registry if alias_registry is not None else AliasRegistry()
     rows = []
     for ip, record in tqdm.tqdm(records.items(), desc="Resolving + featurizing"):
         features = ip_features(
@@ -594,15 +687,17 @@ def build_ip_profiles(
             dandiset_sizes=dandiset_sizes,
         )
         label = resolver.resolve(ip) or ""
+        ip_hash = hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest()
         rows.append(
             {
-                "ip_hash": hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest(),
-                "alias": _alias(hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest()),
+                "ip_hash": ip_hash,
+                "alias": registry.alias_for(ip_hash),
                 "region_label": label,
                 "service": _service_of(label),
                 **features,
             }
         )
+    registry.save()
     return pd.DataFrame(rows)
 
 
@@ -1325,10 +1420,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--content-id-map",
-        type=pathlib.Path,
+        nargs="?",
+        const=CONTENT_ID_MAP_URL,
         default=None,
-        help="Path to the published content_id_to_usage_dandiset_path.jsonl. Supplying it turns the flat, "
-        "content-addressed cache into dandiset membership and unlocks the saturation axis.",
+        help="Turn the flat, content-addressed cache into dandiset membership and unlock the saturation axis. "
+        "Pass the flag bare to stream the published mapping straight from its dist branch, or give a URL or a "
+        "local path (plain or .gz) to pin a copy.",
     )
     parser.add_argument("--cache-parquet", action="store_true", help="Cache the per-IP table (salted IP hash) in cache")
     parser.add_argument("--rebuild-cache", action="store_true")
@@ -1364,7 +1461,8 @@ def main() -> None:
                 testing_globs=_load_globs(args.testing_asset_file),
                 min_sessions=args.min_sessions,
                 max_assets=args.max_assets,
-                content_id_map_path=args.content_id_map,
+                content_id_map_source=args.content_id_map,
+                alias_registry=AliasRegistry(path=args.cache_dir / "analysis_cache" / ALIAS_REGISTRY_NAME),
             )
         if args.cache_parquet and not profiles.empty:
             parquet_path.parent.mkdir(parents=True, exist_ok=True)
