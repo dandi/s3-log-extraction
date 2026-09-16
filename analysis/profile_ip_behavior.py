@@ -330,6 +330,47 @@ def _cv(values: list[float]) -> float:
     return float(gaps.std() / mean_gap) if mean_gap > 0 else float("nan")
 
 
+def _saturation_features(
+    touched_assets: collections.abc.Iterable[int],
+    asset_dandisets: list[tuple[str, ...]],
+    dandiset_sizes: collections.Counter,
+) -> dict:
+    """
+    How thoroughly an actor consumes the datasets it visits, on two axes at once.
+
+    A legitimate heavy user revisits dozens of files across hundreds of datasets, but takes only a
+    slice of any one of them. A mirror takes a large share of the files *within* each dataset AND a
+    large share of the datasets. Neither axis alone separates the two -- broad-but-shallow is a real
+    research pattern, and deep-but-narrow is a single dataset's author -- so both are reported and the
+    discriminating region is high on both.
+    """
+    if not dandiset_sizes:
+        return {
+            "n_dandisets_touched": 0,
+            "dandiset_coverage_fraction": float("nan"),
+            "mean_within_dandiset_saturation": float("nan"),
+            "max_within_dandiset_saturation": float("nan"),
+        }
+    touched_per_dandiset: collections.Counter = collections.Counter()
+    for asset_index in touched_assets:
+        for dandiset in asset_dandisets[asset_index]:
+            touched_per_dandiset[dandiset] += 1
+    if not touched_per_dandiset:
+        return {
+            "n_dandisets_touched": 0,
+            "dandiset_coverage_fraction": 0.0,
+            "mean_within_dandiset_saturation": float("nan"),
+            "max_within_dandiset_saturation": float("nan"),
+        }
+    saturations = [count / dandiset_sizes[dandiset] for dandiset, count in touched_per_dandiset.items()]
+    return {
+        "n_dandisets_touched": len(touched_per_dandiset),
+        "dandiset_coverage_fraction": len(touched_per_dandiset) / len(dandiset_sizes),
+        "mean_within_dandiset_saturation": sum(saturations) / len(saturations),
+        "max_within_dandiset_saturation": max(saturations),
+    }
+
+
 def ip_features(
     record: dict,
     asset_is_testing: list,
@@ -337,6 +378,8 @@ def ip_features(
     total_testing_assets: int,
     min_sessions: int,
     session_timeout_in_seconds: int,
+    asset_dandisets: list[tuple[str, ...]] | None = None,
+    dandiset_sizes: collections.Counter | None = None,
 ) -> dict:
     """
     Turn one IP's accumulated activity into the feature row. ``record`` carries ``sessions`` (a list of
@@ -400,7 +443,40 @@ def ip_features(
         "visit_gap_cv": _cv([v["start"] for v in visits]) if n_visits >= min_sessions else float("nan"),
         "testing_fraction": testing_sessions / n_sessions if n_sessions else 0.0,
         **temporal,
+        **_saturation_features(
+            per_asset.keys(),
+            asset_dandisets if asset_dandisets is not None else [],
+            dandiset_sizes if dandiset_sizes is not None else collections.Counter(),
+        ),
     }
+
+
+def _load_content_id_to_dandisets(path: pathlib.Path, wanted: set[str]) -> dict[str, tuple[str, ...]]:
+    """
+    Read the content-id to dandiset mapping, keeping only the content ids present in this cache.
+
+    The published derivative is one JSON object per line, ``{content_id: {dandiset_id: asset_path}}``.
+    A blob deduplicated across dandisets carries several, so every dandiset it appears in is kept.
+    Filtering against ``wanted`` up front bounds memory to the size of the cache rather than the size
+    of the archive's whole history.
+    """
+    import json
+
+    mapping: dict[str, tuple[str, ...]] = {}
+    with path.open(encoding="utf-8") as file_stream:
+        for line in tqdm.tqdm(file_stream, desc="Reading content-id map", unit=" lines"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entry = json.loads(stripped)
+            except ValueError:
+                continue
+            for content_id, dandiset_to_path in entry.items():
+                if content_id in wanted and isinstance(dandiset_to_path, dict):
+                    mapping[content_id] = tuple(sorted(dandiset_to_path))
+    print(f"  Mapped {len(mapping):,} of {len(wanted):,} cached assets to a dandiset")
+    return mapping
 
 
 def build_ip_profiles(
@@ -413,6 +489,7 @@ def build_ip_profiles(
     testing_globs: list[str],
     min_sessions: int,
     max_assets: int | None = None,
+    content_id_map_path: pathlib.Path | None = None,
 ) -> pd.DataFrame:
     """Walk the cache once, accumulate per-IP session activity, and return the per-IP feature table."""
     import datetime
@@ -432,6 +509,22 @@ def build_ip_profiles(
         asset_dirs = asset_dirs[:max_assets]
     total_assets = len(asset_dirs)
     print(f"Found {total_assets} asset directories")
+
+    # Dataset membership, when the published content-id mapping is supplied. The cache is content
+    # addressed -- an asset directory is named for its content id -- so the mapping is what turns a
+    # flat set of blobs into the dandisets they belong to, and is the only way to measure whether an
+    # actor saturates a dataset rather than merely touching many assets.
+    asset_dandisets: list[tuple[str, ...]] = []
+    dandiset_sizes: collections.Counter = collections.Counter()
+    if content_id_map_path is not None:
+        content_ids = {asset_dir.name for asset_dir in asset_dirs}
+        content_id_to_dandisets = _load_content_id_to_dandisets(content_id_map_path, content_ids)
+        for asset_dir in asset_dirs:
+            dandisets = content_id_to_dandisets.get(asset_dir.name, ())
+            asset_dandisets.append(dandisets)
+            for dandiset in dandisets:
+                dandiset_sizes[dandiset] += 1
+        print(f"  Cache spans {len(dandiset_sizes):,} dandisets")
 
     def _new_record() -> dict:
         # ``sessions``: list of (start_epoch, end_epoch, asset_index) per-(IP,asset) view sessions.
@@ -497,6 +590,8 @@ def build_ip_profiles(
             total_testing_assets=total_testing_assets,
             min_sessions=min_sessions,
             session_timeout_in_seconds=session_timeout_in_seconds,
+            asset_dandisets=asset_dandisets,
+            dandiset_sizes=dandiset_sizes,
         )
         label = resolver.resolve(ip) or ""
         rows.append(
@@ -669,6 +764,30 @@ def report(
             print(
                 f"    {name:<41}: {int(mask.sum()):>5,} IPs, {s:>12,} sessions "
                 f"({100 * s / max(total_sessions, 1):5.1f}% of all; {testing_ips} touch testing)"
+            )
+
+    # --- Saturation: the axis that actually distinguishes a heavy researcher from a mirror. A real
+    #     power user is broad but shallow -- dozens of files across hundreds of datasets, a slice of
+    #     each. A mirror is deep AND broad: a large share of the files within each dataset, across a
+    #     large share of the datasets. Needs the content-id -> dandiset mapping to compute. ---
+    if "mean_within_dandiset_saturation" in active.columns and active["mean_within_dandiset_saturation"].notna().any():
+        measurable = active[active["mean_within_dandiset_saturation"].notna()]
+        print(f"\n  dataset saturation ({len(measurable):,} active IPs mapped to dandisets):")
+        print("    within-dandiset saturation (mean share of a visited dandiset's assets taken):")
+        for q in [0.5, 0.9, 0.99, 0.999, 1.0]:
+            print(f"      {q * 100:>5g}th pct: {measurable['mean_within_dandiset_saturation'].quantile(q):.4f}")
+        print("    dandiset coverage (share of all dandisets touched):")
+        for q in [0.5, 0.9, 0.99, 0.999, 1.0]:
+            print(f"      {q * 100:>5g}th pct: {measurable['dandiset_coverage_fraction'].quantile(q):.4f}")
+        print("\n    high on BOTH axes (the mirror region) — IPs and their session share:")
+        for sat_cut, cov_cut in [(0.25, 0.10), (0.50, 0.25), (0.50, 0.50), (0.75, 0.50)]:
+            mask = (measurable["mean_within_dandiset_saturation"] >= sat_cut) & (
+                measurable["dandiset_coverage_fraction"] >= cov_cut
+            )
+            s = int(measurable.loc[mask, "n_sessions"].sum())
+            print(
+                f"      saturation >= {sat_cut:.0%}, coverage >= {cov_cut:.0%}: {int(mask.sum()):>5,} IPs, "
+                f"{s:>12,} sessions ({100 * s / max(total_sessions, 1):5.1f}% of all)"
             )
 
     print(f"\n  top {top_n} active IPs by sessions (label | sessions | assets | cov | test% | CV | domP | MB/sess):")
@@ -924,6 +1043,68 @@ def plot_selection_plane(
     print(f"Saved {out_path}")
 
 
+def plot_saturation_plane(profiles: pd.DataFrame, min_sessions: int, out_path: pathlib.Path) -> None:
+    """
+    The saturation plane: within-dandiset saturation against dandiset coverage.
+
+    This is the discriminator the other axes could not supply. Archive coverage alone cannot tell a
+    broad-but-shallow researcher from a mirror, because both touch many assets; saturation asks how
+    much of each *dataset* an actor takes, and the plane asks it alongside how many datasets it
+    visits. A legitimate power user sits bottom-right (many datasets, a slice of each) or top-left (a
+    dataset's own author). The mirror region is top-right: deep and broad at once.
+    """
+    import matplotlib.pyplot as plt
+
+    if "mean_within_dandiset_saturation" not in profiles.columns:
+        print("  (no dandiset mapping — skipped the saturation plane)")
+        return
+    active = profiles[(profiles["n_sessions"] >= min_sessions) & profiles["mean_within_dandiset_saturation"].notna()]
+    if active.empty:
+        print("  (nothing to plot for the saturation plane)")
+        return
+
+    fig, ax = plt.subplots(figsize=(9.0, 7.0))
+    scatter = ax.scatter(
+        active["dandiset_coverage_fraction"].clip(lower=1e-5),
+        active["mean_within_dandiset_saturation"].clip(lower=1e-4),
+        c=np.log10(active["n_sessions"].clip(lower=1)),
+        s=6 + 30 * np.log10(active["n_sessions"].clip(lower=1)),
+        cmap="viridis",
+        alpha=0.6,
+        linewidths=0,
+    )
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.axvline(0.25, color="crimson", ls="--", lw=0.9)
+    ax.axhline(0.50, color="crimson", ls="--", lw=0.9)
+    ax.set_xlabel("dandiset coverage  (share of all dandisets touched)")
+    ax.set_ylabel("mean within-dandiset saturation  (share of a visited dandiset's assets taken)")
+    ax.set_title(
+        f"Saturation plane ({len(active):,} IPs ≥ {min_sessions} sessions)\n"
+        "mirror region = top-right (deep AND broad); real power users are broad but shallow",
+        fontsize=10,
+    )
+    for x, y, text in [
+        (0.97, 0.97, "mirror"),
+        (0.97, 0.03, "broad, shallow\n(power user)"),
+        (0.03, 0.97, "deep, narrow\n(dataset author)"),
+    ]:
+        ax.text(
+            x,
+            y,
+            text,
+            transform=ax.transAxes,
+            fontsize=8,
+            ha="right" if x > 0.5 else "left",
+            va="top" if y > 0.5 else "bottom",
+            alpha=0.75,
+        )
+    fig.colorbar(scatter, ax=ax, label="log₁₀ sessions")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Saved {out_path}")
+
+
 def plot_testing_conditional(
     profiles: pd.DataFrame, min_sessions: int, testing_regular_min: int, out_path: pathlib.Path
 ) -> None:
@@ -1108,10 +1289,11 @@ def behavior_tables(
 
 def _cache_paths(cache_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     base = cache_dir / "analysis_cache"
+    # _v4: schema gained the dandiset saturation columns (needs --content-id-map to populate).
     # _v3: schema gained the temporal fingerprint (active timespan, active days, presence density,
     # off-hours / weekend fractions), visit-gap CV, download/stream mix, per-visit new-asset fraction,
     # median session duration, and the testing-only flag — an older cache lacks these, so it is not reused.
-    return base / "ip_behavior_profiles_v3.parquet", base / "ip_behavior_profiles_v3.csv.gz"
+    return base / "ip_behavior_profiles_v4.parquet", base / "ip_behavior_profiles_v4.csv.gz"
 
 
 def main() -> None:
@@ -1140,6 +1322,13 @@ def main() -> None:
         default=3,
         help="The selection axis (new-asset fraction) is degenerate below this many visits -- a single-visit "
         "IP scores 1.0 by construction -- so such IPs are excluded from it.",
+    )
+    parser.add_argument(
+        "--content-id-map",
+        type=pathlib.Path,
+        default=None,
+        help="Path to the published content_id_to_usage_dandiset_path.jsonl. Supplying it turns the flat, "
+        "content-addressed cache into dandiset membership and unlocks the saturation axis.",
     )
     parser.add_argument("--cache-parquet", action="store_true", help="Cache the per-IP table (salted IP hash) in cache")
     parser.add_argument("--rebuild-cache", action="store_true")
@@ -1175,6 +1364,7 @@ def main() -> None:
                 testing_globs=_load_globs(args.testing_asset_file),
                 min_sessions=args.min_sessions,
                 max_assets=args.max_assets,
+                content_id_map_path=args.content_id_map,
             )
         if args.cache_parquet and not profiles.empty:
             parquet_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1212,6 +1402,8 @@ def main() -> None:
             out_path=selection_path,
             min_visits=args.min_visits,
         )
+        saturation_path = args.out.with_name(f"{args.out.stem}_saturation_plane{args.out.suffix}")
+        plot_saturation_plane(profiles, min_sessions=args.min_sessions, out_path=saturation_path)
         testing_path = args.out.with_name(f"{args.out.stem}_testing_conditional{args.out.suffix}")
         plot_testing_conditional(
             profiles,
