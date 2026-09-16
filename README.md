@@ -73,16 +73,24 @@ flowchart TD
 s3logextraction config cache set <new cache directory>
 ```
 
+[Optional] Configure a non-default master scratch directory. Each extraction run creates its own working directory beneath this one, holding per-worker output until each batch is merged into the cache. Without this setting, runs work under the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust.
+
+```bash
+s3logextraction config scratch set <scratch directory>
+```
+
+Use `s3logextraction config scratch reset` to go back to the system temporary directory.
+
 To extract the logs:
 
 ```bash
 s3logextraction extract <log directory>
 ```
 
-To override the cache directory for a single extraction run (without changing global config):
+To override the cache or scratch directory for a single extraction run (without changing global config):
 
 ```bash
-s3logextraction extract <log directory> --cache <cache directory>
+s3logextraction extract <log directory> --cache <cache directory> --scratch <scratch directory>
 ```
 
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:

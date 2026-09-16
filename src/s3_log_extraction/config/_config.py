@@ -15,9 +15,8 @@ def save_config(config: dict[str, typing.Any]) -> None:
         The configuration for S3 log extraction.
     """
     # TODO: add basic schema and validation
-    if not any(config):
-        return
-
+    # An empty mapping is written out rather than skipped, so that removing the last remaining
+    # setting actually clears it from the file instead of silently leaving the old value in place.
     with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="w") as file_stream:
         json.dump(obj=config, fp=file_stream, indent=2, sort_keys=True)
 
@@ -66,6 +65,54 @@ def get_cache_directory() -> pathlib.Path:
     directory.mkdir(exist_ok=True)
 
     return directory
+
+
+def set_scratch_directory(directory: str | pathlib.Path, /) -> None:
+    """
+    Set the master scratch directory that extraction runs create their working directories beneath.
+
+    Parameters
+    ----------
+    directory : path-like
+        The directory to create per-run working directories under.
+        Extraction writes worker output here before merging it into the cache, so it needs free space
+        on the order of one batch of extracted logs and it should be on a fast local disk.
+    """
+    scratch_directory = pathlib.Path(directory)
+    scratch_directory.mkdir(parents=True, exist_ok=True)
+
+    config = get_config()
+    config["scratch_directory"] = str(scratch_directory)
+    save_config(config=config)
+
+
+def unset_scratch_directory() -> None:
+    """Remove any configured master scratch directory, restoring use of the system temporary directory."""
+    config = get_config()
+    config.pop("scratch_directory", None)
+    save_config(config=config)
+
+
+def get_scratch_directory() -> pathlib.Path | None:
+    """
+    Get the master scratch directory that extraction runs create their working directories beneath.
+
+    Returns
+    -------
+    pathlib.Path | None
+        The configured master scratch directory, or `None` if none is configured.
+        `None` means the system temporary directory is used, as selected by `TMPDIR` or the platform default.
+    """
+    config = get_config()
+
+    configured_directory = config.get("scratch_directory", None)
+    if configured_directory is None:
+        return None
+
+    scratch_directory = pathlib.Path(configured_directory)
+    scratch_directory.mkdir(parents=True, exist_ok=True)
+
+    return scratch_directory
 
 
 def get_cache_subdirectory(

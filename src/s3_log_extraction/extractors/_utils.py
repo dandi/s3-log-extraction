@@ -1,10 +1,34 @@
 import os
 import pathlib
 import subprocess
+import tempfile
 
 import tqdm
 
 from ..ip_utils._ip_utils import _read_ips_from_file, _write_ips_to_file
+
+
+def _create_scratch_directory(scratch_directory: pathlib.Path | None, /) -> pathlib.Path:
+    """
+    Create a fresh, uniquely named working directory for an extraction run.
+
+    Parameters
+    ----------
+    scratch_directory : pathlib.Path | None
+        The master scratch directory to create the working directory beneath.
+        When `None`, the system temporary directory is used, as selected by `TMPDIR` or the platform default.
+
+    Returns
+    -------
+    pathlib.Path
+        The newly created working directory, which the caller owns and is responsible for removing.
+    """
+    if scratch_directory is not None:
+        scratch_directory.mkdir(parents=True, exist_ok=True)
+
+    working_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-", dir=scratch_directory))
+
+    return working_directory
 
 
 def _merge_file_into_extraction(

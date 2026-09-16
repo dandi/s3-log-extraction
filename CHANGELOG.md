@@ -2,7 +2,13 @@
 
 ## Upcoming
 
+### 🚀 Enhancement
+
+- Extraction runs can now be pointed at a master scratch directory, with `s3logextraction config scratch set <directory>` or the `--scratch` option of `extract`. Each run creates its working directory beneath it instead of under the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
+
 ### 🐛 Bug Fix
+
+- Parallel local extraction no longer leaves an empty temporary directory behind on every call. The directory was created and pointed at by `EXTRACTION_DIRECTORY`, but never written to, since each worker overrides that with its own process directory. It was also never removed, and it redirected any later serial run of the same extractor away from the cache. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
 - A GeoLite2 refresh that MaxMind refuses because the account's daily download allowance is spent now returns the cached copy with a warning instead of failing, on the same terms as a stale copy that cannot be refreshed. With no cached copy to fall back on, the refusal is still raised. ([#303](https://github.com/dandi/s3-log-extraction/pull/303))
 

@@ -6,20 +6,20 @@ import os
 import pathlib
 import random
 import shutil
-import tempfile
 import warnings
 
 import tqdm
 
 from ._globals import _STOP_EXTRACTION_FILE_NAME
 from ._utils import (
+    _create_scratch_directory,
     _deploy_subprocess,
     _handle_aws_credentials,
     _merge_dir_to_extraction,
     _merge_worker_output_into_extraction,
     _run_awk_extraction,
 )
-from ..config import get_cache_directory, get_cache_subdirectory
+from ..config import get_cache_directory, get_cache_subdirectory, get_scratch_directory
 from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
 
 
@@ -40,16 +40,36 @@ class RemoteS3LogAccessExtractor:
             - Invoke the command `s3logextraction stop` to end the processes after the current round of completion.
             - Manually create a file in the extraction cache called '.stop_extraction'.
       - updatable
+
+    Parameters
+    ----------
+    cache_directory : pathlib.Path | None, optional
+        The directory holding the extraction cache and its records.
+        Defaults to the configured cache directory.
+    use_encryption : bool, optional
+        Whether to encrypt IP addresses in the extraction output. Defaults to `True`.
+    scratch_directory : pathlib.Path | None, optional
+        The master directory to create this run's working directory beneath.
+        Each log object is downloaded into that working directory before extraction, so it needs free space
+        on the order of one batch of raw logs.
+        Defaults to the configured master scratch directory, and to the system temporary directory when
+        none is configured.
     """
 
-    def __init__(self, cache_directory: pathlib.Path | None = None, use_encryption: bool = True) -> None:
+    def __init__(
+        self,
+        cache_directory: pathlib.Path | None = None,
+        use_encryption: bool = True,
+        scratch_directory: pathlib.Path | None = None,
+    ) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
         self.use_encryption = use_encryption
         self.extraction_directory = self.cache_directory / "extraction"
         self.extraction_directory.mkdir(exist_ok=True)
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_cache_subdirectory(cache_directory=self.cache_directory, name="records")
-        self.temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
+        self.scratch_directory = scratch_directory or get_scratch_directory()
+        self.temporary_directory = _create_scratch_directory(self.scratch_directory)
 
         class_name = self.__class__.__name__
         s3_url_processing_start_record_file_name = f"{class_name}_s3-url-processing-start.txt"
@@ -339,7 +359,7 @@ class RemoteS3LogAccessExtractor:
             extraction_directory.mkdir(exist_ok=True)
         elif self.use_encryption:
             # For single-worker mode with encryption: use a per-call temp dir so we can use_encryption on merge
-            extraction_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-"))
+            extraction_directory = _create_scratch_directory(self.scratch_directory)
 
         record_key = s3_url.split("/")[-1]
 
