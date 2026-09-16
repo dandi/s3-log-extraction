@@ -542,32 +542,49 @@ def _open_content_id_map(source: str):
     return path.open(encoding="utf-8")
 
 
-def _load_content_id_to_dandisets(source: str, wanted: set[str]) -> dict[str, tuple[str, ...]]:
+def _load_content_id_to_dandisets(
+    source: str, wanted: set[str]
+) -> tuple[dict[str, tuple[str, ...]], collections.Counter]:
     """
-    Read the content-id to dandiset mapping, keeping only the content ids present in this cache.
+    Read the content-id to dandiset mapping, returning cache membership and true dandiset sizes.
 
     The published derivative is one JSON object per line, ``{content_id: {dandiset_id: asset_path}}``.
     A blob deduplicated across dandisets carries several, so every dandiset it appears in is kept.
-    Filtering against ``wanted`` up front bounds memory to the size of the cache rather than the size
-    of the archive's whole history.
+
+    Two things come back, and the distinction matters. The membership map is filtered to ``wanted``,
+    the content ids actually in this cache, which bounds memory to the size of the cache rather than
+    the archive's whole history. The dandiset sizes are counted over EVERY entry in the mapping,
+    because they are the denominator of the saturation measure: "what share of this dandiset did the
+    actor take" has to be a share of the dandiset as it really is, not of the part that happens to
+    appear in the access logs. Counting only cached assets would shrink every denominator and inflate
+    saturation toward 1 for everyone.
     """
     import json
 
     mapping: dict[str, tuple[str, ...]] = {}
-    with _open_content_id_map(source) as file_stream:
-        for line in tqdm.tqdm(file_stream, desc="Reading content-id map", unit=" lines"):
-            stripped = line.strip()
-            if not stripped:
+    dandiset_sizes: collections.Counter = collections.Counter()
+    for line in tqdm.tqdm(_open_content_id_map(source), desc="Reading content-id map", unit=" lines"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            entry = json.loads(stripped)
+        except ValueError:
+            continue
+        for content_id, dandiset_to_path in entry.items():
+            if not isinstance(dandiset_to_path, dict):
                 continue
-            try:
-                entry = json.loads(stripped)
-            except ValueError:
-                continue
-            for content_id, dandiset_to_path in entry.items():
-                if content_id in wanted and isinstance(dandiset_to_path, dict):
-                    mapping[content_id] = tuple(sorted(dandiset_to_path))
-    print(f"  Mapped {len(mapping):,} of {len(wanted):,} cached assets to a dandiset")
-    return mapping
+            dandisets = tuple(sorted(dandiset_to_path))
+            for dandiset in dandisets:
+                dandiset_sizes[dandiset] += 1
+            if content_id in wanted:
+                mapping[content_id] = dandisets
+    print(
+        f"  Mapped {len(mapping):,} of {len(wanted):,} cached assets to a dandiset "
+        f"({100 * len(mapping) / max(len(wanted), 1):.0f}%; the rest are absent from the published mapping)"
+    )
+    print(f"  Archive spans {len(dandiset_sizes):,} dandisets, {sum(dandiset_sizes.values()):,} asset placements")
+    return mapping, dandiset_sizes
 
 
 def build_ip_profiles(
@@ -610,13 +627,10 @@ def build_ip_profiles(
     dandiset_sizes: collections.Counter = collections.Counter()
     if content_id_map_source is not None:
         content_ids = {asset_dir.name for asset_dir in asset_dirs}
-        content_id_to_dandisets = _load_content_id_to_dandisets(content_id_map_source, content_ids)
-        for asset_dir in asset_dirs:
-            dandisets = content_id_to_dandisets.get(asset_dir.name, ())
-            asset_dandisets.append(dandisets)
-            for dandiset in dandisets:
-                dandiset_sizes[dandiset] += 1
-        print(f"  Cache spans {len(dandiset_sizes):,} dandisets")
+        content_id_to_dandisets, dandiset_sizes = _load_content_id_to_dandisets(content_id_map_source, content_ids)
+        asset_dandisets = [content_id_to_dandisets.get(asset_dir.name, ()) for asset_dir in asset_dirs]
+        touched_dandisets = {dandiset for dandisets in asset_dandisets for dandiset in dandisets}
+        print(f"  Cache touches {len(touched_dandisets):,} of them")
 
     def _new_record() -> dict:
         # ``sessions``: list of (start_epoch, end_epoch, asset_index) per-(IP,asset) view sessions.
