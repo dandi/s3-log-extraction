@@ -1,7 +1,8 @@
 # Bot classification for `number_of_views`: what we measured and what we recommend
 
 **Status:** findings for team decision. Nothing here is shipped except the GitHub Actions exclusion
-(§6). No behavioral rule is proposed for production yet, and §5 explains why.
+(§7). §8 proposes a two-tier rule: the saturation region of §5 nominates, and each nominee is
+confirmed by review before exclusion.
 
 **Data:** the full extraction cache — 654,514 assets, 101,386 distinct IPs, 11,974,420 view sessions.
 A "view session" is the shipped `number_of_views` unit: a maximal run of streaming (HTTP 206,
@@ -123,7 +124,60 @@ Separately, the **files-per-visit** threshold (500) used to split mirrors from c
 *not* valley-justified. The only real valley in that distribution sits at ~3 files/visit, which
 separates single-file actors from everyone else — not mirrors from humans. 500 is a judgement call.
 
-## 5. Two corrections worth recording
+## 5. Dataset saturation: the axis that discriminates
+
+The published content-id → dandiset mapping turns the content-addressed cache into dataset
+membership, which makes the decisive measurement possible at last: not how many assets an actor
+touched, but **how much of each dataset it consumed, and across how many datasets**.
+
+Neither half works alone. Broad-but-shallow is an ordinary research pattern, and deep-but-narrow is a
+dataset's own author or a single bulk download. The mirror signature is high on **both at once**, and
+that is the region the plane isolates (`ip_behavior_saturation_plane.png`).
+
+| joint region | IPs | views |
+|---|---|---|
+| saturation ≥ 25%, dandiset coverage ≥ 10% | 91 | 71.9% |
+| **saturation ≥ 50%, dandiset coverage ≥ 25%** | **12** | **62.9%** |
+| saturation ≥ 50%, coverage ≥ 50% | 3 | 6.6% |
+| saturation ≥ 75%, coverage ≥ 50% | **0** | 0% |
+
+**Twelve addresses hold 62.9% of every view in the archive.** The ten of them that appear in the
+top-100 table span every service label — geographic, AWS, VPN and GH-actions alike — confirming §2:
+this is a behavioral population, not an origin one.
+
+The empty bottom row is a real finding rather than a gap: nothing takes three-quarters of the datasets
+it visits across half the archive. There is no perfect mirror; even the most systematic actors are
+selective, so the strictest rule would catch nothing at all.
+
+**What makes this axis worth more than archive coverage** is what it *declines* to flag. Several very
+high-volume actors range extremely widely but stay shallow:
+
+| dandisets touched | share of archive | mean saturation | views |
+|---|---|---|---|
+| 508 | 79% | 0.36 | 207,056 |
+| 507 | 79% | 0.47 | 16,589 |
+| 408 | 64% | 0.46 | 16,682 |
+| 336 | 53% | 0.36 | 31,071 |
+
+These are the "dozens of files across hundreds of datasets" profile — precisely the legitimate heavy
+use that a coverage threshold cannot distinguish from a scanner. Saturation leaves them alone. The
+same logic clears GCP, whose mean saturation is the highest of any service (0.70) but across just 1.5
+dandisets on average: deep and narrow, not a mirror.
+
+Three caveats, all load-bearing:
+
+- **There is still no valley.** Saturation climbs smoothly (median 0.18, 90th 0.74, 99th 1.00). The
+  cuts at 50% and 25% are better-motivated judgement calls than anything before them, but they are
+  judgement calls, not discovered boundaries.
+- **`max_within_dandiset_saturation` is useless** and should be ignored: it is 1.0 for 91 of the
+  top 100 IPs, because fully consuming any one small dandiset saturates it. Only the *mean* carries
+  information.
+- **The mapping covers 61% of cached assets** (410,935 entries against 654,514). Denominators are
+  true archive dandiset sizes, so the measure itself is sound, but an actor's touched-count includes
+  only mapped assets, biasing saturation *downward*. That is the safe direction — it cannot invent a
+  mirror that is not there.
+
+## 6. Two corrections worth recording
 
 We report these because both were believed true at an intermediate stage and would have shipped as
 errors:
@@ -138,7 +192,7 @@ errors:
 The general lesson: measure on the full archive before drawing population conclusions, and check
 every ratio for a degenerate denominator.
 
-## 6. What is already shipped
+## 7. What is already shipped
 
 **GitHub Actions views are excluded from `number_of_views`.** The `GitHub` service label was split
 into `GH-actions` (the `actions*` ranges) and `GitHub` (everything else), and only `GH-actions` is
@@ -146,36 +200,48 @@ dropped. The reasoning: a GitHub Codespace streaming an NWB file is a legitimate
 Actions runner is unambiguously CI. Measured impact ≈ 19% of views; non-Actions GitHub traffic is
 5 views archive-wide, so the split costs nothing and removes the ambiguity.
 
-Cloud/VPN/CI exclusion as a whole would have been ~24–27% of views, but §5 shows VPN does not belong
-in that set, and AWS/GCP remain an open question (§8).
+Cloud/VPN/CI exclusion as a whole would have been ~24–27% of views, but §6 shows VPN does not belong
+in that set, and AWS/GCP remain an open question (§9).
 
-## 7. Recommendation
+## 8. Recommendation
 
-**Do not ship a threshold classifier.** No axis has the distributional structure to justify one, and
-the two axes that looked most promising both required retraction or heavy qualification.
+**Nominate by rule, exclude by review.** Two tiers, because the evidence supports exactly that much
+and no more.
 
-**Do ship a named extreme-outlier exclusion**, justified per IP by the behavioral evidence table
-rather than by a population threshold. Concretely:
+**Tier 1 — the saturation region nominates.** An actor with mean within-dandiset saturation ≥ 50%
+across ≥ 25% of dandisets is taking most of most of the archive, which is not a research pattern. That
+selects **12 addresses holding 62.9% of all views** (§5). This is a genuine rule: it encodes a
+behavioral claim, it is computed from published data, and it demonstrably spares the broad-but-shallow
+heavy users that every coverage-based alternative would have swept up.
 
-1. Exclude the dominant actor. One actor, 54% of all views, with five independent lines of evidence
-   (§1). This is the single highest-value correction available and it is defensible in isolation.
-2. Review the next 24 by hand against their profile rows. Top-25 exclusion would remove 69.1% of
-   views; each case should be argued individually, not by rule.
-3. Keep the GH-actions filter (§6).
+**Tier 2 — each nominee is confirmed individually** against its row in `ip_behavior_by_ip.csv` before
+exclusion. The cuts have no valley behind them (§5), so the rule is a well-aimed filter rather than a
+proof, and 12 cases is a reviewable number. The dominant actor (§1) is the clearest of them and can be
+excluded on its own evidence today.
+
+Then:
+
+1. Exclude the dominant actor first. One address, 54% of all views, corroborated by every axis
+   measured. Highest-value single correction available, defensible in isolation.
+2. Review the remaining 11 Tier-1 nominees against their evidence rows.
+3. Keep the GH-actions filter (§7).
 4. Publish the exclusion list and the per-IP evidence alongside the statistics, so the number is
-   reproducible and the judgement calls are auditable.
+   reproducible and every judgement call is auditable.
+5. Re-run the profiler periodically. The population is not static, and the registry keeps pseudonyms
+   stable across runs so an actor can be tracked over time.
 
-This is deliberately conservative: it privileges a small number of defensible, documented decisions
-over an automated rule whose error modes we cannot characterise.
+**What this deliberately does not do** is run as an automated classifier. No axis has a valley, so
+every threshold remains a choice; 12 nominations a quarter is a review burden the team can carry,
+and a wrong exclusion is far more costly than a missed one. The looser region — 91 IPs at 71.9% — is
+where the marginal cases live and is worth reading, but it should not drive exclusions unreviewed.
 
-## 8. Open questions
+## 9. Open questions
 
-- **Dataset saturation is still unmeasured.** The strongest discriminator identified — high saturation
-  over *both* files-within-a-dataset and number-of-datasets — needs a content-id → dandiset mapping
-  that the content-addressed cache does not carry. A legitimate power user revisits dozens of files
-  across hundreds of datasets; a bot saturates both. We cannot currently compute this.
+- **Dandiset coverage for the 39% of assets outside the mapping.** Saturation is measured only over
+  mapped assets, which biases it downward (§5). Closing that gap would tighten the axis.
 - **AWS and GCP one-shot bulk operations** (595,557 and 48,289 views) have a clean mirror signature
   but may include legitimate cloud-hosted analysis. Not resolved.
-- **The 46 surviving bulk mirrors** (4.0%) warrant individual review on the same basis as the top-25.
+- **The 46 surviving bulk mirrors** (4.0%, §4) overlap the saturation nominees only partly; the
+  difference between the two selections is worth understanding before either is relied on alone.
 - **Object size is not in the cache**, so we cannot compute a full-read fraction — the direct test for
   a checksum scanner versus a metadata skim.
