@@ -15,9 +15,8 @@ def save_config(config: dict[str, typing.Any]) -> None:
         The configuration for S3 log extraction.
     """
     # TODO: add basic schema and validation
-    if not any(config):
-        return
-
+    # An empty mapping is written out rather than skipped, so that removing the last remaining
+    # setting actually clears it from the file instead of silently leaving the old value in place.
     with open(file=S3_LOG_EXTRACTION_CONFIG_FILE_PATH, mode="w") as file_stream:
         json.dump(obj=config, fp=file_stream, indent=2, sort_keys=True)
 
@@ -66,6 +65,54 @@ def get_cache_directory() -> pathlib.Path:
     directory.mkdir(exist_ok=True)
 
     return directory
+
+
+def set_base_temporary_directory(directory: str | pathlib.Path, /) -> None:
+    """
+    Set the base directory that extraction runs create their temporary directories inside.
+
+    Parameters
+    ----------
+    directory : path-like
+        The directory to use in place of the system temporary directory.
+        Extraction writes worker output here before merging it into the cache, so it needs free space
+        on the order of one batch of extracted logs and it should be on a fast local disk.
+    """
+    base_temporary_directory = pathlib.Path(directory)
+    base_temporary_directory.mkdir(parents=True, exist_ok=True)
+
+    config = get_config()
+    config["base_temporary_directory"] = str(base_temporary_directory)
+    save_config(config=config)
+
+
+def unset_base_temporary_directory() -> None:
+    """Remove any configured base temporary directory, restoring use of the system temporary directory."""
+    config = get_config()
+    config.pop("base_temporary_directory", None)
+    save_config(config=config)
+
+
+def get_base_temporary_directory() -> pathlib.Path | None:
+    """
+    Get the base directory that extraction runs create their temporary directories inside.
+
+    Returns
+    -------
+    pathlib.Path | None
+        The configured base temporary directory, or `None` if none is configured.
+        `None` means the system temporary directory is used, as selected by `TMPDIR` or the platform default.
+    """
+    config = get_config()
+
+    configured_directory = config.get("base_temporary_directory", None)
+    if configured_directory is None:
+        return None
+
+    base_temporary_directory = pathlib.Path(configured_directory)
+    base_temporary_directory.mkdir(parents=True, exist_ok=True)
+
+    return base_temporary_directory
 
 
 def get_cache_subdirectory(

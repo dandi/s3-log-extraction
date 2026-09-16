@@ -6,6 +6,9 @@ from ._config import (
     get_cache_directory,
     get_cache_subdirectory,
     set_cache_directory,
+    set_base_temporary_directory,
+    unset_base_temporary_directory,
+    get_base_temporary_directory,
 )
 from ._globals import (
     S3_LOG_EXTRACTION_BASE_FOLDER_PATH,
@@ -23,5 +26,8 @@ __all__ = [
     "get_cache_directory",
     "get_cache_subdirectory",
     "set_cache_directory",
+    "set_base_temporary_directory",
+    "unset_base_temporary_directory",
+    "get_base_temporary_directory",
     "reset_extraction",
 ]
