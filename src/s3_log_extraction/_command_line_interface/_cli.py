@@ -6,7 +6,12 @@ import typing
 
 import rich_click
 
-from ..config import reset_extraction, set_cache_directory
+from ..config import (
+    reset_extraction,
+    set_base_temporary_directory,
+    set_cache_directory,
+    unset_base_temporary_directory,
+)
 from ..extractors import (
     RemoteS3LogAccessExtractor,
     S3LogAccessExtractor,
@@ -135,6 +140,17 @@ def s3logextraction_cli():
     type=rich_click.BOOL,
     default=True,
 )
+@rich_click.option(
+    "--tmp",
+    "base_temporary_directory",
+    help=(
+        "Create this run's temporary directory inside a non-default base directory. "
+        "This overrides the configured base temporary directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
+    default=None,
+)
 def _extract_cli(
     directory: str,
     limit: int | None = None,
@@ -143,6 +159,7 @@ def _extract_cli(
     mode: typing.Literal["remote"] | None = None,
     inventory_directory: str | None = None,
     use_encryption: bool = True,
+    base_temporary_directory: str | None = None,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -153,10 +170,15 @@ def _extract_cli(
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    base_temporary_path = pathlib.Path(base_temporary_directory) if base_temporary_directory is not None else None
 
     match mode:
         case "remote":
-            extractor = RemoteS3LogAccessExtractor(cache_directory=cache_path, use_encryption=use_encryption)
+            extractor = RemoteS3LogAccessExtractor(
+                cache_directory=cache_path,
+                use_encryption=use_encryption,
+                base_temporary_directory=base_temporary_path,
+            )
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -164,7 +186,11 @@ def _extract_cli(
                 inventory_directory=inventory_directory,
             )
         case _:
-            extractor = S3LogAccessExtractor(cache_directory=cache_path, use_encryption=use_encryption)
+            extractor = S3LogAccessExtractor(
+                cache_directory=cache_path,
+                use_encryption=use_encryption,
+                base_temporary_directory=base_temporary_path,
+            )
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
@@ -223,6 +249,37 @@ def _set_cache_cli(directory: str) -> None:
             For example, 80 GB if extracted data from 6 TB of logs.
     """
     set_cache_directory(directory=directory)
+
+
+# s3logextraction config tmp
+@_config_cli.group(name="tmp")
+def _tmp_cli() -> None:
+    pass
+
+
+# s3logextraction config tmp set < directory >
+@_tmp_cli.command(name="set")
+@rich_click.argument("directory", type=rich_click.Path(writable=True))
+def _set_tmp_cli(directory: str) -> None:
+    """
+    Set a non-default base directory for the temporary directories of extraction runs.
+
+    DIRECTORY : The path to the folder that each extraction run creates its temporary directory inside.
+        Without this setting, runs use the system temporary directory, which on many systems is a
+        small RAM-backed '/tmp' that a large extraction can exhaust.
+
+        Parallel runs write their per-worker output here before each batch is merged into the cache, and
+        remote runs also download each raw log file here. Size it for a batch of logs and prefer a fast
+        local disk.
+    """
+    set_base_temporary_directory(directory)
+
+
+# s3logextraction config tmp reset
+@_tmp_cli.command(name="reset")
+def _reset_tmp_cli() -> None:
+    """Forget the configured base temporary directory and go back to using the system temporary directory."""
+    unset_base_temporary_directory()
 
 
 # s3logextraction reset

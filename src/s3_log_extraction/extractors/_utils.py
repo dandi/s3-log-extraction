@@ -1,10 +1,34 @@
 import os
 import pathlib
 import subprocess
+import tempfile
 
 import tqdm
 
 from ..ip_utils._ip_utils import _read_ips_from_file, _write_ips_to_file
+
+
+def _create_temporary_directory(base_temporary_directory: pathlib.Path | None, /) -> pathlib.Path:
+    """
+    Create a fresh, uniquely named temporary directory for an extraction run.
+
+    Parameters
+    ----------
+    base_temporary_directory : pathlib.Path | None
+        The base directory to create the temporary directory inside.
+        When `None`, the system temporary directory is used, as selected by `TMPDIR` or the platform default.
+
+    Returns
+    -------
+    pathlib.Path
+        The newly created temporary directory, which the caller owns and is responsible for removing.
+    """
+    if base_temporary_directory is not None:
+        base_temporary_directory.mkdir(parents=True, exist_ok=True)
+
+    temporary_directory = pathlib.Path(tempfile.mkdtemp(prefix="s3logextraction-", dir=base_temporary_directory))
+
+    return temporary_directory
 
 
 def _merge_file_into_extraction(
