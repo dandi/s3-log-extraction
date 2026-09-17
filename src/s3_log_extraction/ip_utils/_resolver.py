@@ -44,11 +44,34 @@ class RegionResolver(typing.Protocol):
 
 
 def fetch_service_networks() -> ServiceNetworks:
-    """Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, VPN)."""
-    return {
+    """
+    Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, VPN).
+
+    A listing that yields no ranges at all is warned about rather than passed on in silence. These are
+    third-party documents whose shape can change, and a service with no ranges does not fail: it simply
+    matches no address, so everything keyed to that label becomes inert. ``GH-actions`` resolving to
+    nothing would leave the view-count exclusion doing nothing while the counts kept publishing, which
+    is a failure worth hearing about at the moment it happens rather than inferring from the numbers
+    later.
+    """
+    service_networks = {
         service_name: list(_get_cidr_address_ranges_and_subregions(service_name=service_name))
         for service_name in _KNOWN_SERVICES
     }
+
+    empty_service_names = sorted(service_name for service_name, networks in service_networks.items() if not networks)
+    if empty_service_names:
+        warnings.warn(
+            message=(
+                f"The published listings of {empty_service_names} produced no IP ranges, so nothing will be "
+                f"labeled with them and any exclusion they drive is inert. The usual cause is a change in the "
+                f"shape of the published document. Ranges found per service: "
+                f"{ {name: len(networks) for name, networks in service_networks.items()} }"
+            ),
+            stacklevel=2,
+        )
+
+    return service_networks
 
 
 def _freeze_service_networks(
