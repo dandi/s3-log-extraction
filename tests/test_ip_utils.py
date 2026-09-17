@@ -228,7 +228,12 @@ def test_resolver_fetches_service_networks_on_first_use() -> None:
     """Without given ranges, the published listings are fetched once, on the first address that needs them."""
     with unittest.mock.patch(
         "s3_log_extraction.ip_utils._resolver._get_cidr_address_ranges_and_subregions",
-        side_effect=lambda *, service_name: [("203.0.113.0/24", "us-east-1")] if service_name == "AWS" else [],
+        # Every service returns something: this test is about when the listings are fetched, not what is in
+        # them, and a service left empty would raise the zero-range warning of `fetch_service_networks`. The
+        # placeholder is private space, so it cannot match the address resolved below.
+        side_effect=lambda *, service_name: (
+            [("203.0.113.0/24", "us-east-1")] if service_name == "AWS" else [("10.0.0.0/8", None)]
+        ),
     ) as mock_ranges:
         resolver = IpRegionResolver(geolite2_reader=_make_reader(city_responses={}))
         mock_ranges.assert_not_called()
@@ -236,7 +241,13 @@ def test_resolver_fetches_service_networks_on_first_use() -> None:
         assert resolver.resolve("203.0.113.7") == "AWS/us-east-1"
         assert resolver.resolve("203.0.113.8") == "AWS/us-east-1"
 
-    assert sorted(call.kwargs["service_name"] for call in mock_ranges.call_args_list) == ["AWS", "GCP", "GitHub", "VPN"]
+    assert sorted(call.kwargs["service_name"] for call in mock_ranges.call_args_list) == [
+        "AWS",
+        "GCP",
+        "GH-actions",
+        "GitHub",
+        "VPN",
+    ]
 
 
 @pytest.mark.ai_generated
@@ -260,7 +271,14 @@ def test_github_ranges_are_recognized_by_shape_not_by_key() -> None:
         "domains": {"website": ["*.github.com"]},
         "artifact_attestations": {"trust_domain": "", "services": ["*.example.com"]},
     }
-    empty_listings = {"AWS": {"prefixes": []}, "GCP": {"prefixes": []}, "VPN": []}
+    # The other services carry one range apiece, none overlapping the GitHub ranges asserted below. They are
+    # not the subject of this test, but leaving them empty would trip the zero-range warning of
+    # `fetch_service_networks` and fail the `simplefilter("error")` that guards the invalid-CIDR warning.
+    other_listings = {
+        "AWS": {"prefixes": [{"ip_prefix": "198.51.100.128/25", "region": "us-east-1"}]},
+        "GCP": {"prefixes": [{"ipv4Prefix": "10.0.0.0/8", "scope": "us-central1"}]},
+        "VPN": ["172.16.0.0/12"],
+    }
 
     ip_utils_module = s3_log_extraction.ip_utils._ip_utils
     ip_utils_module._get_cidr_address_ranges_and_subregions.cache_clear()
@@ -270,7 +288,7 @@ def test_github_ranges_are_recognized_by_shape_not_by_key() -> None:
                 ip_utils_module,
                 "_request_cidr_range",
                 side_effect=lambda service_name: (
-                    github_meta if service_name == "GitHub" else empty_listings[service_name]
+                    github_meta if service_name in ("GitHub", "GH-actions") else other_listings[service_name]
                 ),
             ),
             warnings.catch_warnings(),
@@ -281,12 +299,14 @@ def test_github_ranges_are_recognized_by_shape_not_by_key() -> None:
                 service_networks=service_networks, geolite2_reader=_make_reader(city_responses={})
             )
 
+            # The actions* ranges are split into the "GH-actions" service; the rest are "GitHub".
             assert service_networks["GitHub"] == [
                 ("192.0.2.0/24", None),
                 ("198.51.100.0/25", None),
-                ("203.0.113.0/24", None),
             ]
+            assert service_networks["GH-actions"] == [("203.0.113.0/24", None)]
             assert resolver.resolve("198.51.100.7") == "GitHub"
+            assert resolver.resolve("203.0.113.7") == "GH-actions"
     finally:
         ip_utils_module._get_cidr_address_ranges_and_subregions.cache_clear()
 

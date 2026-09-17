@@ -6,7 +6,13 @@ import requests
 import s3_log_extraction
 from s3_log_extraction.ip_utils import fetch_service_networks
 
-_GITHUB_META = {"hooks": ["192.0.2.0/24"], "domains": {"website": ["*.github.com"]}}
+_GITHUB_META = {
+    "hooks": ["192.0.2.0/24"],
+    # The Actions runner ranges live under their own keys and become the separate "GH-actions" service
+    "actions": ["192.0.2.64/26"],
+    "actions_macos": ["192.0.2.128/26"],
+    "domains": {"website": ["*.github.com"]},
+}
 _AWS_RANGES = {
     "prefixes": [
         {"ip_prefix": "198.51.100.0/24", "region": "us-east-1"},
@@ -48,6 +54,7 @@ def mocked_service_listings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Serve the published listings from fixtures rather than over the network, and report the URLs requested."""
     requested_urls = []
     s3_log_extraction.ip_utils._ip_utils._request_cidr_range.cache_clear()
+    s3_log_extraction.ip_utils._ip_utils._fetch_github_meta.cache_clear()
     s3_log_extraction.ip_utils._ip_utils._get_cidr_address_ranges_and_subregions.cache_clear()
 
     def _fake_get(url: str) -> _FakeResponse:
@@ -58,6 +65,7 @@ def mocked_service_listings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     yield requested_urls
 
     s3_log_extraction.ip_utils._ip_utils._request_cidr_range.cache_clear()
+    s3_log_extraction.ip_utils._ip_utils._fetch_github_meta.cache_clear()
     s3_log_extraction.ip_utils._ip_utils._get_cidr_address_ranges_and_subregions.cache_clear()
 
 
@@ -66,7 +74,7 @@ def test_fetch_service_networks_covers_every_known_service(mocked_service_listin
     """Every known service should be fetched from its own published endpoint."""
     service_networks = fetch_service_networks()
 
-    assert sorted(service_networks.keys()) == ["AWS", "GCP", "GitHub", "VPN"]
+    assert sorted(service_networks.keys()) == ["AWS", "GCP", "GH-actions", "GitHub", "VPN"]
     assert sorted(mocked_service_listings) == sorted(_URL_TO_PAYLOAD.keys())
 
 
@@ -75,6 +83,7 @@ def test_fetch_service_networks_covers_every_known_service(mocked_service_listin
     ("service_name", "expected_networks"),
     [
         ("GitHub", [("192.0.2.0/24", None)]),
+        ("GH-actions", [("192.0.2.64/26", None), ("192.0.2.128/26", None)]),
         ("AWS", [("198.51.100.0/24", "us-east-1"), ("198.51.100.0/25", None)]),
         ("GCP", [("203.0.113.0/24", "us-central1")]),
         ("VPN", [("192.0.2.128/25", None), ("198.51.100.128/25", None)]),
@@ -96,3 +105,27 @@ def test_fetch_service_networks_is_cached(mocked_service_listings: list[str]) ->
     fetch_service_networks()
 
     assert len(mocked_service_listings) == len(_URL_TO_PAYLOAD)
+
+
+@pytest.mark.ai_generated
+def test_fetch_service_networks_warns_when_a_listing_yields_no_ranges(
+    mocked_service_listings: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    A listing that parses to nothing must say so.
+
+    It is not an error the caller can catch: the service simply matches no address, so every label and
+    exclusion keyed to it becomes inert while the surrounding code keeps running and publishing. The
+    warning has to name the service, since that is the whole diagnosis.
+    """
+    github_meta_without_actions = {key: value for key, value in _GITHUB_META.items() if not key.startswith("actions")}
+    monkeypatch.setitem(_URL_TO_PAYLOAD, "https://api.github.com/meta", github_meta_without_actions)
+
+    with pytest.warns(UserWarning, match=r"GH-actions") as recorded_warnings:
+        service_networks = fetch_service_networks()
+
+    assert service_networks["GH-actions"] == []
+    assert service_networks["GitHub"] == [("192.0.2.0/24", None)], "The other services must be unaffected"
+    message = str(recorded_warnings[0].message)
+    assert "inert" in message, "The warning should say what the consequence is, not only that it happened"
+    assert "'GitHub': 1" in message, "The warning should report the counts of every service for comparison"
