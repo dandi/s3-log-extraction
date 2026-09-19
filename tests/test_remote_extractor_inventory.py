@@ -11,6 +11,7 @@ import pytest
 from conftest import build_key_inventory_directory
 
 from s3_log_extraction.extractors._remote_s3_log_access_extractor import RemoteS3LogAccessExtractor
+from s3_log_extraction.utils import _read_s3_urls_from_local_inventory
 from s3_log_extraction.utils.inventory import _extract_date_from_log_filename
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,39 @@ def test_extract_date_from_log_filename_returns_none_for_non_log_filename() -> N
 def test_extract_date_from_log_filename_returns_none_for_short_name() -> None:
     """Filenames with fewer than three dash-separated components return None."""
     assert _extract_date_from_log_filename("2024-01") is None
+
+
+@pytest.mark.ai_generated
+def test_extract_date_from_log_filename_returns_none_for_non_numeric_components() -> None:
+    """Components of the right length that are not digits do not make a date."""
+    assert _extract_date_from_log_filename("2024-xx-01-00-00-00-ABCDEF1234567890") is None
+
+
+@pytest.mark.ai_generated
+def test_read_s3_urls_from_local_inventory_groups_by_date_from_path_then_filename(tmp_path: pathlib.Path) -> None:
+    """
+    A key is dated from its ``year/month/day/`` directories when it has them, from its filename otherwise, and
+    left out altogether when neither carries a date.
+    """
+    source_bucket = "my-bucket"
+    keys = [
+        # Dated from the path, which takes precedence over the filename
+        "2024/01/05/2024-01-06-00-00-00-AAAA",
+        # Directories that only look like a date fall through to the filename
+        "2024/xx/05/2024-01-07-00-00-00-BBBB",
+        # A flat log is dated from its filename
+        "2024-01-07-00-05-00-CCCC",
+        # Nothing to date this by, so it is not a log
+        "manifest/checksum",
+    ]
+    inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
+
+    inventory = _read_s3_urls_from_local_inventory(inventory_directory=inventory_dir, s3_root=f"s3://{source_bucket}")
+
+    assert inventory == {
+        "2024-01-05": [f"s3://{source_bucket}/{keys[0]}"],
+        "2024-01-07": [f"s3://{source_bucket}/{keys[1]}", f"s3://{source_bucket}/{keys[2]}"],
+    }
 
 
 def _make_extractor(tmp_path: pathlib.Path) -> RemoteS3LogAccessExtractor:

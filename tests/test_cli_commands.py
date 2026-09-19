@@ -182,6 +182,104 @@ def test_cli_extract_with_tmp(runner: CliRunner, tmp_path: pathlib.Path) -> None
 
 
 @pytest.mark.ai_generated
+def test_cli_extract_in_remote_mode(runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    """In remote mode, the directory argument is the bucket root and every option reaches the remote extractor."""
+    captured: dict[str, object] = {}
+
+    class _RecordingRemoteExtractor:
+        def __init__(self, **kwargs: object) -> None:
+            captured["init"] = kwargs
+
+        def extract_s3_bucket(self, **kwargs: object) -> None:
+            captured["extract"] = kwargs
+
+    monkeypatch.setattr(
+        "s3_log_extraction._command_line_interface._cli.RemoteS3LogAccessExtractor", _RecordingRemoteExtractor
+    )
+    inventory_directory = tmp_path / "inventory"
+    inventory_directory.mkdir()
+
+    result = runner.invoke(
+        s3_log_extraction.s3logextraction_cli,
+        [
+            "extract",
+            "s3://my-logs-bucket",
+            "--mode",
+            "remote",
+            "--limit",
+            "7",
+            "--workers",
+            "1",
+            "--cache",
+            str(tmp_path),
+            "--inventory",
+            str(inventory_directory),
+            "--encryption",
+            "false",
+            "--tmp",
+            str(tmp_path / "tmp"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["init"] == {
+        "cache_directory": tmp_path,
+        "use_encryption": False,
+        "base_temporary_directory": tmp_path / "tmp",
+    }
+    assert captured["extract"] == {
+        "s3_root": "s3://my-logs-bucket",
+        "limit": 7,
+        "workers": 1,
+        "inventory_directory": str(inventory_directory),
+    }
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("force", [False, True])
+def test_cli_update_ip_database(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, force: bool
+) -> None:
+    """The database command forwards the cache directory and the force flag, and reports where the database is."""
+    captured: dict[str, object] = {}
+    database_path = tmp_path / "geolite2" / "GeoLite2-City.mmdb"
+
+    def _stub_update_geolite2_database(**kwargs: object) -> pathlib.Path:
+        captured.update(kwargs)
+        return database_path
+
+    monkeypatch.setattr(
+        "s3_log_extraction._command_line_interface._cli.update_geolite2_database", _stub_update_geolite2_database
+    )
+
+    result = runner.invoke(
+        s3_log_extraction.s3logextraction_cli,
+        ["update", "ip", "database", "--cache", str(tmp_path), *(["--force"] if force else [])],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"cache_directory": tmp_path, "force": force}
+    assert f"GeoLite2 database is up to date at {database_path}" in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_testing_generate_benchmark(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    """The benchmark command hands the directory argument to the generator."""
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "s3_log_extraction._command_line_interface._cli.generate_benchmark",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["testing", "generate", "benchmark", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"directory": str(tmp_path)}
+
+
+@pytest.mark.ai_generated
 def test_cli_extract_with_limit(runner: CliRunner, tmp_path: pathlib.Path) -> None:
     """The extract command should honor the limit option."""
     result = runner.invoke(

@@ -1,6 +1,8 @@
 """Tests for the record keeping, resumption, and stop handling of the local extractor."""
 
+import os
 import pathlib
+import shutil
 
 import pytest
 
@@ -86,6 +88,22 @@ def test_extract_file_ignores_the_stop_file_when_disabled(tmp_path: pathlib.Path
     extractor.extract_file(file_path=log_file, enable_stop=False)
 
     assert extractor.file_processing_end_record == {str(log_file.absolute())}
+
+
+@pytest.mark.ai_generated
+def test_extract_file_in_parallel_mode_writes_under_its_process_directory(tmp_path: pathlib.Path) -> None:
+    """A worker writes beneath its own process-ID directory, to be merged into the cache once the batch is done."""
+    log_file = next(iter(_EXAMPLE_LOGS_DIRECTORY.iterdir()))
+
+    extractor = S3LogAccessExtractor(cache_directory=tmp_path, use_encryption=False)
+    extractor.extract_file(file_path=log_file, enable_stop=False, parallel_mode=True)
+
+    worker_directory = extractor.temporary_directory / str(os.getpid())
+    assert len(list(worker_directory.rglob(pattern="*.txt"))) > 0
+    assert list(extractor.extraction_directory.rglob(pattern="*.txt")) == []
+    assert extractor.file_processing_end_record == {str(log_file.absolute())}
+
+    shutil.rmtree(path=extractor.temporary_directory, ignore_errors=True)
 
 
 @pytest.mark.ai_generated
