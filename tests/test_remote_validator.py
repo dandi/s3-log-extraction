@@ -33,6 +33,21 @@ def _make_validator(tmp_path: pathlib.Path) -> RemoteS3BucketValidator:
     return validator
 
 
+@pytest.mark.ai_generated
+def test_validator_reloads_its_record_from_the_cache_directory(tmp_path: pathlib.Path) -> None:
+    """URLs confirmed by a previous run are read back from the record file, ignoring blank lines."""
+    records_directory = tmp_path / "records"
+    records_directory.mkdir()
+    (records_directory / "RemoteS3BucketValidator.txt").write_text(
+        "s3://my-bucket/logs/2024/01/01/file-A\n\ns3://my-bucket/logs/2024/01/01/file-B\n"
+    )
+
+    validator = RemoteS3BucketValidator(cache_directory=tmp_path)
+
+    assert validator.record_file_path == records_directory / "RemoteS3BucketValidator.txt"
+    assert validator.record == {"s3://my-bucket/logs/2024/01/01/file-A", "s3://my-bucket/logs/2024/01/01/file-B"}
+
+
 # ---------------------------------------------------------------------------
 # Tests for _get_s3_urls_from_local_inventory
 # ---------------------------------------------------------------------------
