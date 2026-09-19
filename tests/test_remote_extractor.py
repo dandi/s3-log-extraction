@@ -95,9 +95,7 @@ def test_extract_s3_bucket_respects_limit(
     """Only up to `limit` logs should be extracted per call."""
     extractor = RemoteS3LogAccessExtractor(cache_directory=cache_directory, use_encryption=False)
 
-    extractor.extract_s3_bucket(
-        s3_root=_S3_ROOT, limit=limit, workers=1, inventory_directory=inventory_of_example_logs
-    )
+    extractor.extract_s3_bucket(s3_root=_S3_ROOT, limit=limit, workers=1, inventory_directory=inventory_of_example_logs)
 
     assert len(_read_record(extractor.s3_url_processing_end_record_file_path)) == limit
 
