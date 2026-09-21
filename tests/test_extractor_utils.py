@@ -61,11 +61,20 @@ def test_handle_aws_credentials_rejects_an_ambiguous_file(home_directory: pathli
 
 
 @pytest.mark.ai_generated
-def test_handle_aws_credentials_rejects_a_missing_secret(
-    home_directory: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "set_variables",
+    [
+        pytest.param((), id="neither"),
+        pytest.param(("AWS_ACCESS_KEY_ID",), id="only_the_access_key"),
+        pytest.param(("AWS_SECRET_ACCESS_KEY",), id="only_the_secret"),
+    ],
+)
+def test_handle_aws_credentials_reports_missing_variables_without_a_file(
+    home_directory: pathlib.Path, monkeypatch: pytest.MonkeyPatch, set_variables: tuple[str, ...]
 ) -> None:
-    """An access key without its secret, and no file to complete it from, is reported as missing."""
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "placeholder-id")
+    """Whichever variable is missing, with no credentials file to complete it from, the variables are asked for."""
+    for name in set_variables:
+        monkeypatch.setenv(name, "placeholder")
 
     with pytest.raises(ValueError, match="Missing environment variables"):
         _handle_aws_credentials()

@@ -8,6 +8,8 @@
 
 ### 🐛 Bug Fix
 
+- A remote extraction started without `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` and without an AWS credentials file now reports the missing variables, instead of failing on opening the absent file. ([#305](https://github.com/dandi/s3-log-extraction/pull/305))
+
 - Parallel local extraction no longer leaves an empty temporary directory behind on every call. The directory was created and pointed at by `EXTRACTION_DIRECTORY`, but never written to, since each worker overrides that with its own process directory. It was also never removed, and it redirected any later serial run of the same extractor away from the cache. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
 - A GeoLite2 refresh that MaxMind refuses because the account's daily download allowance is spent now returns the cached copy with a warning instead of failing, on the same terms as a stale copy that cannot be refreshed. With no cached copy to fall back on, the refusal is still raised. ([#303](https://github.com/dandi/s3-log-extraction/pull/303))
