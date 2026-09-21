@@ -5,6 +5,7 @@ import pathlib
 import pytest
 
 from s3_log_extraction.testing import generate_benchmark
+from s3_log_extraction.testing._benchmarking import _create_date_directories
 
 _BENCHMARK_DIRECTORY_NAME = "s3-log-extraction-benchmark"
 
@@ -95,6 +96,22 @@ def test_generate_benchmark_differs_by_seed(tmp_path: pathlib.Path) -> None:
     second_names = {log_file.name for log_file in _log_files(second_directory / _BENCHMARK_DIRECTORY_NAME)}
 
     assert first_names != second_names
+
+
+@pytest.mark.ai_generated
+def test_create_date_directories_lays_out_every_day_of_the_range(tmp_path: pathlib.Path) -> None:
+    """
+    The real date tree, which the other tests here replace with a single day, holds every month of every year in
+    the range and the first twenty-eight days of each.
+    """
+    _create_date_directories(directory=tmp_path, start_year=2020, end_year=2021)
+
+    day_directories = sorted(path.relative_to(tmp_path) for path in tmp_path.glob(pattern="*/*/*"))
+
+    assert len(day_directories) == 2 * 12 * 28
+    assert day_directories[0] == pathlib.Path("2020/01/01")
+    assert day_directories[-1] == pathlib.Path("2021/12/28")
+    assert all(path.is_dir() for path in tmp_path.glob(pattern="*/*/*"))
 
 
 @pytest.mark.ai_generated

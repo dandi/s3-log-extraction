@@ -214,7 +214,7 @@ def _handle_aws_credentials() -> None:
     aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
     aws_credentials_file_path = pathlib.Path.home() / ".aws" / "credentials"
 
-    if aws_access_key_id is None or aws_secret_access_key is None and aws_credentials_file_path.exists():
+    if (aws_access_key_id is None or aws_secret_access_key is None) and aws_credentials_file_path.exists():
         with aws_credentials_file_path.open(mode="r") as file_stream:
             aws_credentials_content = file_stream.read()
         if (

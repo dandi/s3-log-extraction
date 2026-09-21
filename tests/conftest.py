@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from s3_log_extraction.ip_utils import MappingRegionResolver
+from s3_log_extraction.utils import read_text_from_file
 
 _MOCKED_IP_TO_REGION_FILE_PATH = pathlib.Path(__file__).parent / "mocked_ips" / "ip_to_region.yaml"
 
@@ -33,6 +34,16 @@ def use_mocked_region_resolver(
         "s3_log_extraction.summarize._generate_summaries.IpRegionResolver", lambda **kwargs: mocked_region_resolver
     )
     return mocked_region_resolver
+
+
+def read_extracted_ips(extraction_directory: pathlib.Path, *, use_encryption: bool) -> list[str]:
+    """Collect every IP address recorded across the `ips.txt` files of an extraction directory."""
+    return [
+        stripped
+        for file_path in sorted(extraction_directory.rglob(pattern="ips.txt"))
+        for line in read_text_from_file(file_path=file_path, use_encryption=use_encryption).splitlines()
+        if (stripped := line.strip())
+    ]
 
 
 def write_by_region_summary(summary_file_path: pathlib.Path, regions: list[str]) -> None:

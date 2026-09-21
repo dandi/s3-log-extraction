@@ -395,6 +395,43 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.ai_generated
+def test_get_ip_stats_opens_and_closes_its_own_resolver(tmp_path: pathlib.Path) -> None:
+    """Without a resolver handed in, one is made over the cache directory and released once the IPs are binned."""
+    _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset", ["192.0.2.1", "198.51.100.1"])
+    region_resolver = MappingRegionResolver({"192.0.2.1": "USA/CA", "198.51.100.1": "GitHub"})
+
+    with patch("s3_log_extraction.utils.inventory.IpRegionResolver") as mock_resolver_class:
+        mock_resolver_class.return_value.resolve.side_effect = region_resolver.resolve
+        stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False)
+
+    mock_resolver_class.assert_called_once_with(cache_directory=tmp_path)
+    mock_resolver_class.return_value.close.assert_called_once()
+    assert stats["extracted_ip_count"] == 2
+    assert stats["determined"]["count"] == 1
+    assert stats["github"]["count"] == 1
+
+
+@pytest.mark.ai_generated
+def test_get_log_bucket_stats_skips_rows_too_short_to_carry_a_key(tmp_path: pathlib.Path) -> None:
+    """A truncated inventory row has no key to count, so it is passed over rather than failing the walk."""
+    inventory_dir = build_inventory_directory(
+        tmp_path,
+        source_bucket=SOURCE_BUCKET,
+        rows=[
+            (SOURCE_BUCKET, "logs/2024-01-01-00-00-00-AAAA", 100),
+            (SOURCE_BUCKET,),
+            (SOURCE_BUCKET, "logs/2024-01-01-00-05-00-BBBB"),
+        ],
+        file_schema="Bucket, Key, Size",
+    )
+
+    stats = get_log_bucket_stats(inventory_directory=inventory_dir)
+
+    assert stats["file_count"] == 2
+    assert stats["total_size_bytes"] == 100
+
+
+@pytest.mark.ai_generated
 def test_get_ip_stats_empty_extraction(tmp_path: pathlib.Path) -> None:
     """get_ip_stats returns zeros and 0.0% for an empty extraction cache, without resolving anything."""
     (tmp_path / "extraction").mkdir(parents=True)
