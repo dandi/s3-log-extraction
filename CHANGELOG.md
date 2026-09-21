@@ -16,8 +16,6 @@
 
 ### 🏠 Internal
 
-- The test suite now exercises every line of the package without remote resources. The remote extractor runs end to end over the example logs served as `file://` URLs, and the remaining untested paths of the extractor helpers, summaries, CLI, IP utilities, inventory walk and bucket validator are covered as well. ([#305](https://github.com/dandi/s3-log-extraction/pull/305))
-
 - Code quality improvements throughout, from a functionality-preserving review of the whole package. Duplicated blocks in `summarize/`, `validate/`, `extractors/`, the CLI and the S3 inventory walk are single-sourced, dead code and unused manifest entries are removed, `ruff` now selects every rule set, and `mypy` is adopted. No observable behavior, public API or published output changes. ([#302](https://github.com/dandi/s3-log-extraction/pull/302))
 
 - The remote test workflow now actually reuses the GeoLite2 database between runs. Its cache step pointed at a directory the package never writes to, so every run downloaded afresh; it now caches `~/.cache/s3_log_extraction/geolite2` under a weekly key. The three remote tests share one database per session, and skip rather than fail when the allowance is spent. ([#303](https://github.com/dandi/s3-log-extraction/pull/303))
