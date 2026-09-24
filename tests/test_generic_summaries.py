@@ -136,6 +136,111 @@ def test_generic_summaries(tmpdir: py.path.local, mocked_region_resolver: Mappin
     ), f"\n\narchive_totals.json mismatch:\n  test:     {test_archive_totals}\n  expected: {expected_archive_totals}\n"
 
 
+@pytest.mark.ai_generated
+def test_generate_all_dataset_totals_skips_files_and_unsummarized_datasets(tmpdir: py.path.local) -> None:
+    """The totals of a previous run and a dataset with no by-day summary yet are passed over, not read."""
+    test_dir = pathlib.Path(tmpdir)
+    summary_dir = test_dir / "summaries"
+
+    dataset_dir = summary_dir / "ds001"
+    dataset_dir.mkdir(parents=True)
+    (dataset_dir / "by_day.tsv").write_text(
+        "date\tbytes_sent\tnumber_of_requests\tnumber_of_downloads\n2026-01-01\t10\t4\t3\n"
+    )
+    (summary_dir / "ds002").mkdir()
+    (summary_dir / "totals.json").write_text('{"stale": {}}')
+
+    s3_log_extraction.summarize.generate_all_dataset_totals(cache_directory=test_dir)
+
+    totals = json.loads((summary_dir / "totals.json").read_text())
+    assert list(totals.keys()) == ["ds001"]
+
+
+@pytest.mark.ai_generated
+def test_generate_summaries_rejects_unsupported_levels(tmpdir: py.path.local) -> None:
+    """Only dataset-level summaries exist so far, and asking for another level says so."""
+    with pytest.raises(NotImplementedError, match="only level 0 summaries are supported"):
+        s3_log_extraction.summarize.generate_summaries(
+            level=1, cache_directory=pathlib.Path(tmpdir), region_resolver=MappingRegionResolver({})
+        )
+
+
+@pytest.mark.ai_generated
+def test_generate_summaries_writes_nothing_for_a_dataset_without_assets(tmpdir: py.path.local) -> None:
+    """A dataset directory that holds no extracted asset yields no summary file, not an empty table."""
+    test_dir = pathlib.Path(tmpdir)
+    (test_dir / "extraction" / "ds001").mkdir(parents=True)
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, region_resolver=MappingRegionResolver({})
+    )
+
+    assert list((test_dir / "summaries").rglob(pattern="*")) == []
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("missing_file_name", ["timestamps.txt", "bytes_sent.txt", "ips.txt"])
+def test_summaries_skip_an_asset_missing_the_file_they_read(tmpdir: py.path.local, missing_file_name: str) -> None:
+    """
+    Each summary reads its own per-request file and passes over an asset that lacks it.
+
+    The summaries are reached directly here because the entry point sessionizes every asset first, which
+    refuses an incomplete one before any summary sees it.
+    """
+    from s3_log_extraction.summarize._generate_summaries import (
+        _summarize_dataset_by_asset,
+        _summarize_dataset_by_day,
+        _summarize_dataset_by_region,
+    )
+
+    test_dir = pathlib.Path(tmpdir)
+    asset_directory = test_dir / "extraction" / "ds001" / "asset"
+    _write_asset(asset_directory=asset_directory, requests=[("250101000000", _STREAMING, "192.0.2.0")])
+    (asset_directory / missing_file_name).unlink()
+    summary_file_path = test_dir / "summaries" / "ds001" / "summary.tsv"
+
+    match missing_file_name:
+        case "timestamps.txt":
+            _summarize_dataset_by_day(
+                asset_directories=[asset_directory], summary_file_path=summary_file_path, views_by_asset_directory={}
+            )
+        case "bytes_sent.txt":
+            _summarize_dataset_by_asset(
+                asset_directories=[asset_directory],
+                summary_file_path=summary_file_path,
+                views_by_asset_directory={},
+                dataset_id="ds001",
+                extraction_directory=test_dir / "extraction",
+            )
+        case "ips.txt":
+            _summarize_dataset_by_region(
+                asset_directories=[asset_directory],
+                summary_file_path=summary_file_path,
+                region_resolver=MappingRegionResolver({}),
+                views_by_asset_directory={},
+                use_encryption=False,
+            )
+
+    assert summary_file_path.exists() is False
+
+
+@pytest.mark.ai_generated
+def test_collect_unique_ips_without_a_resolver_keeps_every_ip_and_skips_missing_files(tmpdir: py.path.local) -> None:
+    """With no resolver to exclude services by, every IP counts, and an asset without an IP file adds none."""
+    from s3_log_extraction.summarize._generate_summaries import _collect_unique_ips
+
+    test_dir = pathlib.Path(tmpdir)
+    asset_dir = test_dir / "asset"
+    asset_dir.mkdir()
+    (asset_dir / "ips.txt").write_text("192.0.2.1\n198.51.100.1\n192.0.2.1\n")
+    asset_dir_without_ips = test_dir / "asset_without_ips"
+    asset_dir_without_ips.mkdir()
+
+    unique_ips = _collect_unique_ips(asset_directories=[asset_dir, asset_dir_without_ips], use_encryption=False)
+
+    assert unique_ips == {"192.0.2.1", "198.51.100.1"}
+
+
 def test_generate_all_dataset_totals_skips_archive(tmpdir: py.path.local):
     """Verify that the 'archive' subdirectory is excluded from dataset totals."""
     test_dir = pathlib.Path(tmpdir)

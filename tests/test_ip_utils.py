@@ -312,6 +312,25 @@ def test_github_ranges_are_recognized_by_shape_not_by_key() -> None:
 
 
 @pytest.mark.ai_generated
+def test_resolver_ignores_ipv6_ranges_and_addresses() -> None:
+    """IPv6 ranges are left out of the service tables, and an IPv6 address never matches a service."""
+    reader = _make_reader(
+        city_responses={"2001:4860:4860::8888": _make_city_response(country_code="US", subdivision_codes=("CA",))}
+    )
+    service_networks = {
+        "GitHub": [("2001:db8::/32", None), ("192.0.2.0/24", None)],
+        "AWS": [],
+        "GCP": [],
+        "VPN": [],
+    }
+    resolver = IpRegionResolver(service_networks=service_networks, geolite2_reader=reader)
+
+    assert resolver.resolve("2001:db8::1") == "bogon"  # The documentation range, which is not publicly routable
+    assert resolver.resolve("2001:4860:4860::8888") == "USA/CA"
+    assert resolver.resolve("192.0.2.7") == "GitHub"
+
+
+@pytest.mark.ai_generated
 def test_mapping_region_resolver() -> None:
     """A mapping resolver returns the mapped label and ``missing`` for anything else, and satisfies the protocol."""
     resolver = MappingRegionResolver({"192.0.2.1": "USA/CA", "192.0.2.2": None})
@@ -321,6 +340,22 @@ def test_mapping_region_resolver() -> None:
     assert resolver.resolve("192.0.2.1") == "USA/CA"
     assert resolver.resolve("192.0.2.2") == "missing"
     assert resolver.resolve("192.0.2.3") == "missing"
+
+
+@pytest.mark.ai_generated
+def test_mapping_region_resolver_stands_in_as_a_context_manager() -> None:
+    """A mapping resolver can be owned the way a live one is, entered and closed with nothing to release."""
+    with MappingRegionResolver({"192.0.2.1": "USA/CA"}) as resolver:
+        assert resolver.resolve("192.0.2.1") == "USA/CA"
+
+    assert resolver.resolve("192.0.2.1") == "USA/CA"
+
+
+@pytest.mark.ai_generated
+def test_azure_ranges_are_not_yet_fetched() -> None:
+    """Azure is not among the known services, and asking for its listing says why."""
+    with pytest.raises(NotImplementedError, match="Azure"):
+        s3_log_extraction.ip_utils._ip_utils._request_cidr_range(service_name="Azure")
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +544,66 @@ def test_update_geolite2_database_raises_on_spent_quota_without_a_cached_copy(
 
 
 @pytest.mark.ai_generated
+def test_update_geolite2_database_rejects_an_archive_without_the_database(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tarball that holds no ``.mmdb`` leaves nothing to geolocate with, so it is refused rather than kept."""
+    monkeypatch.setenv("MAXMIND_ACCOUNT_ID", "123456")
+    monkeypatch.setenv("MAXMIND_LICENSE_KEY", "test-license-key")
+
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        member = tarfile.TarInfo(name="GeoLite2-City_20260901/LICENSE.txt")
+        member.size = len(b"license")
+        archive.addfile(tarinfo=member, fileobj=io.BytesIO(b"license"))
+
+    mock_response = unittest.mock.MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.iter_content.return_value = [buffer.getvalue()]
+
+    with unittest.mock.patch("requests.get", return_value=mock_response):
+        with pytest.raises(RuntimeError, match=f"No {GEOLITE2_DATABASE_FILE_NAME} was found in the archive"):
+            update_geolite2_database(cache_directory=tmp_path)
+
+    assert not (tmp_path / "geolite2" / GEOLITE2_DATABASE_FILE_NAME).exists()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("database_exists", "credentials_are_set"),
+    [
+        (False, False),  # A missing database is always downloaded, whatever the outcome
+        (False, True),
+        (True, True),  # A present one is refreshed whenever the credentials to do so are there
+    ],
+)
+def test_open_geolite2_database_updates_before_opening(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, database_exists: bool, credentials_are_set: bool
+) -> None:
+    """The database is brought up to date, when it can be, before a reader is opened over it."""
+    if credentials_are_set:
+        monkeypatch.setenv("MAXMIND_ACCOUNT_ID", "123456")
+        monkeypatch.setenv("MAXMIND_LICENSE_KEY", "test-license-key")
+    else:
+        monkeypatch.delenv("MAXMIND_ACCOUNT_ID", raising=False)
+        monkeypatch.delenv("MAXMIND_LICENSE_KEY", raising=False)
+
+    database_path = tmp_path / "geolite2" / GEOLITE2_DATABASE_FILE_NAME
+    if database_exists:
+        database_path.parent.mkdir(parents=True)
+        database_path.write_bytes(b"fresh")
+
+    with (
+        unittest.mock.patch("s3_log_extraction.ip_utils._geolite2.update_geolite2_database") as mock_update,
+        unittest.mock.patch("geoip2.database.Reader") as mock_reader,
+    ):
+        open_geolite2_database(cache_directory=tmp_path)
+
+    mock_update.assert_called_once_with(cache_directory=tmp_path)
+    mock_reader.assert_called_once_with(fileish=database_path)
+
+
+@pytest.mark.ai_generated
 def test_open_geolite2_database_warns_on_stale_copy_without_credentials(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -624,3 +719,40 @@ def test_update_region_code_coordinates_locates_services_with_geolite2(tmp_path:
     coordinates = yaml.safe_load((tmp_path / "ips" / "region_codes_to_coordinates.yaml").read_text())
     assert coordinates["AWS/us-west-2"] == {"latitude": 45.8399, "longitude": -119.7006}
     assert coordinates["GitHub"] == {"latitude": None, "longitude": None}
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("region_code", "city_response"),
+    [
+        # A service label naming no region has no address to locate by
+        pytest.param("AWS", None, id="no_subregion"),
+        # A region absent from the published listing has no range to draw an address from
+        pytest.param("AWS/xx-nowhere-1", None, id="unlisted_subregion"),
+        # An address the database does not know
+        pytest.param("AWS/us-west-2", geoip2.errors.AddressNotFoundError("not found"), id="address_not_found"),
+        # An address the database knows but cannot place
+        pytest.param("AWS/us-west-2", _make_city_response(latitude=None, longitude=None), id="no_location"),
+    ],
+)
+def test_update_region_code_coordinates_reports_services_it_cannot_locate(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture, region_code: str, city_response: object
+) -> None:
+    """A cloud service region that cannot be located is reported and left out, rather than located wrongly."""
+    write_by_region_summary(tmp_path / "summaries" / "ds001" / "by_region.tsv", regions=[region_code])
+    reader = _make_reader(city_responses={"52.0.0.0": city_response})
+
+    with (
+        unittest.mock.patch(
+            "s3_log_extraction.ip_utils._update_region_code_coordinates.open_geolite2_database", return_value=reader
+        ),
+        unittest.mock.patch(
+            "s3_log_extraction.ip_utils._update_region_code_coordinates._get_cidr_address_ranges_and_subregions",
+            return_value=[("52.0.0.0/8", "us-west-2")],
+        ),
+    ):
+        s3_log_extraction.ip_utils.update_region_code_coordinates(cache_directory=tmp_path, use_encryption=False)
+
+    coordinates = yaml.safe_load((tmp_path / "ips" / "region_codes_to_coordinates.yaml").read_text())
+    assert region_code not in coordinates
+    assert region_code in capsys.readouterr().out
