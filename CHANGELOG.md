@@ -6,9 +6,11 @@
 
 - The base directory that extraction runs create their temporary directories inside is now configurable, with `s3logextraction config tmp set <directory>` or the `--tmp` option of `extract`. Runs otherwise use the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
-- `number_of_views` now excludes GitHub Actions traffic, which is automated continuous integration rather than genuine interest. The published GitHub ranges are split into two service labels: `GH-actions` (the `actions*` keys of `api.github.com/meta`) and `GitHub` (everything else, such as Codespaces and the web/API). Only `GH-actions`-labeled requesters are dropped from view counts, so a human streaming a file from a notebook in a Codespace is still counted; a measurement over the full archive found roughly a quarter of raw views originate from cloud/VPN/CI ranges, with GitHub Actions the dominant contaminant. The unique-requester count is unchanged: it continues to exclude every cloud service and VPN range, `GH-actions` included. A new `is_github_actions_label` helper and a `region_resolver` argument to the internal view collector implement the exclusion. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
+- `number_of_views` now excludes GitHub Actions traffic, which is continuous integration rather than genuine interest. The published GitHub ranges are split into `GH-actions` (the `actions*` keys of `api.github.com/meta`) and `GitHub` for everything else, and only the former is dropped, so a human streaming from a Codespace is still counted. Unique-requester counts are unchanged. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
 ### 🐛 Bug Fix
+
+- A published service listing that parses to no IP ranges at all now warns, naming the service and the range counts of its neighbours. Such a listing does not fail; it simply matches no address, so every label and exclusion keyed to it goes quietly inert. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
 - A remote extraction started without `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` and without an AWS credentials file now reports the missing variables, instead of failing on opening the absent file. ([#305](https://github.com/dandi/s3-log-extraction/pull/305))
 
