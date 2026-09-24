@@ -73,7 +73,7 @@ one or two active days apiece.
 
 We held every candidate axis to one standard: a defensible cut needs a visible **gap or valley**
 separating a human bulk from a bot tail — the same standard the 8-hour session boundary met. Plots
-are in `ip_behavior_distributions.png`.
+are in `figures/ip_behavior_distributions.png`.
 
 - **Archive coverage** (fraction of all assets touched). The CCDF is smooth across five decades, from
   the median at 0.008% to a maximum of 66.9%. There is no gap. Any cut is arbitrary; a 2% cut would
@@ -132,7 +132,7 @@ touched, but **how much of each dataset it consumed, and across how many dataset
 
 Neither half works alone. Broad-but-shallow is an ordinary research pattern, and deep-but-narrow is a
 dataset's own author or a single bulk download. The mirror signature is high on **both at once**, and
-that is the region the plane isolates (`ip_behavior_saturation_plane.png`).
+that is the region the plane isolates (`figures/ip_behavior_saturation_plane.png`).
 
 | joint region | IPs | views |
 |---|---|---|
@@ -214,7 +214,7 @@ selects **12 addresses holding 62.9% of all views** (§5). This is a genuine rul
 behavioral claim, it is computed from published data, and it demonstrably spares the broad-but-shallow
 heavy users that every coverage-based alternative would have swept up.
 
-**Tier 2 — each nominee is confirmed individually** against its row in `ip_behavior_by_ip.csv` before
+**Tier 2 — each nominee is confirmed individually** against its row in `figures/ip_behavior_by_ip.csv` before
 exclusion. The cuts have no valley behind them (§5), so the rule is a well-aimed filter rather than a
 proof, and 12 cases is a reviewable number. The dominant actor (§1) is the clearest of them and can be
 excluded on its own evidence today.

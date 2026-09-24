@@ -227,6 +227,11 @@ _ALIAS_NOUNS = (
 
 
 ALIAS_REGISTRY_NAME = "alias_registry.PRIVATE.json"
+
+# Resolved against this file rather than the working directory, so the figures land in the tracked folder no
+# matter where the run is started from. They carry no IP addresses, only pseudonyms and region labels, so they
+# are safe to commit and to reuse in write-ups elsewhere.
+_DEFAULT_OUT_PATH = pathlib.Path(__file__).parent / "bot_classification" / "figures" / "ip_behavior.png"
 _ALIAS_SUFFIX_DIGITS = 4
 
 
@@ -1451,8 +1456,16 @@ def main() -> None:
     parser.add_argument("--cache-parquet", action="store_true", help="Cache the per-IP table (salted IP hash) in cache")
     parser.add_argument("--rebuild-cache", action="store_true")
     parser.add_argument("--max-assets", type=int, default=None, help="Layout-independent smoke test over the first N")
-    parser.add_argument("--out", type=pathlib.Path, default=pathlib.Path("ip_behavior.png"))
+    parser.add_argument(
+        "--out",
+        type=pathlib.Path,
+        default=_DEFAULT_OUT_PATH,
+        help="Where the figures and tables are written. The default is the tracked figures directory beside this "
+        "script, so a run lands somewhere the plots can be committed and reused rather than in whatever "
+        "directory it happened to start in.",
+    )
     args = parser.parse_args()
+    args.out.parent.mkdir(parents=True, exist_ok=True)
 
     resolver_cls, read_ips, session_timeout, timestamp_format = _load_library()
     parquet_path, csv_path = _cache_paths(args.cache_dir)
