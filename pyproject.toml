@@ -9,7 +9,7 @@ packages = ["src/s3_log_extraction"]
 
 [project]
 name = "s3-log-extraction"
-version="1.11.7"
+version="1.11.8"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
@@ -107,7 +107,12 @@ extend-exclude = '''
 
 [tool.ruff]
 exclude = [
-  "*/__init__.py"
+  "*/__init__.py",
+  # One-off exploratory research scripts (bot/view analysis, whitepaper figure builders). They are not
+  # part of the shipped package (the wheel is src/ only) and are iterated on quickly, so the full
+  # `select = ["ALL"]` ruleset — type annotations on every argument, docstrings, complexity limits — is
+  # noise here rather than signal. black and codespell still run on them; mypy already checks src/ only.
+  "analysis",
 ]
 line-length = 120
 
@@ -291,6 +296,8 @@ ignore_errors = true
 
 [tool.codespell]
 skip = "*/ip_utils/_data/*"  # Three-letter ISO 3166 codes look like misspelled words
+# "sackin" is the proper name of the Sackin tree-imbalance index, not a typo.
+ignore-words-list = "sackin"
 
 
 [tool.pytest.ini_options]
