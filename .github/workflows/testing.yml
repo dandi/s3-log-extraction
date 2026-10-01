@@ -57,6 +57,8 @@ jobs:
           cat ./coverage.xml
 
       - name: Upload coverage to Codecov
+        # Dependabot runs receive no repository secrets, and Codecov rejects tokenless uploads to this repository
+        if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_CREDENTIALS }}
