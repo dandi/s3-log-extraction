@@ -34,13 +34,16 @@ jobs:
     # Action dashboard identified by 'Remote testing'
     # Requirement settings identified as 'RemoteTests / ubuntu'
     name: ubuntu
+    # Dependabot runs receive no repository secrets, so the MaxMind credentials these tests need are empty.
+    # Skipping the job still reports the required check as passing.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
       - run: git fetch --prune --unshallow --tags
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
