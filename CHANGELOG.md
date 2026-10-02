@@ -8,8 +8,6 @@
 
 - `number_of_views` now excludes GitHub Actions traffic, which is continuous integration rather than genuine interest. The published GitHub ranges are split into `GH-actions` (the `actions*` keys of `api.github.com/meta`) and `GitHub` for everything else, and only the former is dropped, so a human streaming from a Codespace is still counted. Unique-requester counts are unchanged. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
-- Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts, with `s3logextraction config exclude set <IP address> ...` and `config exclude reset`. The addresses are kept only in the local configuration file. Bytes sent, requests, and downloads still include them, and an empty list changes no published number. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
-
 ### 🐛 Bug Fix
 
 - A published service listing that parses to no IP ranges at all now warns, naming the service and the range counts of its neighbours. Such a listing does not fail; it simply matches no address, so every label and exclusion keyed to it goes quietly inert. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))

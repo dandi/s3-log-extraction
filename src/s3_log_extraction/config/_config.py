@@ -1,5 +1,3 @@
-import collections.abc
-import ipaddress
 import json
 import pathlib
 import typing
@@ -115,67 +113,6 @@ def get_base_temporary_directory() -> pathlib.Path | None:
     base_temporary_directory.mkdir(parents=True, exist_ok=True)
 
     return base_temporary_directory
-
-
-def set_excluded_ips(ips: collections.abc.Iterable[str], /) -> None:
-    """
-    Set the IP addresses whose activity is left out of the published view and requester counts.
-
-    The list replaces any previously configured one. It is stored only in the local configuration file,
-    so the addresses never enter the published summaries or the repository.
-
-    Parameters
-    ----------
-    ips : iterable of str
-        The individual IPv4 or IPv6 addresses to exclude. Each is stored in its canonical text form,
-        which is the form the extraction cache records. Networks in CIDR notation are not accepted.
-        An empty iterable removes the setting, the same as ``unset_excluded_ips``.
-
-    Raises
-    ------
-    ValueError
-        If any entry is not a single valid IP address.
-    """
-    canonical_ips = set()
-    for ip in ips:
-        try:
-            canonical_ips.add(str(ipaddress.ip_address(ip.strip())))
-        except ValueError as exception:
-            message = (
-                f"\n\nThe excluded IP entry '{ip}' is not a single valid IP address.\n"
-                "Only individual addresses can be excluded. Networks in CIDR notation are not accepted.\n\n"
-            )
-            raise ValueError(message) from exception
-
-    config = get_config()
-    if canonical_ips:
-        config["excluded_ips"] = sorted(canonical_ips)
-    else:
-        config.pop("excluded_ips", None)
-    save_config(config=config)
-
-
-def unset_excluded_ips() -> None:
-    """Remove any configured excluded IP addresses, so that every requester is counted again."""
-    config = get_config()
-    config.pop("excluded_ips", None)
-    save_config(config=config)
-
-
-def get_excluded_ips() -> frozenset[str]:
-    """
-    Get the IP addresses whose activity is left out of the published view and requester counts.
-
-    Returns
-    -------
-    frozenset of str
-        The configured addresses in canonical text form.
-        An empty set when none are configured, in which case no requester is excluded by address.
-    """
-    config = get_config()
-
-    excluded_ips = frozenset(config.get("excluded_ips", []))
-    return excluded_ips
 
 
 def get_cache_subdirectory(

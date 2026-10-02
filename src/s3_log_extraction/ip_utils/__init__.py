@@ -7,7 +7,6 @@ from ._globals import (
     EXCLUDED_REGION_LABELS,
     GITHUB_ACTIONS_LABEL,
     is_cloud_service_or_vpn_label,
-    is_excluded_ip,
     is_github_actions_label,
     is_resolved_region,
 )
@@ -23,7 +22,6 @@ __all__ = [
     "get_geolite2_database_path",
     "get_region_coordinates",
     "is_cloud_service_or_vpn_label",
-    "is_excluded_ip",
     "is_github_actions_label",
     "is_resolved_region",
     "load_ip_cache",

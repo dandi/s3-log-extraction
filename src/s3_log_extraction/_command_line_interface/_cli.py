@@ -10,9 +10,7 @@ from ..config import (
     reset_extraction,
     set_base_temporary_directory,
     set_cache_directory,
-    set_excluded_ips,
     unset_base_temporary_directory,
-    unset_excluded_ips,
 )
 from ..extractors import (
     RemoteS3LogAccessExtractor,
@@ -284,35 +282,6 @@ def _reset_tmp_cli() -> None:
     unset_base_temporary_directory()
 
 
-# s3logextraction config exclude
-@_config_cli.group(name="exclude")
-def _exclude_cli() -> None:
-    pass
-
-
-# s3logextraction config exclude set < ip > [< ip > ...]
-@_exclude_cli.command(name="set")
-@rich_click.argument("ips", nargs=-1, required=True, type=rich_click.STRING)
-def _set_exclude_cli(ips: tuple[str, ...]) -> None:
-    """
-    Exclude individual requesters from the view and requester counts of future summaries.
-
-    IPS : One or more individual IP addresses, replacing any previously configured list.
-        Each is stored only in the local configuration file, never in the published summaries.
-
-        Views and unique requester counts leave these addresses out. Bytes sent, requests, and downloads
-        still include them. Summaries already written are unchanged until 'update summaries' is run again.
-    """
-    set_excluded_ips(ips)
-
-
-# s3logextraction config exclude reset
-@_exclude_cli.command(name="reset")
-def _reset_exclude_cli() -> None:
-    """Forget the configured excluded IP addresses, so that every requester is counted again."""
-    unset_excluded_ips()
-
-
 # s3logextraction reset
 @s3logextraction_cli.group(name="reset")
 def _reset_cli() -> None:
@@ -466,8 +435,6 @@ def _update_summaries_cli(
     Requesters are geolocated while the summaries are generated, against the published IP ranges of known cloud
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
-
-    Any addresses configured with 'config exclude set' are left out of the view and requester counts.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
