@@ -6,7 +6,7 @@
 
 - The base directory that extraction runs create their temporary directories inside is now configurable, with `s3logextraction config tmp set <directory>` or the `--tmp` option of `extract`. Runs otherwise use the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
-- Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts, with `s3logextraction config exclude set <IP address> ...` and `config exclude reset`. The addresses are kept only in the local configuration file. Bytes sent, requests, and downloads still include them, and an empty list changes no published number. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
+- Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts, with `s3logextraction config exclude set <IP address> ...` and `config exclude reset`. The addresses are kept only in the local configuration file. Bytes sent, requests, and downloads still include them, and an empty list changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311))
 
 ### 🐛 Bug Fix
 
