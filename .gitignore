@@ -158,9 +158,10 @@ fabric.properties
 # Spyder
 .spyproject/*
 
-# Local-only IP alias -> address mappings produced by analysis/resolve_ip_aliases.py.
-# These contain raw IP addresses (personal data) and must never be committed.
-*.PRIVATE.csv
-*.PRIVATE.json
+# Local-only IP alias -> address mappings produced by analysis/resolve_ip_aliases.py and the
+# registry written by analysis/profile_ip_behavior.py. These contain raw IP addresses (personal
+# data) and must never be committed. The trailing-glob form is what catches the backup
+# migrate_alias_registry.py leaves behind, whose name ends in .bak rather than .json.
+*.PRIVATE.*
 ip_aliases*.csv
-alias_registry*.json
+alias_registry*
