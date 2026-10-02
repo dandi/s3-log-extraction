@@ -8,11 +8,12 @@ confirmed by review before exclusion.
 A "view session" is the shipped `number_of_views` unit: a maximal run of streaming (HTTP 206,
 `download == 0`) requests from one IP to one asset with no gap over 8 hours.
 
-**Tooling:** `analysis/profile_ip_behavior.py`. IPs are stored only as a salted keyed hash and are
-shown in tables under pseudonyms drawn uniformly at random, never as addresses. The pseudonyms are
-not derived from the addresses, so they carry no information about them; the registry linking the two
-is held only on the machine that produced it. Actors are therefore referred to here by role rather
-than by name.
+**Tooling:** `analysis/profile_ip_behavior.py`. Published tables and figures carry no IP address. Every
+actor appears under a pseudonym drawn uniformly at random, minted on first sight and reused forever
+after, so the same actor is named the same way across runs. The pseudonyms are not derived from the
+addresses, so they carry no information about them; the registry linking the two is held only on the
+machine that produced it, and `analysis/resolve_ip_aliases.py` reads it to name the address behind a
+pseudonym. Actors are therefore referred to here by role rather than by name.
 
 ---
 

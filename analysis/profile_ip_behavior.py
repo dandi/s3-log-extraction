@@ -57,6 +57,7 @@ import argparse
 import collections
 import fnmatch
 import hashlib
+import json
 import math
 import os
 import pathlib
@@ -237,7 +238,7 @@ _ALIAS_SUFFIX_DIGITS = 4
 
 class AliasRegistry:
     """
-    Random, locally-held pseudonyms for hashed IPs.
+    Random, locally-held pseudonyms for IP addresses.
 
     A pseudonym *derived* from the address — even through a keyed hash — is still a function of it,
     so publishing one publishes a little information about the address. These are drawn uniformly at
@@ -245,8 +246,17 @@ class AliasRegistry:
     connecting the two is this registry, which never leaves the machine that produced it.
 
     That makes the registry the sole record of who is who, so it is persisted next to the analysis
-    cache (never in the repository, and gitignored) and reloaded on each run to keep names stable
-    across runs. Delete it and the names are gone for good: a rerun produces a fresh, unrelated set.
+    cache (never in the repository, and gitignored, mode 0600) and reloaded on each run. A name is
+    minted once, on first sight of an address, and reused forever after, so every table and figure
+    any later run produces names the same actor the same way. Delete the registry and the names are
+    gone for good: a rerun produces a fresh, unrelated set.
+
+    The registry maps address to name directly. An earlier version keyed it by the salted hash, which
+    left it inert if it leaked but meant recovering an address took the hashing salt and a full walk
+    of the cache to find which address produced a given hash. Since the file is local-only either
+    way, that bought little and made the one operation it exists for — telling the maintainer which
+    address a published pseudonym stands for — depend on the salt still matching. It is the sensitive
+    artifact now, and its permissions are what protect it.
 
     The name space is ``len(adjectives) * len(nouns) * 10 ** 4`` (9,000,000), far larger than the
     number of addresses, and assignment refuses to reuse a name — so unlike a derived scheme there
@@ -255,19 +265,17 @@ class AliasRegistry:
 
     def __init__(self, path: pathlib.Path | None = None) -> None:
         self.path = path
-        self._hash_to_alias: dict[str, str] = {}
+        self._ip_to_alias: dict[str, str] = {}
         self._used: set[str] = set()
         self._random = secrets.SystemRandom()
         if path is not None and path.exists():
-            import json
+            self._ip_to_alias = json.loads(path.read_text(encoding="utf-8"))
+            self._used = set(self._ip_to_alias.values())
+            print(f"Loaded {len(self._ip_to_alias):,} existing pseudonyms from {path}")
 
-            self._hash_to_alias = json.loads(path.read_text(encoding="utf-8"))
-            self._used = set(self._hash_to_alias.values())
-            print(f"Loaded {len(self._hash_to_alias):,} existing pseudonyms from {path}")
-
-    def alias_for(self, ip_hash: str) -> str:
-        """Return this hash's pseudonym, drawing and recording a fresh random one if it has none."""
-        existing = self._hash_to_alias.get(ip_hash)
+    def alias_for(self, ip: str, /) -> str:
+        """Return this address's pseudonym, drawing and recording a fresh random one if it has none."""
+        existing = self._ip_to_alias.get(ip)
         if existing is not None:
             return existing
         limit = len(_ALIAS_ADJECTIVES) * len(_ALIAS_NOUNS) * 10**_ALIAS_SUFFIX_DIGITS
@@ -281,19 +289,17 @@ class AliasRegistry:
             )
             if candidate not in self._used:
                 self._used.add(candidate)
-                self._hash_to_alias[ip_hash] = candidate
+                self._ip_to_alias[ip] = candidate
                 return candidate
 
     def save(self) -> None:
         """Persist the registry locally, readable only by its owner."""
         if self.path is None:
             return
-        import json
-
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self._hash_to_alias, indent=0, sort_keys=True), encoding="utf-8")
+        self.path.write_text(json.dumps(self._ip_to_alias, indent=0, sort_keys=True), encoding="utf-8")
         self.path.chmod(0o600)
-        print(f"Saved {len(self._hash_to_alias):,} pseudonyms to {self.path} (local only; do not share or commit)")
+        print(f"Saved {len(self._ip_to_alias):,} pseudonyms to {self.path} (local only; do not share or commit)")
 
 
 def _selection_entropy(per_asset_session_counts: list[int]) -> float:
@@ -710,7 +716,7 @@ def build_ip_profiles(
         rows.append(
             {
                 "ip_hash": ip_hash,
-                "alias": registry.alias_for(ip_hash),
+                "alias": registry.alias_for(ip),
                 "region_label": label,
                 "service": _service_of(label),
                 **features,
