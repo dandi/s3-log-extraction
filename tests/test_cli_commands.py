@@ -156,6 +156,42 @@ def test_cli_config_tmp_set_and_reset(
 
 
 @pytest.mark.ai_generated
+def test_cli_config_exclude_set_and_reset(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    """Setting excluded addresses should persist them, and resetting should clear them again."""
+    config_file_path = tmp_path / "config.yaml"
+    monkeypatch.setattr("s3_log_extraction.config._config.S3_LOG_EXTRACTION_CONFIG_FILE_PATH", config_file_path)
+
+    set_result = runner.invoke(
+        s3_log_extraction.s3logextraction_cli, ["config", "exclude", "set", "198.51.100.0", "192.0.2.0"]
+    )
+
+    assert set_result.exit_code == 0, set_result.output
+    assert s3_log_extraction.config.get_excluded_ips() == frozenset({"192.0.2.0", "198.51.100.0"})
+
+    reset_result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["config", "exclude", "reset"])
+
+    assert reset_result.exit_code == 0, reset_result.output
+    assert s3_log_extraction.config.get_config() == {}
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("arguments", [[], ["198.51.100.0/24"]])
+def test_cli_config_exclude_set_rejects_invalid_input(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, arguments: list[str]
+) -> None:
+    """Setting no address or a network fails and writes nothing to the configuration."""
+    config_file_path = tmp_path / "config.yaml"
+    monkeypatch.setattr("s3_log_extraction.config._config.S3_LOG_EXTRACTION_CONFIG_FILE_PATH", config_file_path)
+
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["config", "exclude", "set", *arguments])
+
+    assert result.exit_code != 0
+    assert s3_log_extraction.config.get_excluded_ips() == frozenset()
+
+
+@pytest.mark.ai_generated
 def test_cli_extract_with_tmp(runner: CliRunner, tmp_path: pathlib.Path) -> None:
     """The extract command should work under the given base temporary directory and clean up after itself."""
     base_temporary_directory = tmp_path / "tmp"

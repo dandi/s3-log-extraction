@@ -9,6 +9,9 @@ from ._config import (
     set_base_temporary_directory,
     unset_base_temporary_directory,
     get_base_temporary_directory,
+    set_excluded_ips,
+    unset_excluded_ips,
+    get_excluded_ips,
 )
 from ._globals import (
     S3_LOG_EXTRACTION_BASE_FOLDER_PATH,
@@ -29,5 +32,8 @@ __all__ = [
     "set_base_temporary_directory",
     "unset_base_temporary_directory",
     "get_base_temporary_directory",
+    "set_excluded_ips",
+    "unset_excluded_ips",
+    "get_excluded_ips",
     "reset_extraction",
 ]
