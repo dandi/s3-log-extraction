@@ -81,6 +81,14 @@ s3logextraction config tmp set <temporary directory>
 
 Use `s3logextraction config tmp reset` to go back to the system temporary directory.
 
+[Optional] Exclude individually reviewed requesters from the view and requester counts of the summaries. The addresses are stored only in the local configuration file. Bytes sent, requests, and downloads still include them.
+
+```bash
+s3logextraction config exclude set <IP address> [<IP address> ...]
+```
+
+Use `s3logextraction config exclude reset` to count every requester again.
+
 To extract the logs:
 
 ```bash

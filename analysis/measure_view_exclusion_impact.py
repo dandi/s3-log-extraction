@@ -14,6 +14,17 @@ default) it reports:
   * a per-service origin breakdown (GH-actions / GitHub / AWS / GCP / VPN / geographic)
     and a sensitivity table for broader exclusion tiers.
 
+Configured IP exclusion
+-----------------------
+Addresses configured with ``s3logextraction config exclude set`` (stored only in the local
+``~/.s3-log-extraction/config.yaml``) are read with the library's own ``get_excluded_ips``,
+hashed with the same salted key as the walk, and matched against the hashed rows. The report
+then shows what the exclusion would remove from ``number_of_views`` on top of the shipped
+GH-actions filter, and from the unique-requester count, before any summary is regenerated.
+No address is printed; only counts and the coarse origin of the matched rows are. Because the
+match is on hashes, it also works on a ``--cache-parquet`` cache, provided that cache was
+written with the same ``S3_LOG_EXTRACTION_SALT`` / ``S3_LOG_EXTRACTION_PASSWORD``.
+
 Testing-asset cross-tab (``--testing-asset-file``)
 --------------------------------------------------
 The shipped exclusion drops ``GH-actions`` only, deliberately sparing plausibly-human
@@ -67,10 +78,11 @@ _SERVICES = ("GH-actions", "GitHub", "AWS", "GCP", "VPN")
 def _load_library():
     """Import the exact production functions so the measurement matches the summaries."""
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
-    from s3_log_extraction.ip_utils import IpRegionResolver
+    from s3_log_extraction.config import get_excluded_ips
+    from s3_log_extraction.ip_utils import IpRegionResolver, is_cloud_service_or_vpn_label
     from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
 
-    return _collect_asset_views, IpRegionResolver
+    return _collect_asset_views, IpRegionResolver, get_excluded_ips, is_cloud_service_or_vpn_label
 
 
 def _ip_hash_key() -> bytes:
@@ -136,6 +148,11 @@ def _load_pairs(cache_dir: pathlib.Path) -> pd.DataFrame | None:
             csv_path, dtype={"dataset_id": str, "ip_hash": str, "region_label": str}, keep_default_na=False
         )
     return None
+
+
+def _hash_ip(ip: str) -> str:
+    """The salted keyed hash that stands in for an address in every persisted or printed row."""
+    return hashlib.blake2b(ip.encode("utf-8"), key=_ip_hash_key(), digest_size=16).hexdigest()
 
 
 def build_view_pairs(
@@ -205,12 +222,11 @@ def build_view_pairs(
     print(f"Resolving {len(distinct_ips):,} distinct IPs with the production resolver...")
     label_of = {ip: resolver.resolve(ip) for ip in tqdm.tqdm(distinct_ips, desc="Resolving IPs")}
 
-    key = _ip_hash_key()
     rows = [
         {
             "dataset_id": dataset_id,
             "is_testing": bool(is_testing),
-            "ip_hash": hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest(),
+            "ip_hash": _hash_ip(ip),
             "region_label": label_of[ip] or "",
             "n_views": n,
         }
@@ -265,6 +281,69 @@ def report(pairs: pd.DataFrame) -> None:
         exc = int(per_gh.get(dataset_id, 0))
         tot = int(per_total[dataset_id])
         print(f"    {dataset_id}: {exc:,}/{tot:,} from GH-actions ({100 * f:.1f}%)")
+
+
+def report_configured_exclusion(
+    pairs: pd.DataFrame, excluded_ips: frozenset[str], is_cloud_service_or_vpn_label
+) -> None:
+    """
+    Report what the configured IP exclusion removes, on top of the shipped GH-actions filter.
+
+    Mirrors production: the exclusion drops the listed addresses from ``number_of_views`` and from the
+    unique-requester count, and leaves bytes sent, requests, and downloads alone. The requester count
+    already drops cloud/VPN labels, so only listed addresses with a non-cloud label change it.
+    """
+    print("\n=== Configured IP exclusion (config exclude set) ===")
+    if not excluded_ips:
+        print("  no addresses configured: the exclusion is inert and every published number is unchanged")
+        return
+
+    excluded_hashes = {_hash_ip(ip) for ip in excluded_ips}
+    is_excluded = pairs["ip_hash"].isin(excluded_hashes)
+    services = pairs["region_label"].map(_service_of)
+    is_gh_actions = services == "GH-actions"
+
+    matched_hashes = set(pairs.loc[is_excluded, "ip_hash"])
+    print(f"  configured addresses:                        {len(excluded_ips):,}")
+    print(f"  of which seen in the walked views:           {len(matched_hashes):,}")
+    if len(matched_hashes) < len(excluded_ips):
+        print(
+            "  NOTE: an unmatched address made no streaming session in scope, or the cache was hashed with "
+            "a different salt (rebuild with --rebuild-cache under the current salt to rule that out)."
+        )
+
+    total_views = int(pairs["n_views"].sum())
+    shipped_views = total_views - int(pairs.loc[is_gh_actions, "n_views"].sum())
+    removed_views = int(pairs.loc[is_excluded & ~is_gh_actions, "n_views"].sum())
+    print(f"  shipped number_of_views (minus GH-actions):  {shipped_views:,}")
+    print(
+        f"  further removed by the configured list:      {removed_views:,} "
+        f"({100 * removed_views / max(shipped_views, 1):.2f}% of shipped, "
+        f"{100 * removed_views / max(total_views, 1):.2f}% of raw)"
+    )
+    print(f"  number_of_views after both exclusions:       {shipped_views - removed_views:,}")
+
+    print("\n  origin of the excluded views (label-based exclusions cannot see a geographic one):")
+    _print_origin_breakdown(pairs[is_excluded])
+
+    labels_by_hash = pairs.drop_duplicates("ip_hash").set_index("ip_hash")["region_label"]
+    removed_requesters = {
+        ip_hash for ip_hash in matched_hashes if not is_cloud_service_or_vpn_label(labels_by_hash[ip_hash] or None)
+    }
+    print(f"\n  archive requester_count reduction:           −{len(removed_requesters):,}")
+    print("  (one per listed address with a non-cloud label seen streaming; an address that only made full")
+    print("   downloads is not in this walk but is removed from requester_count all the same)")
+
+    print("\n--- Datasets most affected by the configured list (by % of shipped views) ---")
+    per_shipped = pairs[~is_gh_actions].groupby("dataset_id")["n_views"].sum()
+    per_removed = pairs[is_excluded & ~is_gh_actions].groupby("dataset_id")["n_views"].sum()
+    frac = (per_removed / per_shipped).dropna().sort_values(ascending=False)
+    print(f"    {len(frac):,} dataset(s) touched")
+    for dataset_id, f in frac.head(15).items():
+        print(
+            f"    {dataset_id}: {int(per_removed[dataset_id]):,}/{int(per_shipped[dataset_id]):,} "
+            f"shipped views removed ({100 * f:.1f}%)"
+        )
 
 
 def report_testing_crosstab(pairs: pd.DataFrame, top_n: int = 25) -> None:
@@ -341,7 +420,7 @@ def main() -> None:
     args = parser.parse_args()
     use_encryption = not args.no_encryption
 
-    collect_asset_views, ip_region_resolver_cls = _load_library()
+    collect_asset_views, ip_region_resolver_cls, get_excluded_ips, is_cloud_service_or_vpn_label = _load_library()
     testing_globs = _load_testing_globs(args.testing_asset_file)
 
     cached = None
@@ -375,6 +454,7 @@ def main() -> None:
     # Print the report BEFORE persisting: the number is the deliverable, and a persistence
     # failure (e.g. a missing parquet engine) must never throw away a multi-hour walk.
     report(pairs)
+    report_configured_exclusion(pairs, get_excluded_ips(), is_cloud_service_or_vpn_label)
     if testing_globs or ("is_testing" in pairs.columns and pairs["is_testing"].any()):
         report_testing_crosstab(pairs)
 

@@ -45,6 +45,32 @@ def is_github_actions_label(region_label: str | None, /) -> bool:
     return region_label == GITHUB_ACTIONS_LABEL or region_label.startswith(f"{GITHUB_ACTIONS_LABEL}/")
 
 
+def is_excluded_ip(*, ip: str, excluded_ips: frozenset[str]) -> bool:
+    """
+    Determine whether an IP address is one of an explicitly configured list of excluded requesters.
+
+    This catches only the exact addresses listed, as configured with ``set_excluded_ips``. It exists for
+    actors identified individually by review, such as a periodic mirror whose plain geographic label makes
+    it invisible to the label-based predicates above. It does NOT catch neighbouring addresses in the same
+    network, other addresses the same actor may move to, or any requester by behavior or label. An empty
+    list excludes nothing.
+
+    Parameters
+    ----------
+    ip : str
+        The requester address, as recorded in the extraction cache.
+    excluded_ips : frozenset of str
+        The configured addresses to exclude, in canonical text form.
+
+    Returns
+    -------
+    bool
+        Whether ``ip`` is one of ``excluded_ips``.
+    """
+    is_excluded = ip in excluded_ips
+    return is_excluded
+
+
 def is_resolved_region(region_label: str | None, /) -> bool:
     """
     Determine whether a region/service label (as produced by a region resolver) names an actual place.
