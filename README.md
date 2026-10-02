@@ -81,13 +81,17 @@ s3logextraction config tmp set <temporary directory>
 
 Use `s3logextraction config tmp reset` to go back to the system temporary directory.
 
-[Optional] Exclude individually reviewed requesters from the view and requester counts of the summaries. The addresses are stored only in the local configuration file. Bytes sent, requests, and downloads still include them.
+[Optional] Exclude individually reviewed requesters from the view and requester counts of the summaries. List their addresses in a plain text file at `~/.s3-log-extraction/excluded_ips.txt`, which you create and edit by hand. The package only reads this file and never writes it.
 
-```bash
-s3logextraction config exclude set <IP address> [<IP address> ...]
+Put one IPv4 or IPv6 address on each line. Blank lines are ignored, and so is anything after a `#`, so each entry can carry a note on why it is excluded. Networks in CIDR notation are not accepted, and any line that is not a single valid address stops `update summaries` with an error naming the line.
+
+```text
+# Periodic mirror, reviewed 2026-10-01
+192.0.2.1
+2001:db8::1  # Second address of the same mirror
 ```
 
-Use `s3logextraction config exclude reset` to count every requester again.
+Listed addresses are left out of `number_of_views` and the requester counts. Bytes sent, requests, and downloads still include them. When the file is absent or lists no address, nothing is excluded and every published number is unchanged. Delete the file or empty it to count every requester again. Summaries already written change only when `update summaries` is run again.
 
 To extract the logs:
 

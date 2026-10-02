@@ -6,7 +6,7 @@ import pandas
 import pytest
 
 import s3_log_extraction
-from s3_log_extraction.config import get_config, get_excluded_ips, set_excluded_ips, unset_excluded_ips
+from s3_log_extraction.config import get_excluded_ips
 from s3_log_extraction.ip_utils import MappingRegionResolver, is_excluded_ip
 
 # Every address below is drawn from the documentation ranges (TEST-NET-1, TEST-NET-2, and 2001:db8::/32)
@@ -17,11 +17,11 @@ _DOWNLOAD = 1
 
 
 @pytest.fixture
-def isolated_config(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
-    """Point the configuration file at a temporary location rather than the user's real one."""
-    config_file_path = tmp_path / "config.yaml"
-    monkeypatch.setattr("s3_log_extraction.config._config.S3_LOG_EXTRACTION_CONFIG_FILE_PATH", config_file_path)
-    return config_file_path
+def excluded_ips_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
+    """Point the excluded IPs file at a temporary location rather than the user's real one, without creating it."""
+    excluded_ips_file_path = tmp_path / "excluded_ips.txt"
+    monkeypatch.setattr("s3_log_extraction.config._config.EXCLUDED_IPS_FILE_PATH", excluded_ips_file_path)
+    return excluded_ips_file_path
 
 
 def _write_asset(*, asset_directory: pathlib.Path, requests: list[tuple[str, int, str]]) -> None:
@@ -34,47 +34,41 @@ def _write_asset(*, asset_directory: pathlib.Path, requests: list[tuple[str, int
 
 
 @pytest.mark.ai_generated
-def test_excluded_ips_are_empty_when_unconfigured(isolated_config: pathlib.Path) -> None:
-    """With nothing configured, no address is excluded."""
+@pytest.mark.parametrize("file_content", [None, "", "\n\n# A comment and nothing else\n"])
+def test_excluded_ips_are_empty_without_any_listed_address(
+    excluded_ips_file_path: pathlib.Path, file_content: str | None
+) -> None:
+    """An absent file, an empty file, and a file of only comments all exclude nothing."""
+    if file_content is not None:
+        excluded_ips_file_path.write_text(file_content)
+
     assert get_excluded_ips() == frozenset()
 
 
 @pytest.mark.ai_generated
-def test_set_and_unset_excluded_ips(isolated_config: pathlib.Path) -> None:
-    """Configured addresses are stored in canonical form, replace earlier ones, and can be cleared."""
-    set_excluded_ips(["192.0.2.0"])
-    set_excluded_ips([" 198.51.100.0 ", "2001:DB8::0001", "198.51.100.0"])
+def test_excluded_ips_are_read_from_the_file(excluded_ips_file_path: pathlib.Path) -> None:
+    """Comments and blank lines are skipped, and each address is read in canonical form."""
+    excluded_ips_file_path.write_text(
+        "# Reviewed mirror\n"
+        "\n"
+        "  198.51.100.0  \n"
+        "2001:DB8::0001  # Same actor, second address\n"
+        "198.51.100.0\n"
+    )
 
     assert get_excluded_ips() == frozenset({"198.51.100.0", "2001:db8::1"})
-    assert get_config() == {"excluded_ips": ["198.51.100.0", "2001:db8::1"]}
-
-    unset_excluded_ips()
-
-    assert get_excluded_ips() == frozenset()
-    assert get_config() == {}
 
 
 @pytest.mark.ai_generated
-def test_set_excluded_ips_with_no_addresses_clears_the_setting(isolated_config: pathlib.Path) -> None:
-    """Setting an empty list is the same as unsetting, so no empty key lingers in the configuration."""
-    set_excluded_ips(["198.51.100.0"])
-    set_excluded_ips([])
-
-    assert get_config() == {}
-
-
-@pytest.mark.ai_generated
-@pytest.mark.parametrize("invalid_entry", ["198.51.100.0/24", "not-an-address", ""])
-def test_set_excluded_ips_rejects_anything_but_single_addresses(
-    isolated_config: pathlib.Path, invalid_entry: str
+@pytest.mark.parametrize("invalid_entry", ["198.51.100.0/24", "not-an-address", "192.0.2.0 198.51.100.0"])
+def test_excluded_ips_reject_anything_but_single_addresses(
+    excluded_ips_file_path: pathlib.Path, invalid_entry: str
 ) -> None:
-    """A network or a malformed entry is refused and leaves the configured list as it was."""
-    set_excluded_ips(["192.0.2.0"])
+    """A network or a malformed line is refused, naming the line, rather than silently matching nothing."""
+    excluded_ips_file_path.write_text(f"192.0.2.0\n{invalid_entry}\n")
 
-    with pytest.raises(ValueError, match="is not a single valid IP address"):
-        set_excluded_ips(["198.51.100.0", invalid_entry])
-
-    assert get_excluded_ips() == frozenset({"192.0.2.0"})
+    with pytest.raises(ValueError, match="Line 2 of"):
+        get_excluded_ips()
 
 
 @pytest.mark.ai_generated
@@ -96,25 +90,24 @@ def test_is_excluded_ip(ip: str, excluded_ips: frozenset[str], expected: bool) -
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("configured_ips", "unset_afterwards", "excluded_ips", "expected_is_actor_excluded"),
+    ("file_content", "excluded_ips", "expected_is_actor_excluded"),
     [
-        # Nothing configured, so every published number is as it was
-        (None, False, None, False),
-        # Configured and then reset, so every published number is as it was
-        ([_ACTOR_IP], True, None, False),
-        # An explicit empty argument overrides the configuration
-        ([_ACTOR_IP], False, (), False),
-        # The configured list is applied by default
-        ([_ACTOR_IP], False, None, True),
-        # An explicit argument is applied with nothing configured
-        (None, False, [_ACTOR_IP], True),
+        # No file, so every published number is as it was
+        (None, None, False),
+        # A file emptied of addresses, so every published number is as it was
+        ("# Nothing excluded at the moment\n", None, False),
+        # An explicit empty argument overrides the file
+        (f"{_ACTOR_IP}\n", (), False),
+        # The listed addresses are applied by default
+        (f"{_ACTOR_IP}\n", None, True),
+        # An explicit argument is applied with no file
+        (None, [_ACTOR_IP], True),
     ],
 )
 def test_summaries_exclude_listed_requesters_from_views_and_requesters_only(
-    isolated_config: pathlib.Path,
+    excluded_ips_file_path: pathlib.Path,
     tmp_path: pathlib.Path,
-    configured_ips: list[str] | None,
-    unset_afterwards: bool,
+    file_content: str | None,
     excluded_ips: list[str] | tuple[()] | None,
     expected_is_actor_excluded: bool,
 ) -> None:
@@ -145,10 +138,8 @@ def test_summaries_exclude_listed_requesters_from_views_and_requesters_only(
     region_resolver = MappingRegionResolver(
         {_ACTOR_IP: "USA/NH"} | {ip: f"USA/Subdivision {index % 5}" for index, ip in enumerate(_OTHER_IPS)}
     )
-    if configured_ips is not None:
-        set_excluded_ips(configured_ips)
-    if unset_afterwards:
-        unset_excluded_ips()
+    if file_content is not None:
+        excluded_ips_file_path.write_text(file_content)
 
     s3_log_extraction.summarize.generate_summaries(
         cache_directory=tmp_path,

@@ -58,7 +58,7 @@ def _collect_asset_views(
         Maximum gap between two consecutive streaming requests of the same session.
         Defaults to ``SESSION_TIMEOUT_IN_SECONDS`` (8 hours).
     excluded_ips : frozenset of str, optional
-        Individual addresses whose sessions are excluded, as configured with ``set_excluded_ips``.
+        Individual addresses whose sessions are excluded, as listed in ``EXCLUDED_IPS_FILE_PATH``.
         Defaults to an empty set, which excludes nothing and counts every IP.
 
     Returns
@@ -209,7 +209,7 @@ def _summarize_dataset_requester_count(
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
     excluded_ips : frozenset of str, optional
-        Individual addresses left out of the requester count, as configured with ``set_excluded_ips``.
+        Individual addresses left out of the requester count, as listed in ``EXCLUDED_IPS_FILE_PATH``.
         Defaults to an empty set, which excludes nothing.
     """
     unique_ips = _collect_unique_ips(
@@ -271,9 +271,9 @@ def generate_summaries(
         GeoLite2 database in the cache directory.
     excluded_ips : iterable of str, optional
         Individual addresses left out of ``number_of_views`` and the requester counts, though not out of
-        bytes sent, requests, or downloads. Defaults to the addresses configured with ``set_excluded_ips``,
-        which is none unless configured. Pass an empty iterable to exclude no address regardless of the
-        configuration.
+        bytes sent, requests, or downloads. Defaults to the addresses listed in ``EXCLUDED_IPS_FILE_PATH``,
+        which is none when that file is absent. Pass an empty iterable to exclude no address regardless of
+        that file.
     """
     if level != 0:
         message = (

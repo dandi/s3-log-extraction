@@ -1,10 +1,9 @@
-import collections.abc
 import ipaddress
 import json
 import pathlib
 import typing
 
-from ._globals import DEFAULT_CACHE_DIRECTORY, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
+from ._globals import DEFAULT_CACHE_DIRECTORY, EXCLUDED_IPS_FILE_PATH, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
 
 
 def save_config(config: dict[str, typing.Any]) -> None:
@@ -117,64 +116,46 @@ def get_base_temporary_directory() -> pathlib.Path | None:
     return base_temporary_directory
 
 
-def set_excluded_ips(ips: collections.abc.Iterable[str], /) -> None:
-    """
-    Set the IP addresses whose activity is left out of the published view and requester counts.
-
-    The list replaces any previously configured one. It is stored only in the local configuration file,
-    so the addresses never enter the published summaries or the repository.
-
-    Parameters
-    ----------
-    ips : iterable of str
-        The individual IPv4 or IPv6 addresses to exclude. Each is stored in its canonical text form,
-        which is the form the extraction cache records. Networks in CIDR notation are not accepted.
-        An empty iterable removes the setting, the same as ``unset_excluded_ips``.
-
-    Raises
-    ------
-    ValueError
-        If any entry is not a single valid IP address.
-    """
-    canonical_ips = set()
-    for ip in ips:
-        try:
-            canonical_ips.add(str(ipaddress.ip_address(ip.strip())))
-        except ValueError as exception:
-            message = (
-                f"\n\nThe excluded IP entry '{ip}' is not a single valid IP address.\n"
-                "Only individual addresses can be excluded. Networks in CIDR notation are not accepted.\n\n"
-            )
-            raise ValueError(message) from exception
-
-    config = get_config()
-    if canonical_ips:
-        config["excluded_ips"] = sorted(canonical_ips)
-    else:
-        config.pop("excluded_ips", None)
-    save_config(config=config)
-
-
-def unset_excluded_ips() -> None:
-    """Remove any configured excluded IP addresses, so that every requester is counted again."""
-    config = get_config()
-    config.pop("excluded_ips", None)
-    save_config(config=config)
-
-
 def get_excluded_ips() -> frozenset[str]:
     """
     Get the IP addresses whose activity is left out of the published view and requester counts.
 
+    The addresses are read from ``EXCLUDED_IPS_FILE_PATH`` (``~/.s3-log-extraction/excluded_ips.txt``), which
+    is edited by hand and never written by this package. It is a plain text file holding one IPv4 or IPv6
+    address per line. Blank lines are ignored, as is anything after a ``#``, so each entry can carry a note
+    on why it is excluded. Networks in CIDR notation are not accepted.
+
     Returns
     -------
     frozenset of str
-        The configured addresses in canonical text form.
-        An empty set when none are configured, in which case no requester is excluded by address.
-    """
-    config = get_config()
+        The listed addresses in canonical text form, which is the form the extraction cache records.
+        An empty set when the file does not exist or lists no address, in which case no requester is
+        excluded by address.
 
-    excluded_ips = frozenset(config.get("excluded_ips", []))
+    Raises
+    ------
+    ValueError
+        If any line holds something other than a single valid IP address.
+    """
+    if not EXCLUDED_IPS_FILE_PATH.exists():
+        return frozenset()
+
+    canonical_ips = set()
+    for line_number, line in enumerate(EXCLUDED_IPS_FILE_PATH.read_text().splitlines(), start=1):
+        entry = line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        try:
+            canonical_ips.add(str(ipaddress.ip_address(entry)))
+        except ValueError as exception:
+            message = (
+                f"\n\nLine {line_number} of '{EXCLUDED_IPS_FILE_PATH}' is not a single valid IP address.\n"
+                "Each line must hold one IPv4 or IPv6 address, optionally followed by a '#' comment. "
+                "Networks in CIDR notation are not accepted.\n\n"
+            )
+            raise ValueError(message) from exception
+
+    excluded_ips = frozenset(canonical_ips)
     return excluded_ips
 
 
