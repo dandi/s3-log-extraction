@@ -16,6 +16,7 @@ from ..ip_utils import (
     IpRegionResolver,
     RegionResolver,
     is_cloud_service_or_vpn_label,
+    is_github_actions_label,
 )
 from ..ip_utils._ip_utils import _read_ips_from_file
 
@@ -25,6 +26,7 @@ def _collect_asset_views(
     asset_directory: pathlib.Path,
     use_encryption: bool = True,
     session_timeout_in_seconds: int = SESSION_TIMEOUT_IN_SECONDS,
+    region_resolver: RegionResolver | None = None,
 ) -> list[tuple[str, str]]:
     """
     Collect the views of a single asset.
@@ -54,6 +56,12 @@ def _collect_asset_views(
     session_timeout_in_seconds : int
         Maximum gap between two consecutive streaming requests of the same session.
         Defaults to ``SESSION_TIMEOUT_IN_SECONDS`` (8 hours).
+    region_resolver : RegionResolver, optional
+        Resolves each IP address to its region/service label. When provided, sessions from IPs labeled as
+        GitHub Actions runners are excluded, since that traffic is automated CI rather than genuine
+        interest. Other GitHub-hosted ranges (Codespaces, the web/API) are NOT excluded, so a human
+        streaming a file from a notebook in a Codespace is still counted. When omitted, no exclusion is
+        applied and every IP is counted.
 
     Returns
     -------
@@ -112,6 +120,8 @@ def _collect_asset_views(
 
     views: list[tuple[str, str]] = []
     for ip, parsed_timestamps in parsed_timestamps_per_ip.items():
+        if region_resolver is not None and is_github_actions_label(region_resolver.resolve(ip)):
+            continue  # Automated CI traffic is not a view
         parsed_timestamps.sort()
         session_starts = [parsed_timestamps[0]] + [
             current
@@ -313,9 +323,12 @@ def _summarize_dataset(
     use_encryption: bool = True,
     region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
 ) -> None:
-    # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries
+    # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries.
+    # The region_resolver is passed so that GitHub Actions CI traffic is excluded from view counts.
     views_by_asset_directory = {
-        asset_directory: _collect_asset_views(asset_directory=asset_directory, use_encryption=use_encryption)
+        asset_directory: _collect_asset_views(
+            asset_directory=asset_directory, use_encryption=use_encryption, region_resolver=region_resolver
+        )
         for asset_directory in asset_directories
     }
 
