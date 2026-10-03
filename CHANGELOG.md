@@ -6,6 +6,8 @@
 
 - The base directory that extraction runs create their temporary directories inside is now configurable, with `s3logextraction config tmp set <directory>` or the `--tmp` option of `extract`. Runs otherwise use the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
+- Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts by listing their addresses, one per line, in `~/.s3-log-extraction/excluded_ips.txt`. The file is edited by hand and never written by the package. Bytes sent, requests, and downloads still include them, and an absent or empty file changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311))
+
 ### 🐛 Bug Fix
 
 - A remote extraction started without `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` and without an AWS credentials file now reports the missing variables, instead of failing on opening the absent file. ([#305](https://github.com/dandi/s3-log-extraction/pull/305))
