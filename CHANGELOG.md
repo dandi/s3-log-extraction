@@ -8,7 +8,11 @@
 
 - Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts by listing their addresses, one per line, in `~/.s3-log-extraction/excluded_ips.txt`. The file is edited by hand and never written by the package. Bytes sent, requests, and downloads still include them, and an absent or empty file changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311))
 
+- `number_of_views` now excludes GitHub Actions traffic, which is continuous integration rather than genuine interest. The published GitHub ranges are split into `GH-actions` (the `actions*` keys of `api.github.com/meta`) and `GitHub` for everything else, and only the former is dropped, so a human streaming from a Codespace is still counted. Unique-requester counts are unchanged. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
+
 ### 🐛 Bug Fix
+
+- A published service listing that parses to no IP ranges at all now warns, naming the service and the range counts of its neighbours. Such a listing does not fail; it simply matches no address, so every label and exclusion keyed to it goes quietly inert. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
 - A remote extraction started without `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` and without an AWS credentials file now reports the missing variables, instead of failing on opening the absent file. ([#305](https://github.com/dandi/s3-log-extraction/pull/305))
 
@@ -66,6 +70,7 @@
 - Sessionized each asset once per dataset summary and shared the result across the by-asset, by-day, and by-region tables, so `ips.txt` is decrypted no more often than before. ([#293](https://github.com/dandi/s3-log-extraction/pull/293))
 
 - Added a `Version Check` CI workflow that fails pull requests which modify `src/` or `pyproject.toml` without bumping the package version. ([#292](https://github.com/dandi/s3-log-extraction/pull/292))
+- Added exploratory analysis scripts under `analysis/` for assessing streaming "view session" separability and relating NWB structural metrics and asset size to web access counts. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
 ### 🐛 Bug Fix
 

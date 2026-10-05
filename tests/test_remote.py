@@ -145,8 +145,17 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geoli
         with s3_log_extraction.ip_utils.IpRegionResolver(cache_directory=tmp_path) as resolver:
             region = resolver.resolve(test_ip)
             # The live listings must have been fetched for every known service
-            assert set(resolver.service_networks.keys()) == {"GitHub", "AWS", "GCP", "VPN"}
-            assert all(len(networks) > 0 for networks in resolver.service_networks.values())
+            assert set(resolver.service_networks.keys()) == {"GH-actions", "GitHub", "AWS", "GCP", "VPN"}
+            # A service that parses to no ranges at all is not merely a test failure: it silently
+            # disables whatever that label is used for, so name the offender and the counts of its
+            # neighbours rather than asserting a bare `all(...)` that reports only `False`.
+            range_counts = {service: len(networks) for service, networks in resolver.service_networks.items()}
+            empty_services = sorted(service for service, count in range_counts.items() if count == 0)
+            assert not empty_services, (
+                f"These published listings parsed to zero ranges: {empty_services}. "
+                f"Counts for every service: {range_counts}. A published document whose shape changed is the "
+                f"usual cause; the label is inert until it is parsed again correctly."
+            )
     except Exception as exc:
         _skip_if_download_quota_is_spent(exc)
         _fail_if_maxmind_rejected(exc)
