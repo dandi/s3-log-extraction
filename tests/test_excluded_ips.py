@@ -1,4 +1,4 @@
-"""Tests for excluding individually reviewed requesters from the view and requester counts."""
+"""Tests for excluding individually reviewed requesters from every summary."""
 
 import pathlib
 
@@ -104,7 +104,7 @@ def test_is_excluded_ip(ip: str, excluded_ips: frozenset[str], expected: bool) -
         (None, [_ACTOR_IP], True),
     ],
 )
-def test_summaries_exclude_listed_requesters_from_views_and_requesters_only(
+def test_summaries_exclude_listed_requesters_from_every_summary(
     excluded_ips_file_path: pathlib.Path,
     tmp_path: pathlib.Path,
     file_content: str | None,
@@ -112,7 +112,7 @@ def test_summaries_exclude_listed_requesters_from_views_and_requesters_only(
     expected_is_actor_excluded: bool,
 ) -> None:
     """
-    An excluded address leaves the view and requester counts, but not bytes sent, requests, or downloads.
+    An excluded address leaves every summary: bytes sent, requests, downloads, views, and requester counts.
 
     The actor carries a plain geographic label, as the reviewed actor does, so no label-based exclusion
     already removes it.
@@ -151,12 +151,16 @@ def test_summaries_exclude_listed_requesters_from_views_and_requesters_only(
 
     summary_directory = tmp_path / "summaries"
     expected_number_of_views = 10 if expected_is_actor_excluded else 15
+    expected_number_of_requests = 10 if expected_is_actor_excluded else 16
+    expected_number_of_downloads = 0 if expected_is_actor_excluded else 1
     expected_number_of_requesters = "10" if expected_is_actor_excluded else "11"
     for summary_file_name in ("by_asset.tsv", "by_day.tsv", "by_region.tsv"):
         summary = pandas.read_table(filepath_or_buffer=summary_directory / "ds001" / summary_file_name)
         assert int(summary["number_of_views"].sum()) == expected_number_of_views, summary_file_name
-        assert int(summary["bytes_sent"].sum()) == 16, summary_file_name
-        assert int(summary["number_of_requests"].sum()) == 16, summary_file_name
-        assert int(summary["number_of_downloads"].sum()) == 1, summary_file_name
+        assert int(summary["bytes_sent"].sum()) == expected_number_of_requests, summary_file_name
+        assert int(summary["number_of_requests"].sum()) == expected_number_of_requests, summary_file_name
+        assert int(summary["number_of_downloads"].sum()) == expected_number_of_downloads, summary_file_name
+    by_region = pandas.read_table(filepath_or_buffer=summary_directory / "ds001" / "by_region.tsv")
+    assert ("USA/NH" in by_region["region"].tolist()) == (not expected_is_actor_excluded)
     assert (summary_directory / "ds001" / "requester_count.tsv").read_text() == expected_number_of_requesters
     assert (summary_directory / "archive" / "requester_count.tsv").read_text() == expected_number_of_requesters

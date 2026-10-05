@@ -118,7 +118,7 @@ def get_base_temporary_directory() -> pathlib.Path | None:
 
 def get_excluded_ips() -> frozenset[str]:
     """
-    Get the IP addresses whose activity is left out of the published view and requester counts.
+    Get the IP addresses whose activity is left out of every published summary.
 
     The addresses are read from ``EXCLUDED_IPS_FILE_PATH`` (``~/.s3-log-extraction/excluded_ips.txt``), which
     is edited by hand and never written by this package. It is a plain text file holding one IPv4 or IPv6

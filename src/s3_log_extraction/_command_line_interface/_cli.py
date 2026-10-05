@@ -436,7 +436,8 @@ def _update_summaries_cli(
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
 
-    Any addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are left out of the view and requester counts.
+    Any addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are left out of every summary. Requesters in the
+    published GitHub ranges are left out of the view and requester counts only.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
