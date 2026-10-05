@@ -435,6 +435,8 @@ def _update_summaries_cli(
     Requesters are geolocated while the summaries are generated, against the published IP ranges of known cloud
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
+
+    Any addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are left out of the view and requester counts.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:

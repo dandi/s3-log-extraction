@@ -6,6 +6,8 @@
 
 - The base directory that extraction runs create their temporary directories inside is now configurable, with `s3logextraction config tmp set <directory>` or the `--tmp` option of `extract`. Runs otherwise use the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
+- Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts by listing their addresses, one per line, in `~/.s3-log-extraction/excluded_ips.txt`. The file is edited by hand and never written by the package. Bytes sent, requests, and downloads still include them, and an absent or empty file changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311))
+
 - `number_of_views` now excludes GitHub Actions traffic, which is continuous integration rather than genuine interest. The published GitHub ranges are split into `GH-actions` (the `actions*` keys of `api.github.com/meta`) and `GitHub` for everything else, and only the former is dropped, so a human streaming from a Codespace is still counted. Unique-requester counts are unchanged. ([#284](https://github.com/dandi/s3-log-extraction/pull/284))
 
 ### 🐛 Bug Fix
@@ -22,6 +24,7 @@
 
 ### 🏠 Internal
 
+- Disabled Dependabot rebases, which force-push and so fail on protected branches. ([#312](https://github.com/dandi/s3-log-extraction/pull/312))
 - Code quality improvements throughout, from a functionality-preserving review of the whole package. Duplicated blocks in `summarize/`, `validate/`, `extractors/`, the CLI and the S3 inventory walk are single-sourced, dead code and unused manifest entries are removed, `ruff` now selects every rule set, and `mypy` is adopted. No observable behavior, public API or published output changes. ([#302](https://github.com/dandi/s3-log-extraction/pull/302))
 
 - The remote test workflow now actually reuses the GeoLite2 database between runs. Its cache step pointed at a directory the package never writes to, so every run downloaded afresh; it now caches `~/.cache/s3_log_extraction/geolite2` under a weekly key. The three remote tests share one database per session, and skip rather than fail when the allowance is spent. ([#303](https://github.com/dandi/s3-log-extraction/pull/303))

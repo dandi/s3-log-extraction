@@ -1,4 +1,5 @@
 import collections
+import collections.abc
 import datetime
 import pathlib
 
@@ -11,11 +12,12 @@ from .globals import (
     SESSION_TIMEOUT_IN_SECONDS,
     TIMESTAMP_FORMAT,
 )
-from ..config import get_cache_directory, get_cache_subdirectory
+from ..config import get_cache_directory, get_cache_subdirectory, get_excluded_ips
 from ..ip_utils import (
     IpRegionResolver,
     RegionResolver,
     is_cloud_service_or_vpn_label,
+    is_excluded_ip,
     is_github_actions_label,
 )
 from ..ip_utils._ip_utils import _read_ips_from_file
@@ -27,6 +29,7 @@ def _collect_asset_views(
     use_encryption: bool = True,
     session_timeout_in_seconds: int = SESSION_TIMEOUT_IN_SECONDS,
     region_resolver: RegionResolver | None = None,
+    excluded_ips: frozenset[str] = frozenset(),
 ) -> list[tuple[str, str]]:
     """
     Collect the views of a single asset.
@@ -62,6 +65,9 @@ def _collect_asset_views(
         interest. Other GitHub-hosted ranges (Codespaces, the web/API) are NOT excluded, so a human
         streaming a file from a notebook in a Codespace is still counted. When omitted, no exclusion is
         applied and every IP is counted.
+    excluded_ips : frozenset of str, optional
+        Individual addresses whose sessions are excluded, as listed in ``EXCLUDED_IPS_FILE_PATH``.
+        Defaults to an empty set, which excludes nothing and counts every IP.
 
     Returns
     -------
@@ -122,6 +128,8 @@ def _collect_asset_views(
     for ip, parsed_timestamps in parsed_timestamps_per_ip.items():
         if region_resolver is not None and is_github_actions_label(region_resolver.resolve(ip)):
             continue  # Automated CI traffic is not a view
+        if is_excluded_ip(ip=ip, excluded_ips=excluded_ips):
+            continue  # Individually reviewed and excluded requester
         parsed_timestamps.sort()
         session_starts = [parsed_timestamps[0]] + [
             current
@@ -137,6 +145,7 @@ def _collect_unique_ips(
     asset_directories: list[pathlib.Path],
     use_encryption: bool = True,
     region_resolver: RegionResolver | None = None,
+    excluded_ips: frozenset[str] = frozenset(),
 ) -> set[str]:
     """
     Collect all unique IP addresses across the given asset directories.
@@ -151,20 +160,27 @@ def _collect_unique_ips(
     region_resolver : RegionResolver, optional
         Resolves each IP address to its region/service label, used to exclude known cloud
         service IPs (e.g. GitHub, AWS, GCP, VPN) from the collected set. If not
-        provided, no exclusion is applied.
+        provided, no exclusion is applied by label.
+    excluded_ips : frozenset of str, optional
+        Individual addresses left out of the collected set regardless of their label, as configured with
+        ``set_excluded_ips``. Defaults to an empty set, which excludes nothing.
 
     Returns
     -------
     set of str
         The set of unique IP addresses found across all ``ips.txt`` files, excluding
-        any IPs classified as a known cloud service or VPN.
+        any IPs classified as a known cloud service or VPN and any of ``excluded_ips``.
     """
     unique_ips: set[str] = set()
     for asset_directory in asset_directories:
         full_ips_file_path = asset_directory / "ips.txt"
         if not full_ips_file_path.exists():
             continue
-        ips = _read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption)
+        ips = [
+            ip
+            for ip in _read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption)
+            if not is_excluded_ip(ip=ip, excluded_ips=excluded_ips)
+        ]
         if region_resolver is None:
             unique_ips.update(ips)
         else:
@@ -178,6 +194,7 @@ def _summarize_dataset_requester_count(
     summary_file_path: pathlib.Path,
     region_resolver: RegionResolver,
     use_encryption: bool = True,
+    excluded_ips: frozenset[str] = frozenset(),
 ) -> None:
     """
     Compute and save the unique requester count for a dataset.
@@ -201,9 +218,15 @@ def _summarize_dataset_requester_count(
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
+    excluded_ips : frozenset of str, optional
+        Individual addresses left out of the requester count, as listed in ``EXCLUDED_IPS_FILE_PATH``.
+        Defaults to an empty set, which excludes nothing.
     """
     unique_ips = _collect_unique_ips(
-        asset_directories=asset_directories, use_encryption=use_encryption, region_resolver=region_resolver
+        asset_directories=asset_directories,
+        use_encryption=use_encryption,
+        region_resolver=region_resolver,
+        excluded_ips=excluded_ips,
     )
 
     if not unique_ips:
@@ -219,6 +242,7 @@ def generate_summaries(
     use_encryption: bool = True,
     region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
     region_resolver: RegionResolver | None = None,
+    excluded_ips: collections.abc.Iterable[str] | None = None,
 ) -> None:
     """
     Generate summaries for each dataset in the extraction directory.
@@ -255,6 +279,11 @@ def generate_summaries(
     region_resolver : RegionResolver, optional
         Resolves each IP address to its region/service label. Defaults to an ``IpRegionResolver`` over the
         GeoLite2 database in the cache directory.
+    excluded_ips : iterable of str, optional
+        Individual addresses left out of ``number_of_views`` and the requester counts, though not out of
+        bytes sent, requests, or downloads. Defaults to the addresses listed in ``EXCLUDED_IPS_FILE_PATH``,
+        which is none when that file is absent. Pass an empty iterable to exclude no address regardless of
+        that file.
     """
     if level != 0:
         message = (
@@ -267,6 +296,8 @@ def generate_summaries(
     extraction_directory = cache_dir / "extraction"
     extraction_directory.mkdir(exist_ok=True)
     summary_directory = get_cache_subdirectory(cache_directory=cache_directory, name="summaries")
+
+    excluded_ip_set = frozenset(excluded_ips) if excluded_ips is not None else get_excluded_ips()
 
     owns_resolver = region_resolver is None
     if owns_resolver:
@@ -296,11 +327,15 @@ def generate_summaries(
                 region_resolver=region_resolver,
                 use_encryption=use_encryption,
                 region_disclosure_threshold=region_disclosure_threshold,
+                excluded_ips=excluded_ip_set,
             )
 
             all_archive_unique_ips.update(
                 _collect_unique_ips(
-                    asset_directories=asset_directories, use_encryption=use_encryption, region_resolver=region_resolver
+                    asset_directories=asset_directories,
+                    use_encryption=use_encryption,
+                    region_resolver=region_resolver,
+                    excluded_ips=excluded_ip_set,
                 )
             )
     finally:
@@ -322,12 +357,17 @@ def _summarize_dataset(
     region_resolver: RegionResolver,
     use_encryption: bool = True,
     region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
+    excluded_ips: frozenset[str] = frozenset(),
 ) -> None:
     # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries.
-    # The region_resolver is passed so that GitHub Actions CI traffic is excluded from view counts.
+    # The region_resolver is passed so that GitHub Actions CI traffic is excluded from view counts, and
+    # excluded_ips so that individually reviewed requesters are too.
     views_by_asset_directory = {
         asset_directory: _collect_asset_views(
-            asset_directory=asset_directory, use_encryption=use_encryption, region_resolver=region_resolver
+            asset_directory=asset_directory,
+            use_encryption=use_encryption,
+            region_resolver=region_resolver,
+            excluded_ips=excluded_ips,
         )
         for asset_directory in asset_directories
     }
@@ -357,6 +397,7 @@ def _summarize_dataset(
         summary_file_path=summary_directory / dataset_id / "requester_count.tsv",
         region_resolver=region_resolver,
         use_encryption=use_encryption,
+        excluded_ips=excluded_ips,
     )
 
 

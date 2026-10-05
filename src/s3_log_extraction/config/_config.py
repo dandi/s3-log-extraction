@@ -1,8 +1,9 @@
+import ipaddress
 import json
 import pathlib
 import typing
 
-from ._globals import DEFAULT_CACHE_DIRECTORY, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
+from ._globals import DEFAULT_CACHE_DIRECTORY, EXCLUDED_IPS_FILE_PATH, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
 
 
 def save_config(config: dict[str, typing.Any]) -> None:
@@ -113,6 +114,49 @@ def get_base_temporary_directory() -> pathlib.Path | None:
     base_temporary_directory.mkdir(parents=True, exist_ok=True)
 
     return base_temporary_directory
+
+
+def get_excluded_ips() -> frozenset[str]:
+    """
+    Get the IP addresses whose activity is left out of the published view and requester counts.
+
+    The addresses are read from ``EXCLUDED_IPS_FILE_PATH`` (``~/.s3-log-extraction/excluded_ips.txt``), which
+    is edited by hand and never written by this package. It is a plain text file holding one IPv4 or IPv6
+    address per line. Blank lines are ignored, as is anything after a ``#``, so each entry can carry a note
+    on why it is excluded. Networks in CIDR notation are not accepted.
+
+    Returns
+    -------
+    frozenset of str
+        The listed addresses in canonical text form, which is the form the extraction cache records.
+        An empty set when the file does not exist or lists no address, in which case no requester is
+        excluded by address.
+
+    Raises
+    ------
+    ValueError
+        If any line holds something other than a single valid IP address.
+    """
+    if not EXCLUDED_IPS_FILE_PATH.exists():
+        return frozenset()
+
+    canonical_ips = set()
+    for line_number, line in enumerate(EXCLUDED_IPS_FILE_PATH.read_text().splitlines(), start=1):
+        entry = line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        try:
+            canonical_ips.add(str(ipaddress.ip_address(entry)))
+        except ValueError as exception:
+            message = (
+                f"\n\nLine {line_number} of '{EXCLUDED_IPS_FILE_PATH}' is not a single valid IP address.\n"
+                "Each line must hold one IPv4 or IPv6 address, optionally followed by a '#' comment. "
+                "Networks in CIDR notation are not accepted.\n\n"
+            )
+            raise ValueError(message) from exception
+
+    excluded_ips = frozenset(canonical_ips)
+    return excluded_ips
 
 
 def get_cache_subdirectory(

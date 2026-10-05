@@ -936,6 +936,44 @@ def test_collect_asset_views_excludes_github_actions(tmpdir: py.path.local) -> N
 
 
 @pytest.mark.ai_generated
+def test_collect_asset_views_applies_label_and_named_exclusions_together(tmpdir: py.path.local) -> None:
+    """
+    The GitHub Actions label and the named-address list each drop their own requester in the same call.
+
+    The two exclusions arrived separately and meet in one loop, so this guards against one of them
+    shadowing the other: a named requester carrying a plain geographic label must still be dropped
+    when a resolver is also given, and the label check must still apply when the list is non-empty.
+    """
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
+
+    asset_directory = pathlib.Path(tmpdir) / "asset"
+    _write_asset(
+        asset_directory=asset_directory,
+        requests=[
+            ("250101000000", _STREAMING, "192.0.2.0"),  # genuine geographic requester (kept)
+            ("250101000000", _STREAMING, "198.51.100.0"),  # GitHub Actions runner (excluded by label)
+            ("250101000000", _STREAMING, "203.0.113.0"),  # reviewed requester, geographic label (excluded by name)
+        ],
+    )
+    region_resolver = MappingRegionResolver(
+        {
+            "192.0.2.0": "USA/CA",
+            "198.51.100.0": "GH-actions",
+            "203.0.113.0": "USA/NH",
+        }
+    )
+
+    views = _collect_asset_views(
+        asset_directory=asset_directory,
+        use_encryption=False,
+        region_resolver=region_resolver,
+        excluded_ips=frozenset(["203.0.113.0"]),
+    )
+
+    assert sorted(ip for _, ip in views) == ["192.0.2.0"]
+
+
+@pytest.mark.ai_generated
 def test_summaries_report_true_number_of_views(tmpdir: py.path.local) -> None:
     """Per-asset view counts are reported as they are, since an asset path names no requester."""
     test_dir = pathlib.Path(tmpdir)
