@@ -68,6 +68,10 @@ import numpy as np
 import pandas as pd
 import tqdm
 
+# The checkout's own package, so the exclusion list is read with exactly the rules the shipped summaries use
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
+import s3_log_extraction  # noqa: E402
+
 _SERVICES = ("GH-actions", "GitHub", "AWS", "GCP", "VPN")
 
 
@@ -1470,7 +1474,16 @@ def main() -> None:
         "script, so a run lands somewhere the plots can be committed and reused rather than in whatever "
         "directory it happened to start in.",
     )
+    parser.add_argument(
+        "--unfiltered",
+        action="store_true",
+        help="Keep the requesters listed in ~/.s3-log-extraction/excluded_ips.txt, which are otherwise dropped "
+        "exactly as the shipped summaries drop them. With the default --out, the outputs gain an '_unfiltered' "
+        "suffix so a filtered and an unfiltered run sit side by side instead of overwriting each other.",
+    )
     args = parser.parse_args()
+    if args.unfiltered and args.out == _DEFAULT_OUT_PATH:
+        args.out = args.out.with_name(f"{args.out.stem}_unfiltered{args.out.suffix}")
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
     resolver_cls, read_ips, session_timeout, timestamp_format = _load_library()
@@ -1513,6 +1526,26 @@ def main() -> None:
                 profiles.to_csv(csv_path, index=False, compression="gzip")
                 written = csv_path
             print(f"Cached {len(profiles):,} per-IP profiles to {written} (IPs stored as a salted hash)")
+
+    # Applied after caching, so the cache stays complete and one cached walk serves both a filtered and an
+    # unfiltered run. The rows carry only the salted hash, so the listed addresses are hashed to match.
+    if args.unfiltered:
+        print("Unfiltered: requesters on the exclusion list are kept")
+    else:
+        excluded_ips = s3_log_extraction.config.get_excluded_ips()
+        key = _ip_hash_key()
+        excluded_hashes = {
+            hashlib.blake2b(ip.encode("utf-8"), key=key, digest_size=16).hexdigest() for ip in excluded_ips
+        }
+        is_excluded = profiles["ip_hash"].isin(excluded_hashes)
+        total_view_sessions = profiles["n_sessions"].sum()
+        excluded_view_sessions = profiles.loc[is_excluded, "n_sessions"].sum()
+        print(
+            f"Excluding {int(is_excluded.sum())} of the {len(excluded_ips)} listed address(es) found among the "
+            f"profiles, carrying {excluded_view_sessions:,} of {total_view_sessions:,} view sessions "
+            f"({100 * excluded_view_sessions / max(total_view_sessions, 1):.1f}%)"
+        )
+        profiles = profiles.loc[~is_excluded].reset_index(drop=True)
 
     if profiles.empty:
         print("No IPs found.")

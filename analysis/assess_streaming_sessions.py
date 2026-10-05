@@ -32,6 +32,10 @@ import numpy as np
 import pandas as pd
 import tqdm
 
+# The checkout's own package, so the exclusion list is read with exactly the rules the shipped summaries use
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
+import s3_log_extraction  # noqa: E402
+
 TIMESTAMP_FORMAT = "%y%m%d%H%M%S"  # YYMMDDHHmmss
 
 
@@ -59,8 +63,14 @@ def load_streaming_requests(
     dataset_filter: str | None,
     use_encryption: bool,
     exclude_patterns: list[str] | None = None,
+    excluded_ips: frozenset[str] = frozenset(),
 ) -> pd.DataFrame:
-    """Walk the extraction cache and collect all streaming (download=0) requests."""
+    """
+    Walk the extraction cache and collect all streaming (download=0) requests.
+
+    Requests from ``excluded_ips`` are dropped as they are read, the same requesters the shipped summaries
+    leave out of ``number_of_views``, so the interval distribution describes the population being counted.
+    """
     extraction_root = cache_dir / "extraction"
     if not extraction_root.exists():
         raise FileNotFoundError(f"No 'extraction' subdirectory found under {cache_dir}")
@@ -84,6 +94,7 @@ def load_streaming_requests(
     print(f"Found {len(asset_dirs)} asset directories")
 
     n_excluded_assets = 0
+    n_excluded_requests = 0
     records = []
     for asset_dir in tqdm.tqdm(asset_dirs, desc="Loading assets"):
         # Asset path relative to the extraction root, e.g. "ds000123/sub-01/.../file.nwb"
@@ -110,6 +121,9 @@ def load_streaming_requests(
 
         for ts_str, dl_str, ip in zip(timestamps_raw, downloads_raw, ips_raw):
             if dl_str == "0":  # streaming only
+                if s3_log_extraction.ip_utils.is_excluded_ip(ip=ip, excluded_ips=excluded_ips):
+                    n_excluded_requests += 1
+                    continue
                 try:
                     ts = _parse_timestamp(ts_str)
                     records.append({"timestamp": ts, "ip": ip, "asset_path": asset_path})
@@ -118,6 +132,8 @@ def load_streaming_requests(
 
     if n_excluded_assets:
         print(f"Excluded {n_excluded_assets} asset(s) matching {exclude_patterns}")
+    if excluded_ips:
+        print(f"Dropped {n_excluded_requests:,} streaming requests from the {len(excluded_ips)} excluded address(es)")
 
     if not records:
         raise ValueError("No streaming requests found — check cache path and filters")
@@ -419,14 +435,31 @@ def main() -> None:
         "the shipped per-asset number_of_views metric; compare its valley against the default cross-asset one.",
     )
     parser.add_argument(
+        "--unfiltered",
+        action="store_true",
+        help="Keep the requesters listed in ~/.s3-log-extraction/excluded_ips.txt, which are otherwise dropped "
+        "exactly as the shipped summaries drop them. Use it to reproduce a run from before the list existed.",
+    )
+    parser.add_argument(
         "--out",
-        default="session_assessment.png",
+        default=None,
         type=pathlib.Path,
-        help="Output PNG path (default: session_assessment.png)",
+        help="Output PNG path (default: session_assessment.png, or session_assessment_unfiltered.png with "
+        "--unfiltered, so the two runs never overwrite each other)",
     )
     args = parser.parse_args()
+    if args.out is None:
+        args.out = pathlib.Path("session_assessment_unfiltered.png" if args.unfiltered else "session_assessment.png")
 
     use_encryption = not args.no_encryption
+
+    excluded_ips = frozenset() if args.unfiltered else s3_log_extraction.config.get_excluded_ips()
+    if args.unfiltered:
+        print("Unfiltered: requesters on the exclusion list are kept")
+    elif excluded_ips:
+        print(f"Excluding the {len(excluded_ips)} address(es) listed in the exclusion file, as the summaries do")
+    else:
+        print("No exclusion list configured; every requester is kept")
 
     exclude_patterns = list(args.exclude_asset)
     if args.exclude_asset_file:
@@ -441,6 +474,7 @@ def main() -> None:
         dataset_filter=args.dataset,
         use_encryption=use_encryption,
         exclude_patterns=exclude_patterns,
+        excluded_ips=excluded_ips,
     )
 
     scope = "same-asset (per IP, asset)" if args.per_asset else "cross-asset (per IP)"
@@ -511,6 +545,7 @@ def main() -> None:
         ("30 min", 1800.0),
         ("1 hour", 3600.0),
         ("2 hours", 7200.0),
+        ("8 hours (shipped)", float(s3_log_extraction.summarize.globals.SESSION_TIMEOUT_IN_SECONDS)),
         ("1 day", 86400.0),
     ]
     if valley is not None:
