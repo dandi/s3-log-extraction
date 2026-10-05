@@ -28,6 +28,7 @@ def _collect_asset_views(
     use_encryption: bool = True,
     session_timeout_in_seconds: int = SESSION_TIMEOUT_IN_SECONDS,
     excluded_ips: frozenset[str] = frozenset(),
+    region_resolver: RegionResolver | None = None,
 ) -> list[tuple[str, str]]:
     """
     Collect the views of a single asset.
@@ -41,6 +42,10 @@ def _collect_asset_views(
     consecutive requests are more than ``session_timeout_in_seconds`` apart. Only streaming requests count,
     which the extraction cache marks with a ``0`` in ``download.txt``. Full downloads are reported
     separately by ``number_of_downloads``.
+
+    Requesters in the published ranges of GitHub make no views. Their streaming is overwhelmingly automated, by CI
+    runners and similar services, so it is left out of the measure of interest. Their requests still count toward
+    bytes sent, requests, and downloads.
 
     Each view is returned with the date it began and the IP that made it, so that a view can be attributed
     to a single day and a single region. A session spans requests and can straddle midnight, so it is
@@ -60,6 +65,9 @@ def _collect_asset_views(
     excluded_ips : frozenset of str, optional
         Individual addresses whose sessions are excluded, as listed in ``EXCLUDED_IPS_FILE_PATH``.
         Defaults to an empty set, which excludes nothing and counts every IP.
+    region_resolver : RegionResolver, optional
+        Resolves each IP address to its region/service label, used to leave out the sessions of requesters
+        labeled ``"GitHub"``. If not provided, no requester is left out by label.
 
     Returns
     -------
@@ -120,6 +128,8 @@ def _collect_asset_views(
     for ip, parsed_timestamps in parsed_timestamps_per_ip.items():
         if is_excluded_ip(ip=ip, excluded_ips=excluded_ips):
             continue  # Individually reviewed and excluded requester
+        if region_resolver is not None and region_resolver.resolve(ip) == "GitHub":
+            continue  # Automated streaming, such as CI runners
         parsed_timestamps.sort()
         session_starts = [parsed_timestamps[0]] + [
             current
@@ -128,6 +138,30 @@ def _collect_asset_views(
         ]
         views.extend((session_start.strftime(format="%Y-%m-%d"), ip) for session_start in session_starts)
     return views
+
+
+def _select_included(*, values: list, included: list[bool] | None) -> list:
+    """
+    Keep the entries of a per-request list whose request was made by an address that is not excluded.
+
+    Parameters
+    ----------
+    values : list
+        One entry per request of an asset, such as its dates, bytes sent, or download flags.
+    included : list of bool or None
+        Whether each request of the asset is kept, positionally aligned with ``values``.
+        ``None`` keeps every request, which is the case whenever no address is excluded.
+
+    Returns
+    -------
+    list
+        The entries of ``values`` whose request is kept.
+    """
+    if included is None:
+        return values
+
+    selected_values = [value for value, is_included in zip(values, included) if is_included]
+    return selected_values
 
 
 def _collect_unique_ips(
@@ -247,6 +281,9 @@ def generate_summaries(
     database, which is downloaded on first use (see ``update_geolite2_database``). No location of any
     requester is written to disk; only the aggregated by-region summaries are.
 
+    Requesters in the published GitHub ranges make no views, since their streaming is automated, but their requests
+    still count toward bytes sent, requests, and downloads. Addresses in ``excluded_ips`` leave every summary.
+
     Every summary is written with its true values, except for `by_region.tsv`. That one pairs activity with
     requester location, so it is written only when the update it carries moves more than
     ``region_disclosure_threshold`` resolved regions at once. Its totals therefore drift out of step with
@@ -270,8 +307,8 @@ def generate_summaries(
         Resolves each IP address to its region/service label. Defaults to an ``IpRegionResolver`` over the
         GeoLite2 database in the cache directory.
     excluded_ips : iterable of str, optional
-        Individual addresses left out of ``number_of_views`` and the requester counts, though not out of
-        bytes sent, requests, or downloads. Defaults to the addresses listed in ``EXCLUDED_IPS_FILE_PATH``,
+        Individual addresses left out of every summary, including bytes sent, requests, downloads, views, and
+        the requester counts. Defaults to the addresses listed in ``EXCLUDED_IPS_FILE_PATH``,
         which is none when that file is absent. Pass an empty iterable to exclude no address regardless of
         that file.
     """
@@ -352,20 +389,36 @@ def _summarize_dataset(
     # Sessionizing decrypts ips.txt, so it is done once here and shared by all three summaries
     views_by_asset_directory = {
         asset_directory: _collect_asset_views(
-            asset_directory=asset_directory, use_encryption=use_encryption, excluded_ips=excluded_ips
+            asset_directory=asset_directory,
+            use_encryption=use_encryption,
+            excluded_ips=excluded_ips,
+            region_resolver=region_resolver,
         )
         for asset_directory in asset_directories
+    }
+
+    # Excluded addresses leave every summary, so the requests they made are masked out of each one. Without any
+    # excluded address the mask is skipped entirely, which spares decrypting ips.txt once more.
+    included_by_asset_directory = {
+        asset_directory: [
+            not is_excluded_ip(ip=ip, excluded_ips=excluded_ips)
+            for ip in _read_ips_from_file(file_path=asset_directory / "ips.txt", use_encryption=use_encryption)
+        ]
+        for asset_directory in asset_directories
+        if excluded_ips
     }
 
     _summarize_dataset_by_day(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_day.tsv",
         views_by_asset_directory=views_by_asset_directory,
+        included_by_asset_directory=included_by_asset_directory,
     )
     _summarize_dataset_by_asset(
         asset_directories=asset_directories,
         summary_file_path=summary_directory / dataset_id / "by_asset.tsv",
         views_by_asset_directory=views_by_asset_directory,
+        included_by_asset_directory=included_by_asset_directory,
         dataset_id=dataset_id,
         extraction_directory=extraction_directory,
     )
@@ -374,6 +427,7 @@ def _summarize_dataset(
         summary_file_path=summary_directory / dataset_id / "by_region.tsv",
         region_resolver=region_resolver,
         views_by_asset_directory=views_by_asset_directory,
+        included_by_asset_directory=included_by_asset_directory,
         use_encryption=use_encryption,
         region_disclosure_threshold=region_disclosure_threshold,
     )
@@ -450,6 +504,7 @@ def _summarize_dataset_by_day(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    included_by_asset_directory: dict[pathlib.Path, list[bool]],
 ) -> None:
     all_dates = []
     all_bytes_sent = []
@@ -467,19 +522,21 @@ def _summarize_dataset_by_day(
         if not timestamps_file_path.exists():
             continue
 
+        included = included_by_asset_directory.get(asset_directory)
+
         dates = [
             datetime.datetime.strptime(timestamp.strip(), TIMESTAMP_FORMAT).strftime(format="%Y-%m-%d")
             for timestamp in timestamps_file_path.read_text().splitlines()
         ]
-        all_dates.extend(dates)
+        all_dates.extend(_select_included(values=dates, included=included))
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
         bytes_sent = _read_integers_from_file(bytes_sent_file_path)
-        all_bytes_sent.extend(bytes_sent)
+        all_bytes_sent.extend(_select_included(values=bytes_sent, included=included))
 
         download_file_path = asset_directory / "download.txt"
         downloads = _read_integers_from_file(download_file_path)
-        all_downloads.extend(downloads)
+        all_downloads.extend(_select_included(values=downloads, included=included))
 
     summary_table = _assemble_activity_summary(
         keys=all_dates,
@@ -501,6 +558,7 @@ def _summarize_dataset_by_asset(
     asset_directories: list[pathlib.Path],
     summary_file_path: pathlib.Path,
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    included_by_asset_directory: dict[pathlib.Path, list[bool]],
     dataset_id: str,
     extraction_directory: pathlib.Path,
 ) -> None:
@@ -520,14 +578,15 @@ def _summarize_dataset_by_asset(
         if not bytes_sent_file_path.exists():
             continue
 
-        bytes_sent = _read_integers_from_file(bytes_sent_file_path)
+        included = included_by_asset_directory.get(asset_directory)
+        bytes_sent = _select_included(values=_read_integers_from_file(bytes_sent_file_path), included=included)
 
         asset_path = str(asset_directory.relative_to(extraction_base_path))
         summarized_activity_by_asset[asset_path] += sum(bytes_sent)
         number_of_requests_by_asset[asset_path] += len(bytes_sent)
 
         download_file_path = asset_directory / "download.txt"
-        downloads = _read_integers_from_file(download_file_path)
+        downloads = _select_included(values=_read_integers_from_file(download_file_path), included=included)
         number_of_downloads_by_asset[asset_path] += sum(downloads)
 
         number_of_views_by_asset[asset_path] += len(views_by_asset_directory.get(asset_directory, []))
@@ -555,6 +614,7 @@ def _summarize_dataset_by_region(
     summary_file_path: pathlib.Path,
     region_resolver: RegionResolver,
     views_by_asset_directory: dict[pathlib.Path, list[tuple[str, str]]],
+    included_by_asset_directory: dict[pathlib.Path, list[bool]],
     use_encryption: bool = True,
     region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
 ) -> None:
@@ -574,17 +634,19 @@ def _summarize_dataset_by_region(
         if not full_ips_file_path.exists():
             continue
 
+        included = included_by_asset_directory.get(asset_directory)
+
         full_ips = _read_ips_from_file(file_path=full_ips_file_path, use_encryption=use_encryption)
-        regions = [region_resolver.resolve(ip) for ip in full_ips]
+        regions = [region_resolver.resolve(ip) for ip in _select_included(values=full_ips, included=included)]
         all_regions.extend(regions)
 
         bytes_sent_file_path = asset_directory / "bytes_sent.txt"
         bytes_sent = _read_integers_from_file(bytes_sent_file_path)
-        all_bytes_sent.extend(bytes_sent)
+        all_bytes_sent.extend(_select_included(values=bytes_sent, included=included))
 
         download_file_path = asset_directory / "download.txt"
         downloads = _read_integers_from_file(download_file_path)
-        all_downloads.extend(downloads)
+        all_downloads.extend(_select_included(values=downloads, included=included))
 
     summary_table = _assemble_activity_summary(
         keys=all_regions,

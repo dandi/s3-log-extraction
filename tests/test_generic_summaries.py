@@ -202,13 +202,17 @@ def test_summaries_skip_an_asset_missing_the_file_they_read(tmpdir: py.path.loca
     match missing_file_name:
         case "timestamps.txt":
             _summarize_dataset_by_day(
-                asset_directories=[asset_directory], summary_file_path=summary_file_path, views_by_asset_directory={}
+                asset_directories=[asset_directory],
+                summary_file_path=summary_file_path,
+                views_by_asset_directory={},
+                included_by_asset_directory={},
             )
         case "bytes_sent.txt":
             _summarize_dataset_by_asset(
                 asset_directories=[asset_directory],
                 summary_file_path=summary_file_path,
                 views_by_asset_directory={},
+                included_by_asset_directory={},
                 dataset_id="ds001",
                 extraction_directory=test_dir / "extraction",
             )
@@ -218,6 +222,7 @@ def test_summaries_skip_an_asset_missing_the_file_they_read(tmpdir: py.path.loca
                 summary_file_path=summary_file_path,
                 region_resolver=MappingRegionResolver({}),
                 views_by_asset_directory={},
+                included_by_asset_directory={},
                 use_encryption=False,
             )
 
@@ -1047,6 +1052,60 @@ def test_views_are_attributed_to_the_region_of_their_requester(tmpdir: py.path.l
     by_region = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / "by_region.tsv", index_col=0)
     assert by_region.loc["US/California", "number_of_views"] == 60
     assert by_region.loc["DE/Berlin", "number_of_views"] == 80
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("summary_file_name", "github_key"),
+    [("by_asset.tsv", "ci.nwb"), ("by_day.tsv", "2025-01-01"), ("by_region.tsv", "GitHub")],
+)
+def test_github_requesters_make_no_views_but_count_toward_activity(
+    tmpdir: py.path.local, summary_file_name: str, github_key: str
+) -> None:
+    """Streaming from the published GitHub ranges is left out of the views, yet still counts as bytes and requests."""
+    test_dir = pathlib.Path(tmpdir)
+
+    github_ips = [f"192.0.2.{index}" for index in range(5)]
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "ci.nwb",
+        requests=[(f"2501010000{index:02d}", _STREAMING, ip) for index, ip in enumerate(github_ips)],
+    )
+    # A requester in a resolved region, on another asset and day, so that the by-region summary is published
+    _write_asset(
+        asset_directory=test_dir / "extraction" / "ds001" / "other.nwb",
+        requests=[("250102000000", _STREAMING, "198.51.100.0")],
+    )
+    region_resolver = MappingRegionResolver(dict.fromkeys(github_ips, "GitHub") | {"198.51.100.0": "USA/CA"})
+
+    s3_log_extraction.summarize.generate_summaries(
+        cache_directory=test_dir, use_encryption=False, region_disclosure_threshold=0, region_resolver=region_resolver
+    )
+
+    summary = pandas.read_table(filepath_or_buffer=test_dir / "summaries" / "ds001" / summary_file_name, index_col=0)
+    assert summary.loc[github_key, "number_of_views"] == 0
+    assert summary.loc[github_key, "bytes_sent"] == 5
+    assert summary.loc[github_key, "number_of_requests"] == 5
+
+
+@pytest.mark.ai_generated
+def test_github_views_are_left_out_while_other_views_remain(tmpdir: py.path.local) -> None:
+    """Only the GitHub requesters lose their views; requesters elsewhere, other clouds included, keep theirs."""
+    from s3_log_extraction.summarize._generate_summaries import _collect_asset_views
+
+    asset_directory = pathlib.Path(tmpdir) / "asset"
+    _write_asset(
+        asset_directory=asset_directory,
+        requests=[
+            ("250101000000", _STREAMING, "192.0.2.0"),
+            ("250101000000", _STREAMING, "192.0.2.1"),
+            ("250101000000", _STREAMING, "192.0.2.2"),
+        ],
+    )
+    region_resolver = MappingRegionResolver({"192.0.2.0": "GitHub", "192.0.2.1": "Azure/eastus", "192.0.2.2": "USA/CA"})
+
+    views = _collect_asset_views(asset_directory=asset_directory, use_encryption=False, region_resolver=region_resolver)
+
+    assert sorted(ip for _, ip in views) == ["192.0.2.1", "192.0.2.2"]
 
 
 @pytest.mark.ai_generated
