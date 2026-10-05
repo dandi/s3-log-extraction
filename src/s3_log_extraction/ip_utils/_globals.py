@@ -1,4 +1,6 @@
-_KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "VPN")  # Azure has problems; see _ip_utils.py for more info
+# The order is the precedence of the services when their ranges overlap. GitHub comes before Azure because nearly all of
+# the published ranges of GitHub Actions lie inside the published ranges of Azure, where the hosted runners live.
+_KNOWN_SERVICES = ("GitHub", "AWS", "GCP", "Azure", "VPN")
 
 EXCLUDED_REGION_LABELS = frozenset(["VPN", "GitHub", "unknown", "undetermined", "missing", "bogon"])
 
@@ -7,7 +9,7 @@ def is_cloud_service_or_vpn_label(region_label: str | None, /) -> bool:
     """
     Determine whether a region/service label (as produced by a region resolver) refers to a
     known cloud service or VPN provider (e.g. ``"GitHub"``, ``"AWS/us-east-1"``, ``"GCP/us-central1"``,
-    ``"VPN"``) rather than a genuine geographic requester location.
+    ``"Azure/eastus"``, ``"VPN"``) rather than a genuine geographic requester location.
 
     Note that unresolved labels such as ``"unknown"``, ``"undetermined"``, ``"missing"``, or ``"bogon"``
     are NOT considered cloud service or VPN labels here; they simply mean the requester's location could

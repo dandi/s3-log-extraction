@@ -81,7 +81,7 @@ class IpStats(typing.TypedDict):
     vpn : IpCategoryCount
         IPs classified as VPN or datacenter addresses.
     cloud_service : IpCategoryCount
-        IPs belonging to a known cloud provider CIDR (AWS or GCP).
+        IPs belonging to a known cloud provider CIDR (AWS, GCP, or Azure).
     github : IpCategoryCount
         IPs belonging to GitHub CIDR ranges.
     """
@@ -104,7 +104,7 @@ def _categorize_region(region: str, /) -> str:
             return "bogon"
         case _ if region.startswith("VPN"):
             return "vpn"
-        case _ if region.startswith(("AWS", "GCP")):
+        case _ if region.startswith(("AWS", "GCP", "Azure")):
             return "cloud_service"
         case _ if region.startswith("GitHub"):
             return "github"
@@ -127,8 +127,8 @@ def get_ip_stats(
     * **unknown** – the IP is malformed, absent from the GeoLite2 database, or has no country there.
     * **bogon** – the IP is in private / reserved address space (``"bogon"``).
     * **vpn** – the IP matches a known VPN / datacenter CIDR (starts with ``"VPN"``).
-    * **cloud_service** – the IP belongs to an AWS or GCP CIDR range.
-    * **github** – the IP belongs to a GitHub CIDR range.
+    * **cloud_service** – the IP belongs to an AWS, GCP, or Azure CIDR range.
+    * **github** – the IP belongs to a GitHub CIDR range, which takes precedence over Azure.
 
     Parameters
     ----------

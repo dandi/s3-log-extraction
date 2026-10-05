@@ -8,6 +8,8 @@
 
 - Individually reviewed requesters can now be left out of `number_of_views` and the unique-requester counts by listing their addresses, one per line, in `~/.s3-log-extraction/excluded_ips.txt`. The file is edited by hand and never written by the package. Bytes sent, requests, and downloads still include them, and an absent or empty file changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311))
 
+- Requesters in the published IP ranges of Azure are now labeled by Azure region, such as `Azure/eastus`, and counted as a cloud service rather than geolocated. GitHub keeps precedence, so GitHub-hosted Actions runners, which sit inside the Azure ranges, are still labeled `GitHub`. ([#PR_NUMBER](https://github.com/dandi/s3-log-extraction/pull/PR_NUMBER))
+
 ### 🐛 Bug Fix
 
 - A remote extraction started without `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` and without an AWS credentials file now reports the missing variables, instead of failing on opening the absent file. ([#305](https://github.com/dandi/s3-log-extraction/pull/305))

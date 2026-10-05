@@ -573,6 +573,7 @@ def test_generate_archive_summaries_accepts_custom_asset_type_order(tmpdir: py.p
         ("DE/Berlin", True),
         ("AWS/us-east-1", True),
         ("GCP/us-central1", True),
+        ("Azure/eastus", True),
         # Unresolved outcomes of geolocation name no place
         ("unknown", False),
         ("undetermined", False),
@@ -581,6 +582,7 @@ def test_generate_archive_summaries_accepts_custom_asset_type_order(tmpdir: py.p
         # Neither do services whose region was never reported
         ("GitHub", False),
         ("VPN", False),
+        ("Azure", False),
         # Nor a ``None`` entry left in the cache by earlier versions
         (None, False),
     ],
@@ -601,6 +603,8 @@ def test_is_resolved_region(region_label: str | None, expected: bool) -> None:
         ("VPN", True),
         ("AWS/us-east-1", True),
         ("GCP/us-central1", True),
+        ("Azure/eastus", True),
+        ("Azure", True),
         # Unresolved-location labels are NOT cloud/VPN labels; a real requester's IP
         # simply failed to geolocate (rate limit, quota exceeded, obscure IP, etc.)
         ("unknown", False),

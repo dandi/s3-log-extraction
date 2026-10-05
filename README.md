@@ -119,7 +119,7 @@ s3logextraction update summaries
 s3logextraction update totals
 ```
 
-Requesters are geolocated while the summaries are generated. Each IP address is checked against the published ranges of GitHub, AWS, GCP, and known VPN or datacenter providers, and labeled by that service if it falls in one; otherwise it is looked up in the local GeoLite2 database and labeled with its ISO 3166-1 alpha-3 country code and ISO 3166-2 subdivision code (e.g. "USA/CA" for California). Fetching the published ranges needs network access. No requester's location is written to disk; only the aggregated `by_region.tsv` summaries are.
+Requesters are geolocated while the summaries are generated. Each IP address is checked against the published ranges of GitHub, AWS, GCP, Azure, and known VPN or datacenter providers, and labeled by that service if it falls in one. GitHub is checked before Azure, since the ranges of its hosted Actions runners lie inside those of Azure. An address outside every service is looked up in the local GeoLite2 database and labeled with its ISO 3166-1 alpha-3 country code and ISO 3166-2 subdivision code (e.g. "USA/CA" for California). Fetching the published ranges needs network access. No requester's location is written to disk; only the aggregated `by_region.tsv` summaries are.
 
 To give every region of the published summaries a coordinate, for maps:
 
