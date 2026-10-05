@@ -6,11 +6,11 @@
 
 - The base directory that extraction runs create their temporary directories inside is now configurable, with `s3logextraction config tmp set <directory>` or the `--tmp` option of `extract`. Runs otherwise use the system temporary directory, which on many systems is a small RAM-backed `/tmp` that a large extraction can exhaust. ([#304](https://github.com/dandi/s3-log-extraction/pull/304))
 
-- Individually reviewed requesters can now be left out of every summary by listing their addresses, one per line, in `~/.s3-log-extraction/excluded_ips.txt`. Their requests leave bytes sent, requests, downloads, views, and the unique-requester counts alike. The file is edited by hand and never written by the package, and an absent or empty file changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311), [#PR_NUMBER](https://github.com/dandi/s3-log-extraction/pull/PR_NUMBER))
+- Individually reviewed requesters can now be left out of every summary by listing their addresses, one per line, in `~/.s3-log-extraction/excluded_ips.txt`. Their requests leave bytes sent, requests, downloads, views, and the unique-requester counts alike. The file is edited by hand and never written by the package, and an absent or empty file changes no published number. ([#311](https://github.com/dandi/s3-log-extraction/pull/311), [#315](https://github.com/dandi/s3-log-extraction/pull/315))
 
 - Requesters in the published IP ranges of Azure are now labeled by Azure region, such as `Azure/eastus`, and counted as a cloud service rather than geolocated. GitHub keeps precedence, so GitHub-hosted Actions runners, which sit inside the Azure ranges, are still labeled `GitHub`. ([#314](https://github.com/dandi/s3-log-extraction/pull/314))
 
-- Requesters in the published GitHub ranges no longer count toward `number_of_views`, since their streaming comes from automated runners rather than people. Their requests still count toward bytes sent, requests, and downloads. ([#PR_NUMBER](https://github.com/dandi/s3-log-extraction/pull/PR_NUMBER))
+- Requesters in the published GitHub ranges no longer count toward `number_of_views`, since their streaming comes from automated runners rather than people. Their requests still count toward bytes sent, requests, and downloads. ([#315](https://github.com/dandi/s3-log-extraction/pull/315))
 
 ### 🐛 Bug Fix
 
