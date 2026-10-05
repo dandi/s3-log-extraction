@@ -126,7 +126,7 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geoli
     Test that the resolver classifies a real public IP via the live service listings and the local database.
 
     Uses ``4.4.4.4`` (Level3/Lumen Technologies), a major US-ISP address that is
-    outside GitHub, AWS, GCP, and VPN CIDR ranges, to exercise the database lookup path.
+    outside GitHub, AWS, GCP, Azure, and VPN CIDR ranges, to exercise the database lookup path.
 
     Parameters
     ----------
@@ -145,7 +145,7 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geoli
         with s3_log_extraction.ip_utils.IpRegionResolver(cache_directory=tmp_path) as resolver:
             region = resolver.resolve(test_ip)
             # The live listings must have been fetched for every known service
-            assert set(resolver.service_networks.keys()) == {"GitHub", "AWS", "GCP", "VPN"}
+            assert set(resolver.service_networks.keys()) == {"GitHub", "AWS", "GCP", "Azure", "VPN"}
             assert all(len(networks) > 0 for networks in resolver.service_networks.values())
     except Exception as exc:
         _skip_if_download_quota_is_spent(exc)
