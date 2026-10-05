@@ -22,6 +22,32 @@ def is_cloud_service_or_vpn_label(region_label: str | None, /) -> bool:
     )
 
 
+def is_excluded_ip(*, ip: str, excluded_ips: frozenset[str]) -> bool:
+    """
+    Determine whether an IP address is one of an explicitly configured list of excluded requesters.
+
+    This catches only the exact addresses listed in ``EXCLUDED_IPS_FILE_PATH``. It exists for
+    actors identified individually by review, such as a periodic mirror whose plain geographic label makes
+    it invisible to the label-based predicate above. It does NOT catch neighbouring addresses in the same
+    network, other addresses the same actor may move to, or any requester by behavior or label. An empty
+    list excludes nothing.
+
+    Parameters
+    ----------
+    ip : str
+        The requester address, as recorded in the extraction cache.
+    excluded_ips : frozenset of str
+        The configured addresses to exclude, in canonical text form.
+
+    Returns
+    -------
+    bool
+        Whether ``ip`` is one of ``excluded_ips``.
+    """
+    is_excluded = ip in excluded_ips
+    return is_excluded
+
+
 def is_resolved_region(region_label: str | None, /) -> bool:
     """
     Determine whether a region/service label (as produced by a region resolver) names an actual place.
