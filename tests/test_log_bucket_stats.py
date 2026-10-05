@@ -358,7 +358,7 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
         "8.8.8.8",
         "9.9.9.9",
         "10.10.10.10",
-        "192.0.2.12",
+        "12.12.12.12",
         "11.11.11.11",  # repeated below, so it is one extracted IP
     ]
     _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset1", all_ips[:6])
@@ -376,7 +376,7 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
             "8.8.8.8": "VPN/datacenter",  # vpn (sub-label)
             "9.9.9.9": "AWS/us-east-1",  # cloud_service
             "10.10.10.10": "GCP/us-central1",  # cloud_service
-            "192.0.2.12": "Azure/eastus",  # cloud_service
+            "12.12.12.12": "Azure/eastus",  # cloud_service
             "11.11.11.11": "GitHub",  # github
         }
     )
