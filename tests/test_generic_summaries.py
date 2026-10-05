@@ -679,21 +679,23 @@ def test_summaries_geolocate_requesters_while_summarizing(tmpdir: py.path.local)
     assert sorted(by_region.index) == ["AUS", "AWS/us-east-1", "USA/CA", "bogon", "unknown"]
     assert by_region.loc["USA/CA", "number_of_downloads"] == 1
     assert by_region.loc["AUS", "number_of_views"] == 1
-    # The cloud service requester is not a requester, and the database was never asked about it
-    assert (test_dir / "summaries" / "ds001" / "requester_count.tsv").read_text().strip() == "4"
+    # The cloud service requester still counts as a requester, though the database was never asked about it
+    assert (test_dir / "summaries" / "ds001" / "requester_count.tsv").read_text().strip() == "5"
     assert sorted(call.args[0] for call in reader.city.call_args_list) == ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
     reader.close.assert_called_once()
     assert not (test_dir / "ips").exists()
 
 
 @pytest.mark.ai_generated
-def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.local) -> None:
-    """Known cloud service/VPN IPs are excluded from the requester count, but unresolved-location IPs are not."""
+def test_collect_unique_ips_excludes_only_github_ips(tmpdir: py.path.local) -> None:
+    """Only GitHub IPs are excluded from the requester count; other clouds, VPNs, and unresolved IPs are not."""
     from s3_log_extraction.summarize._generate_summaries import _collect_unique_ips
 
     asset_dir = pathlib.Path(tmpdir) / "asset"
     asset_dir.mkdir(parents=True, exist_ok=True)
-    (asset_dir / "ips.txt").write_text("1.2.3.4\n5.6.7.8\n9.10.11.12\n13.14.15.16\n17.18.19.20\n21.22.23.24\n")
+    (asset_dir / "ips.txt").write_text(
+        "1.2.3.4\n5.6.7.8\n9.10.11.12\n13.14.15.16\n17.18.19.20\n21.22.23.24\n25.26.27.28\n29.30.31.32\n"
+    )
 
     region_resolver = MappingRegionResolver(
         {
@@ -703,6 +705,8 @@ def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.loc
             "13.14.15.16": "VPN",
             "17.18.19.20": "bogon",
             "21.22.23.24": "unknown",
+            "25.26.27.28": "Azure/eastus",
+            "29.30.31.32": "GCP/us-central1",
         }
     )
 
@@ -710,12 +714,20 @@ def test_collect_unique_ips_excludes_known_cloud_service_ips(tmpdir: py.path.loc
         asset_directories=[asset_dir], use_encryption=False, region_resolver=region_resolver
     )
 
-    assert unique_ips == {"1.2.3.4", "17.18.19.20", "21.22.23.24"}
+    assert unique_ips == {
+        "1.2.3.4",
+        "9.10.11.12",
+        "13.14.15.16",
+        "17.18.19.20",
+        "21.22.23.24",
+        "25.26.27.28",
+        "29.30.31.32",
+    }
 
 
 @pytest.mark.ai_generated
-def test_summarize_dataset_requester_count_excludes_known_cloud_service_ips(tmpdir: py.path.local) -> None:
-    """The requester count written to disk excludes known cloud service/VPN IPs."""
+def test_summarize_dataset_requester_count_excludes_github_ips(tmpdir: py.path.local) -> None:
+    """The requester count written to disk excludes GitHub IPs."""
     from s3_log_extraction.summarize._generate_summaries import _summarize_dataset_requester_count
 
     asset_dir = pathlib.Path(tmpdir) / "asset"

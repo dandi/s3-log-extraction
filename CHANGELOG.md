@@ -10,7 +10,7 @@
 
 - Requesters in the published IP ranges of Azure are now labeled by Azure region, such as `Azure/eastus`, and counted as a cloud service rather than geolocated. GitHub keeps precedence, so GitHub-hosted Actions runners, which sit inside the Azure ranges, are still labeled `GitHub`. ([#314](https://github.com/dandi/s3-log-extraction/pull/314))
 
-- Requesters in the published GitHub ranges no longer count toward `number_of_views`, since their streaming comes from automated runners rather than people. Their requests still count toward bytes sent, requests, and downloads. ([#315](https://github.com/dandi/s3-log-extraction/pull/315))
+- Requesters in the published GitHub ranges no longer count toward `number_of_views`, since their streaming comes from automated runners rather than people, while their requests still count toward bytes sent, requests, and downloads. GitHub is now also the only service left out of the requester counts, so requesters on AWS, GCP, Azure, and VPNs count as requesters again. ([#315](https://github.com/dandi/s3-log-extraction/pull/315))
 
 ### 🐛 Bug Fix
 

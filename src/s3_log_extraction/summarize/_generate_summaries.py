@@ -16,7 +16,6 @@ from ..config import get_cache_directory, get_cache_subdirectory, get_excluded_i
 from ..ip_utils import (
     IpRegionResolver,
     RegionResolver,
-    is_cloud_service_or_vpn_label,
     is_excluded_ip,
 )
 from ..ip_utils._ip_utils import _read_ips_from_file
@@ -182,9 +181,9 @@ def _collect_unique_ips(
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
     region_resolver : RegionResolver, optional
-        Resolves each IP address to its region/service label, used to exclude known cloud
-        service IPs (e.g. GitHub, AWS, GCP, Azure, VPN) from the collected set. If not
-        provided, no exclusion is applied by label.
+        Resolves each IP address to its region/service label, used to exclude requesters labeled ``"GitHub"`` from
+        the collected set. Other cloud services (AWS, GCP, Azure) and VPNs are kept. If not provided, no exclusion
+        is applied by label.
     excluded_ips : frozenset of str, optional
         Individual addresses left out of the collected set regardless of their label, as configured with
         ``set_excluded_ips``. Defaults to an empty set, which excludes nothing.
@@ -192,8 +191,8 @@ def _collect_unique_ips(
     Returns
     -------
     set of str
-        The set of unique IP addresses found across all ``ips.txt`` files, excluding
-        any IPs classified as a known cloud service or VPN and any of ``excluded_ips``.
+        The set of unique IP addresses found across all ``ips.txt`` files, excluding any IPs labeled
+        ``"GitHub"`` and any of ``excluded_ips``.
     """
     unique_ips: set[str] = set()
     for asset_directory in asset_directories:
@@ -208,7 +207,9 @@ def _collect_unique_ips(
         if region_resolver is None:
             unique_ips.update(ips)
         else:
-            unique_ips.update(ip for ip in ips if not is_cloud_service_or_vpn_label(region_resolver.resolve(ip)))
+            # Other clouds (AWS, GCP, and the rest of Azure) and VPNs carry real people's sessions, so only the
+            # automated GitHub runners are left out of the count
+            unique_ips.update(ip for ip in ips if region_resolver.resolve(ip) != "GitHub")
     return unique_ips
 
 
@@ -224,8 +225,8 @@ def _summarize_dataset_requester_count(
     Compute and save the unique requester count for a dataset.
 
     Reads all ``ips.txt`` files from the given asset directories, counts the
-    number of unique IP addresses across the entire dataset (excluding known cloud
-    service and VPN IPs), and writes the value to ``summary_file_path``.
+    number of unique IP addresses across the entire dataset (excluding GitHub IPs), and writes the value to
+    ``summary_file_path``.
 
     The count is not paired with any location, so it cannot single out a requester and is written with
     its true value on every update.
@@ -237,8 +238,8 @@ def _summarize_dataset_requester_count(
     summary_file_path : pathlib.Path
         Destination file where the count (as a string) will be written.
     region_resolver : RegionResolver
-        Resolves each IP address to its region/service label, used to exclude known cloud
-        service IPs (e.g. GitHub, AWS, GCP, Azure, VPN) from the requester count.
+        Resolves each IP address to its region/service label, used to exclude GitHub IPs from the requester
+        count.
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
@@ -281,8 +282,9 @@ def generate_summaries(
     database, which is downloaded on first use (see ``update_geolite2_database``). No location of any
     requester is written to disk; only the aggregated by-region summaries are.
 
-    Requesters in the published GitHub ranges make no views, since their streaming is automated, but their requests
-    still count toward bytes sent, requests, and downloads. Addresses in ``excluded_ips`` leave every summary.
+    Requesters in the published GitHub ranges make no views and are not counted as requesters, since their streaming
+    is automated, but their requests still count toward bytes sent, requests, and downloads. Requesters of other
+    cloud services and VPNs count everywhere. Addresses in ``excluded_ips`` leave every summary.
 
     Every summary is written with its true values, except for `by_region.tsv`. That one pairs activity with
     requester location, so it is written only when the update it carries moves more than
