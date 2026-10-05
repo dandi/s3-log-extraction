@@ -1,8 +1,16 @@
 import functools
 import ipaddress
 import pathlib
+import re
 
 from ..utils.encryption import read_text_from_file, write_text_to_file
+
+# Microsoft publishes the Azure ranges as a weekly file whose name carries its date, so there is no stable URL to it.
+# The download page of the listing links to the current file.
+_AZURE_DOWNLOAD_PAGE_URL = "https://www.microsoft.com/en-us/download/details.aspx?id=56519"
+_AZURE_SERVICE_TAGS_URL_PATTERN = re.compile(
+    r"https://download\.microsoft\.com/download/[^\"'\s]*?/ServiceTags_Public_\d+\.json"
+)
 
 
 def _read_ips_from_file(file_path: pathlib.Path, use_encryption: bool = True) -> list[str]:
@@ -58,7 +66,17 @@ def _request_cidr_range(service_name: str) -> dict | list[str]:
 
             return gcp_cidr_request
         case "Azure":
-            raise NotImplementedError("Azure CIDR address fetching is not yet implemented!")
+            download_page = requests.get(url=_AZURE_DOWNLOAD_PAGE_URL).text
+            service_tags_url_match = _AZURE_SERVICE_TAGS_URL_PATTERN.search(download_page)
+            if service_tags_url_match is None:
+                message = (
+                    f"Could not find the link to the Azure service tags file on {_AZURE_DOWNLOAD_PAGE_URL}. "
+                    "The layout of the download page may have changed."
+                )
+                raise RuntimeError(message)
+            azure_cidr_request = requests.get(url=service_tags_url_match.group(0)).json()
+
+            return azure_cidr_request
         case "VPN":
             # Very nice public and maintained listing! Hope this stays stable.
             vpn_cidr_request = (
@@ -75,7 +93,7 @@ def _request_cidr_range(service_name: str) -> dict | list[str]:
 
 
 def _is_ipv4_network(candidate: object, /) -> bool:
-    """Whether a value of GitHub's meta document is an IPv4 range rather than a key, a domain, or other metadata."""
+    """Whether a listed value is an IPv4 range rather than an IPv6 range, a key, a domain, or other metadata."""
     if not isinstance(candidate, str):
         return False
     try:
@@ -117,7 +135,29 @@ def _get_cidr_address_ranges_and_subregions(*, service_name: str) -> list[tuple[
 
             return gcp_cidr_addresses_and_subregions
         case "Azure":
-            raise NotImplementedError("Azure CIDR address fetching is not yet implemented!")  # pragma: no cover
+            # The regional "AzureCloud.<region>" tags carry the region. The "AzureCloud" tag spans every region, often
+            # in aggregated blocks that no regional tag lists, so its ranges are kept without a region to label the
+            # rest. A range listed by both is kept once, with its region.
+            regional_cidr_addresses_and_subregions = [
+                (cidr_address, service_tag["properties"]["region"] or None)
+                for service_tag in cidr_request["values"]
+                if service_tag["name"].startswith("AzureCloud.")
+                for cidr_address in service_tag["properties"]["addressPrefixes"]
+                if _is_ipv4_network(cidr_address)
+            ]
+            regional_cidr_addresses = {cidr_address for cidr_address, _ in regional_cidr_addresses_and_subregions}
+            unregioned_cidr_addresses_and_subregions = [
+                (cidr_address, None)
+                for service_tag in cidr_request["values"]
+                if service_tag["name"] == "AzureCloud"
+                for cidr_address in service_tag["properties"]["addressPrefixes"]
+                if _is_ipv4_network(cidr_address) and cidr_address not in regional_cidr_addresses
+            ]
+            azure_cidr_addresses_and_subregions = (
+                unregioned_cidr_addresses_and_subregions + regional_cidr_addresses_and_subregions
+            )
+
+            return azure_cidr_addresses_and_subregions
         case "VPN":
             vpn_cidr_addresses_and_subregions = [(cidr_address, None) for cidr_address in cidr_request]
 

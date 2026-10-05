@@ -44,7 +44,7 @@ class RegionResolver(typing.Protocol):
 
 
 def fetch_service_networks() -> ServiceNetworks:
-    """Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, VPN)."""
+    """Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, Azure, VPN)."""
     return {
         service_name: list(_get_cidr_address_ranges_and_subregions(service_name=service_name))
         for service_name in _KNOWN_SERVICES

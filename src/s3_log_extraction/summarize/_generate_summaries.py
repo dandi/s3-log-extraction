@@ -149,7 +149,7 @@ def _collect_unique_ips(
         If ``False``, files are read as plaintext.
     region_resolver : RegionResolver, optional
         Resolves each IP address to its region/service label, used to exclude known cloud
-        service IPs (e.g. GitHub, AWS, GCP, VPN) from the collected set. If not
+        service IPs (e.g. GitHub, AWS, GCP, Azure, VPN) from the collected set. If not
         provided, no exclusion is applied by label.
     excluded_ips : frozenset of str, optional
         Individual addresses left out of the collected set regardless of their label, as configured with
@@ -204,7 +204,7 @@ def _summarize_dataset_requester_count(
         Destination file where the count (as a string) will be written.
     region_resolver : RegionResolver
         Resolves each IP address to its region/service label, used to exclude known cloud
-        service IPs (e.g. GitHub, AWS, GCP, VPN) from the requester count.
+        service IPs (e.g. GitHub, AWS, GCP, Azure, VPN) from the requester count.
     use_encryption : bool
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.

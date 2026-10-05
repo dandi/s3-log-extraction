@@ -358,6 +358,7 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
         "8.8.8.8",
         "9.9.9.9",
         "10.10.10.10",
+        "12.12.12.12",
         "11.11.11.11",  # repeated below, so it is one extracted IP
     ]
     _write_plaintext_ips_txt(tmp_path, "extraction/dataset/asset1", all_ips[:6])
@@ -375,23 +376,24 @@ def test_get_ip_stats_all_categories(tmp_path: pathlib.Path) -> None:
             "8.8.8.8": "VPN/datacenter",  # vpn (sub-label)
             "9.9.9.9": "AWS/us-east-1",  # cloud_service
             "10.10.10.10": "GCP/us-central1",  # cloud_service
+            "12.12.12.12": "Azure/eastus",  # cloud_service
             "11.11.11.11": "GitHub",  # github
         }
     )
 
     stats = get_ip_stats(cache_directory=tmp_path, use_encryption=False, region_resolver=region_resolver)
 
-    assert stats["extracted_ip_count"] == 11
+    assert stats["extracted_ip_count"] == 12
 
     assert stats["determined"]["count"] == 3
     assert stats["unknown"]["count"] == 1
     assert stats["bogon"]["count"] == 2
     assert stats["vpn"]["count"] == 2
-    assert stats["cloud_service"]["count"] == 2
+    assert stats["cloud_service"]["count"] == 3
     assert stats["github"]["count"] == 1
 
-    assert abs(stats["determined"]["percent"] - 3 / 11 * 100) < 0.01
-    assert abs(stats["cloud_service"]["percent"] - 2 / 11 * 100) < 0.01
+    assert abs(stats["determined"]["percent"] - 3 / 12 * 100) < 0.01
+    assert abs(stats["cloud_service"]["percent"] - 3 / 12 * 100) < 0.01
 
 
 @pytest.mark.ai_generated

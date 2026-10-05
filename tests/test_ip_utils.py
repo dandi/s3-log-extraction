@@ -33,7 +33,7 @@ _ENGLAND_BOX = (49.5, 56.0, -6.5, 2.0)
 _BAVARIA_BOX = (47.0, 50.7, 8.9, 13.9)
 _CONTIGUOUS_US_BOX = (24.0, 50.0, -125.0, -66.0)
 
-_NO_SERVICE_NETWORKS = {"GitHub": [], "AWS": [], "GCP": [], "VPN": []}
+_NO_SERVICE_NETWORKS = {"GitHub": [], "AWS": [], "GCP": [], "Azure": [], "VPN": []}
 
 
 def _assert_within(coordinates: dict[str, float], box: tuple[float, float, float, float]) -> None:
@@ -236,7 +236,13 @@ def test_resolver_fetches_service_networks_on_first_use() -> None:
         assert resolver.resolve("203.0.113.7") == "AWS/us-east-1"
         assert resolver.resolve("203.0.113.8") == "AWS/us-east-1"
 
-    assert sorted(call.kwargs["service_name"] for call in mock_ranges.call_args_list) == ["AWS", "GCP", "GitHub", "VPN"]
+    assert sorted(call.kwargs["service_name"] for call in mock_ranges.call_args_list) == [
+        "AWS",
+        "Azure",
+        "GCP",
+        "GitHub",
+        "VPN",
+    ]
 
 
 @pytest.mark.ai_generated
@@ -260,7 +266,7 @@ def test_github_ranges_are_recognized_by_shape_not_by_key() -> None:
         "domains": {"website": ["*.github.com"]},
         "artifact_attestations": {"trust_domain": "", "services": ["*.example.com"]},
     }
-    empty_listings = {"AWS": {"prefixes": []}, "GCP": {"prefixes": []}, "VPN": []}
+    empty_listings = {"AWS": {"prefixes": []}, "GCP": {"prefixes": []}, "Azure": {"values": []}, "VPN": []}
 
     ip_utils_module = s3_log_extraction.ip_utils._ip_utils
     ip_utils_module._get_cidr_address_ranges_and_subregions.cache_clear()
@@ -332,10 +338,31 @@ def test_mapping_region_resolver_stands_in_as_a_context_manager() -> None:
 
 
 @pytest.mark.ai_generated
-def test_azure_ranges_are_not_yet_fetched() -> None:
-    """Azure is not among the known services, and asking for its listing says why."""
-    with pytest.raises(NotImplementedError, match="Azure"):
-        s3_log_extraction.ip_utils._ip_utils._request_cidr_range(service_name="Azure")
+@pytest.mark.parametrize(
+    ("ip_address", "expected_region"),
+    [
+        ("192.0.2.7", "GitHub"),  # A GitHub Actions range inside an Azure regional range
+        ("192.0.2.200", "Azure/eastus"),  # The rest of that Azure regional range
+        ("198.51.100.7", "Azure"),  # An aggregated Azure range that no regional range lists
+    ],
+)
+def test_resolver_prefers_github_over_azure(ip_address: str, expected_region: str) -> None:
+    """
+    GitHub is checked before Azure, so the hosted runners inside the Azure ranges are labeled by GitHub.
+
+    The ranges are fetched by the resolver itself, so that the precedence comes from the order of the known services.
+    """
+    published_ranges = {
+        "GitHub": [("192.0.2.0/25", None)],
+        "Azure": [("198.51.100.0/24", None), ("192.0.2.0/24", "eastus")],
+    }
+    with unittest.mock.patch(
+        "s3_log_extraction.ip_utils._resolver._get_cidr_address_ranges_and_subregions",
+        side_effect=lambda *, service_name: published_ranges.get(service_name, []),
+    ):
+        resolver = IpRegionResolver(geolite2_reader=_make_reader(city_responses={}))
+
+        assert resolver.resolve(ip_address) == expected_region
 
 
 # ---------------------------------------------------------------------------
