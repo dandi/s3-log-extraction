@@ -584,7 +584,7 @@ def plot(args: argparse.Namespace) -> None:
     )
     report["access_dandiset_level"] = access_corr
 
-    (out / "summary.json").write_text(json.dumps(report, indent=2))
+    (out / "summary.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
 
