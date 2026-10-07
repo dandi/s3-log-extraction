@@ -36,6 +36,8 @@ import concurrent.futures
 import json
 import pathlib
 import random
+import subprocess
+import sys
 
 import numpy as np
 import pandas as pd
@@ -218,16 +220,27 @@ def build(args: argparse.Namespace) -> None:
         f"(max {args.max_per_dandiset} per dandiset, seed {args.seed}); {len(todo):,} still to walk"
     )
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as pool, failures_path.open("a") as failures:
-        futures = [pool.submit(walk_file, c) for c in todo]
+    # One subprocess per file: a file that exhausts memory or hangs on a slow chunk index fails alone,
+    # instead of breaking a shared process pool and stalling every other worker
+    def run_one(content_id: str) -> tuple[str, str | None]:
+        command = [sys.executable, "-I", str(pathlib.Path(__file__).resolve()), "_walk_one", content_id, str(cache)]
+        try:
+            completed = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout, check=False)
+        except subprocess.TimeoutExpired:
+            return content_id, f"timeout after {args.timeout}s"
+        if completed.returncode != 0:
+            detail = (completed.stderr.strip().splitlines() or [""])[-1][:200]
+            return content_id, f"worker exited with code {completed.returncode} (killed or crashed) {detail}".strip()
+        error = completed.stdout.strip()
+        return content_id, error or None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool, failures_path.open("a") as failures:
+        futures = [pool.submit(run_one, c) for c in todo]
         for future in tqdm.tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Walking files"):
-            result = future.result()
-            if result["error"] is not None:
-                failures.write(json.dumps({"content_id": result["content_id"], "error": result["error"]}) + "\n")
+            content_id, error = future.result()
+            if error is not None:
+                failures.write(json.dumps({"content_id": content_id, "error": error}) + "\n")
                 failures.flush()
-                continue
-            rows = result["rows"] or [{"content_id": result["content_id"]}]
-            pd.DataFrame(rows).to_parquet(cache / "files" / f"{result['content_id']}.parquet", index=False)
 
     walked = [c for c in sample if (cache / "files" / f"{c}.parquet").exists()]
     datasets = pd.concat([pd.read_parquet(cache / "files" / f"{c}.parquet") for c in walked], ignore_index=True)
@@ -579,7 +592,20 @@ def _partial_two(x: pd.Series, y: pd.Series, z: np.ndarray) -> float:
     return float(np.corrcoef(res_x, res_y)[0, 1])
 
 
+def _walk_one(content_id: str, cache: pathlib.Path) -> None:
+    """Child-process entry: walk one file, write its parquet, and print the error if it failed."""
+    result = walk_file(content_id)
+    if result["error"] is not None:
+        print(result["error"])
+        return
+    rows = result["rows"] or [{"content_id": content_id}]
+    pd.DataFrame(rows).to_parquet(cache / "files" / f"{content_id}.parquet", index=False)
+
+
 def main() -> None:
+    if len(sys.argv) == 4 and sys.argv[1] == "_walk_one":
+        _walk_one(sys.argv[2], pathlib.Path(sys.argv[3]))
+        return
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("build", "plot"):
@@ -595,6 +621,7 @@ def main() -> None:
     b.add_argument("--data", type=pathlib.Path, default=HERE / "access_structure.csv")
     b.add_argument("--workers", type=int, default=16)
     b.add_argument("--seed", type=int, default=0)
+    b.add_argument("--timeout", type=int, default=900, help="Seconds before one file's walk is abandoned")
     b.add_argument("--retry-failed", action="store_true", help="Walk files that failed on an earlier run again")
     pl = sub.choices["plot"]
     pl.add_argument("--metrics", type=pathlib.Path, default=HERE / "byte_weighted.csv")
