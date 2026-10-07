@@ -34,6 +34,7 @@ HDF5 only. Zarr assets are a follow-up.
 import argparse
 import concurrent.futures
 import json
+import os
 import pathlib
 import random
 import subprocess
@@ -67,6 +68,9 @@ JOIN_COLUMNS = [
     "number_of_requests",
     "number_of_downloads",
 ]
+# Counting chunks walks the whole chunk index a second time, which on a file of hundreds of gigabytes is
+# enough to time out. The retry pass for such files sets this so they still contribute storage bytes.
+_SKIP_CHUNK_COUNT = os.environ.get("BYTE_WEIGHTED_SKIP_CHUNK_COUNT") == "1"
 _LAYOUTS = {0: "compact", 1: "contiguous", 2: "chunked", 3: "virtual"}
 
 
@@ -109,7 +113,7 @@ def walk_file(content_id: str) -> dict:
                 shape = obj.shape or ()
                 itemsize = obj.dtype.itemsize
                 n_chunks = None
-                if layout == "chunked":
+                if layout == "chunked" and not _SKIP_CHUNK_COUNT:
                     try:
                         n_chunks = obj.id.get_num_chunks()
                     except Exception:  # noqa: BLE001 - older HDF5 builds lack the chunk query
@@ -222,10 +226,14 @@ def build(args: argparse.Namespace) -> None:
 
     # One subprocess per file: a file that exhausts memory or hangs on a slow chunk index fails alone,
     # instead of breaking a shared process pool and stalling every other worker
+    environment = {**os.environ, "BYTE_WEIGHTED_SKIP_CHUNK_COUNT": "1" if args.skip_chunk_count else "0"}
+
     def run_one(content_id: str) -> tuple[str, str | None]:
         command = [sys.executable, "-I", str(pathlib.Path(__file__).resolve()), "_walk_one", content_id, str(cache)]
         try:
-            completed = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout, check=False)
+            completed = subprocess.run(
+                command, capture_output=True, text=True, timeout=args.timeout, check=False, env=environment
+            )
         except subprocess.TimeoutExpired:
             return content_id, f"timeout after {args.timeout}s"
         if completed.returncode != 0:
@@ -622,6 +630,11 @@ def main() -> None:
     b.add_argument("--workers", type=int, default=16)
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--timeout", type=int, default=900, help="Seconds before one file's walk is abandoned")
+    b.add_argument(
+        "--skip-chunk-count",
+        action="store_true",
+        help="Leave n_chunks empty to halve the index traversal; for retrying the largest files",
+    )
     b.add_argument("--retry-failed", action="store_true", help="Walk files that failed on an earlier run again")
     pl = sub.choices["plot"]
     pl.add_argument("--metrics", type=pathlib.Path, default=HERE / "byte_weighted.csv")
