@@ -538,7 +538,7 @@ def plot(args: argparse.Namespace) -> None:
         ax.axvline(0, color="0.7", lw=0.8)
         ax.set_xlim(-1, 1)
         ax.set_title(title, fontsize=9)
-    axes[2].legend(fontsize=7, loc="lower left")
+    axes[2].legend(fontsize=7, loc="upper left")
     axes[0].set_yticks(y)
     axes[0].set_yticklabels(validation["metric"])
     for ax in axes:
