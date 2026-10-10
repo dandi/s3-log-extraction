@@ -435,7 +435,8 @@ def plot(args: argparse.Namespace) -> None:
         ax.plot(x, cumulative, color="tab:blue")
         ax.plot([0, 1], [0, 1], color="0.6", ls="--", lw=0.8)
         ax.set_title(
-            f"{row['dandiset_id']}\nD0={int(row['D0'])}  D1={row['D1']:.1f}  E={row['evenness']:.2f}", fontsize=8
+            f"DANDI:{int(row['dandiset_id']):06d}\nD0={int(row['D0'])}  D1={row['D1']:.1f}  E={row['evenness']:.2f}",
+            fontsize=8,
         )
     for ax in axes[1]:
         ax.set_xlabel("fraction of datasets (smallest first)")
@@ -464,6 +465,7 @@ def plot(args: argparse.Namespace) -> None:
         )
         left += medians[col].fillna(0).to_numpy()
     ax.set_yticks([])
+    ax.set_ylim(-0.5, len(medians) - 0.5)
     ax.set_ylabel(f"dandisets (n={len(medians)}), sorted by acquisition share")
     ax.set_xlabel("median storage-byte share, renormalized")
     ax.set_xlim(0, 1)
@@ -484,7 +486,16 @@ def plot(args: argparse.Namespace) -> None:
     codes = pd.Categorical(df["dandiset_id"]).codes
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.scatter(scores[:, 0], scores[:, 1], c=codes, cmap="nipy_spectral", s=8, alpha=0.7)
-    scale = np.abs(scores).max() * 0.8 / np.abs(vt[:2]).max()
+    # Scale the loadings so every arrow tip lands inside the scatter, toward whichever side it points.
+    # A single scale from the largest loading let the two longest arrows run off the axes, where an
+    # annotation is clipped without moving the limits.
+    room = [
+        (scores[:, k].max() if vt[k, j] > 0 else -scores[:, k].min()) / abs(vt[k, j])
+        for j in range(len(present))
+        for k in range(2)
+        if vt[k, j] != 0
+    ]
+    scale = 0.85 * min(room)
     for j, col in enumerate(present):
         ax.annotate(
             "",
@@ -565,6 +576,7 @@ def plot(args: argparse.Namespace) -> None:
                 ax.set_xscale("log")
             if ycol == "streaming":
                 ax.set_yscale("symlog")
+                ax.set_ylim(bottom=0)  # a count; symlog otherwise pads into negatives
             rho = float(stats.spearmanr(dl[xcol], dl[ycol]).statistic)
             access_corr[f"{xcol}~{ycol}"] = rho
             ax.set_xlabel(xlabel)
