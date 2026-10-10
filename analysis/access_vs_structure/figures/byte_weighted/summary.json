@@ -1,91 +1,91 @@
 {
-  "files": 3519,
-  "dandisets": 418,
-  "median_evenness": 0.0308143269746397,
-  "median_D1": 2.9977765523200333,
-  "median_D0": 62.0,
+  "files": 3557,
+  "dandisets": 422,
+  "median_evenness": 0.0303355226288355,
+  "median_D1": 2.996342455738129,
+  "median_D0": 63.0,
   "corr_files_capped": {
-    "rho_D1_bytes": -0.2874448145811855,
-    "rho_D1_D0": 0.7418145682859646,
-    "rho_E_bytes": -0.3914610125538434,
-    "rho_E_D0": 0.06768203785168757,
-    "partial_D1_bytes_given_D0": -0.5366461625493565,
-    "partial_D1_D0_given_bytes": 0.8068219356855942,
-    "partial_E_bytes_given_D0": -0.40066289444356695,
-    "rho_D0_bytes": 0.09542874164607974
+    "rho_D1_bytes": -0.2842368501760966,
+    "rho_D1_D0": 0.7376069105353392,
+    "rho_E_bytes": -0.3991851488142811,
+    "rho_E_D0": 0.05718242736170729,
+    "partial_D1_bytes_given_D0": -0.5419289146953917,
+    "partial_D1_D0_given_bytes": 0.8060164040523075,
+    "partial_E_bytes_given_D0": -0.40839935704285235,
+    "rho_D0_bytes": 0.1078560683935916
   },
   "corr_dandiset_medians": {
-    "rho_D1_bytes": -0.2827928440534897,
-    "rho_D1_D0": 0.7495051367414729,
-    "rho_E_bytes": -0.3823866288608147,
-    "rho_E_D0": 0.09644846903616643,
-    "partial_D1_bytes_given_D0": -0.5322005598312146,
-    "partial_D1_D0_given_bytes": 0.8115297786319625,
-    "partial_E_bytes_given_D0": -0.39460844317260846,
-    "rho_D0_bytes": 0.0908162623012964
+    "rho_D1_bytes": -0.27613138602212756,
+    "rho_D1_D0": 0.7480099845393597,
+    "rho_E_bytes": -0.38520473338162003,
+    "rho_E_D0": 0.0925280045198082,
+    "partial_D1_bytes_given_D0": -0.5353967660715327,
+    "partial_D1_D0_given_bytes": 0.8123093567373015,
+    "partial_E_bytes_given_D0": -0.39860197404322906,
+    "rho_D0_bytes": 0.10334376053825044
   },
   "clr_pca_explained": [
-    0.44921428438204847,
-    0.1969343635240929,
-    0.12957971659982856
+    0.44797184023809067,
+    0.19923254246473546,
+    0.12942503095012917
   ],
   "validation": [
     {
       "metric": "log D0",
-      "ICC_dandiset": 0.935,
+      "ICC_dandiset": 0.928,
       "rho_logD0_files": 1.0,
-      "rho_logbytes_files": 0.095,
+      "rho_logbytes_files": 0.108,
       "rho_logD0_dandisets": 1.0,
-      "rho_logbytes_dandisets": 0.091
+      "rho_logbytes_dandisets": 0.103
     },
     {
       "metric": "log bytes",
-      "ICC_dandiset": 0.913,
-      "rho_logD0_files": 0.095,
+      "ICC_dandiset": 0.916,
+      "rho_logD0_files": 0.108,
       "rho_logbytes_files": 1.0,
-      "rho_logD0_dandisets": 0.091,
+      "rho_logD0_dandisets": 0.103,
       "rho_logbytes_dandisets": 1.0
     },
     {
       "metric": "log cophenetic",
-      "ICC_dandiset": 0.931,
+      "ICC_dandiset": 0.922,
       "rho_logD0_files": 0.978,
-      "rho_logbytes_files": 0.103,
-      "rho_logD0_dandisets": 0.978,
-      "rho_logbytes_dandisets": 0.097
+      "rho_logbytes_files": 0.115,
+      "rho_logD0_dandisets": 0.979,
+      "rho_logbytes_dandisets": 0.109
     },
     {
       "metric": "log D1",
-      "ICC_dandiset": 0.922,
-      "rho_logD0_files": 0.742,
-      "rho_logbytes_files": -0.287,
-      "rho_logD0_dandisets": 0.75,
-      "rho_logbytes_dandisets": -0.283
+      "ICC_dandiset": 0.923,
+      "rho_logD0_files": 0.738,
+      "rho_logbytes_files": -0.284,
+      "rho_logD0_dandisets": 0.748,
+      "rho_logbytes_dandisets": -0.276
     },
     {
       "metric": "log D2",
-      "ICC_dandiset": 0.915,
-      "rho_logD0_files": 0.697,
-      "rho_logbytes_files": -0.277,
-      "rho_logD0_dandisets": 0.709,
-      "rho_logbytes_dandisets": -0.27
+      "ICC_dandiset": 0.916,
+      "rho_logD0_files": 0.693,
+      "rho_logbytes_files": -0.272,
+      "rho_logD0_dandisets": 0.708,
+      "rho_logbytes_dandisets": -0.263
     },
     {
       "metric": "evenness",
       "ICC_dandiset": 0.869,
-      "rho_logD0_files": 0.068,
-      "rho_logbytes_files": -0.391,
-      "rho_logD0_dandisets": 0.096,
-      "rho_logbytes_dandisets": -0.382
+      "rho_logD0_files": 0.057,
+      "rho_logbytes_files": -0.399,
+      "rho_logD0_dandisets": 0.093,
+      "rho_logbytes_dandisets": -0.385
     }
   ],
   "access_dandiset_level": {
-    "D1~download_fraction": -0.18496180116892036,
-    "D1~streaming": 0.13886116212839736,
-    "evenness~download_fraction": 0.14974028869664724,
-    "evenness~streaming": -0.2021119411887748,
-    "log_bytes~download_fraction": -0.735811669091051,
-    "log_D0~download_fraction": -0.4679655833708631,
-    "partial_D1~download_fraction|D0,bytes": -0.2591939506249731
+    "D1~download_fraction": -0.18454536802872343,
+    "D1~streaming": 0.13870727219573228,
+    "evenness~download_fraction": 0.1568456109636648,
+    "evenness~streaming": -0.20909664373102793,
+    "log_bytes~download_fraction": -0.7424234924189793,
+    "log_D0~download_fraction": -0.4760366457044534,
+    "partial_D1~download_fraction|D0,bytes": -0.25268156014241105
   }
 }
