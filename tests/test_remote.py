@@ -146,7 +146,8 @@ def test_resolver_resolves_public_ip_remote(tmp_path: pathlib.Path, shared_geoli
             region = resolver.resolve(test_ip)
             # The live listings must have been fetched for every known service
             assert set(resolver.service_networks.keys()) == {"GitHub", "AWS", "GCP", "Azure", "VPN"}
-            assert all(len(networks) > 0 for networks in resolver.service_networks.values())
+            empty_services = sorted(name for name, networks in resolver.service_networks.items() if len(networks) == 0)
+            assert empty_services == [], f"No ranges were parsed for: {empty_services}"
     except Exception as exc:
         _skip_if_download_quota_is_spent(exc)
         _fail_if_maxmind_rejected(exc)
