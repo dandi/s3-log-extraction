@@ -165,3 +165,6 @@ fabric.properties
 *.PRIVATE.*
 ip_aliases*.csv
 alias_registry*
+
+# Per-dataset cache of analysis/access_vs_structure/byte_weighted_structure.py (resumable walk; not committed)
+.byte_weighted_cache/

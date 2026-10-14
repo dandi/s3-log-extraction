@@ -1,0 +1,29 @@
+{
+  "files": 3557,
+  "dandisets": 422,
+  "groups": 447,
+  "candidate_splits_by_basis": {
+    "modality": 12,
+    "schema": 11,
+    "size": 20,
+    "shape": 31
+  },
+  "split_on": [
+    "modality",
+    "schema"
+  ],
+  "dandisets_split": 23,
+  "clusters_in_split_dandisets": 48,
+  "split_sizes": {
+    "2": 21,
+    "3": 2
+  },
+  "criteria": {
+    "min_cluster_size": 2,
+    "max_clusters": 4,
+    "min_silhouette": 0.5,
+    "min_separation_in_global_spreads": 1.0,
+    "max_schema_jaccard": 0.7,
+    "min_size_ratio": 3.0
+  }
+}
