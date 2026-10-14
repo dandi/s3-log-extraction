@@ -1003,10 +1003,15 @@ def cluster(args: argparse.Namespace) -> None:
 
     # 8. Composition of each group's drop from D0 to D_inf, in blocks by recording family, each block ordered by r1
     families = [family for family in MODALITY_FAMILIES if (by_group["family"] == family).any()]
+    # Rows run from the groups whose drop is all r1 down to those where r2 and r* carry most of it, ties broken by
+    # r2's share, so the shares panel reads as a smooth staircase. A group with no drop at all goes last.
+    group_steps = _ratio_steps(by_group)
+    group_total = group_steps.sum(axis=1)
+    group_shares = group_steps.div(group_total.where(group_total > 0), axis=0).fillna(-1.0)
     gap = 2.0
     order, positions, blocks, cursor = [], [], [], 0.0
     for family in families:
-        members = by_group[by_group["family"] == family].sort_values("r1", ascending=False)
+        members = group_shares.loc[by_group["family"] == family].sort_values(["r1", "r2"], ascending=False)
         first = cursor
         for label in members.index:
             order.append(label)
@@ -1035,9 +1040,10 @@ def cluster(args: argparse.Namespace) -> None:
     fig.legend(handles, labels, loc="upper center", ncol=3, fontsize=8, bbox_to_anchor=(0.6, 0.99), frameon=False)
     fig.suptitle(
         f"Hill-ratio composition per dandiset group ({len(by_group)} groups), in blocks by recording family "
-        "(groups per family in brackets), ordered by r1 within each; red ticks mark clusters of split dandisets",
+        "(groups per family in brackets)\nordered by r1's share of the drop within each block; red ticks mark "
+        "clusters of split dandisets",
         fontsize=10,
-        y=1.0,
+        y=1.025,
     )
     fig.savefig(out / "8_ratio_composition.png", dpi=150, bbox_inches="tight")
     plt.close(fig)

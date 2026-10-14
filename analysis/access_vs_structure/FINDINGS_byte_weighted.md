@@ -65,7 +65,8 @@ and log bytes both controlled, `D1` keeps a partial Spearman of −0.25 with dow
 signal, not a new predictor. No per-file access model was fitted.
 
 **8. Ratio composition (`8_ratio_composition.png`).** One row per group from the clustering below, in blocks by
-recording family and ordered by r1 within each block. A group's family is the most common family among its files'
+recording family and ordered within each block by r1's share of the drop, so the shares panel reads as a
+staircase. A group's family is the most common family among its files'
 modality suffixes: ecephys (with spike sorting), icephys, ophys (with fiber photometry and widefield), multimodal
 for files recording more than one of those, then image, behavior, other, and unlabeled for the 14% of files with no
 suffix. The blocks hold 134, 60, 93, 5, 52, 34, 3 and 66 groups. The left panel shows how many decades each group
