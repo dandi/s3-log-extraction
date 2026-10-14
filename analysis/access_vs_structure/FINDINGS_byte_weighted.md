@@ -64,13 +64,19 @@ fraction (Spearman −0.74), followed by log `D0` (−0.48). `D1` (−0.18) and 
 and log bytes both controlled, `D1` keeps a partial Spearman of −0.25 with download fraction. That is a small residual
 signal, not a new predictor. No per-file access model was fitted.
 
-**8. Ratio composition (`8_ratio_composition.png`).** One row per group from the clustering below, ordered by a Ward
-tree on each dandiset's mean (log r1, log r2, log r*), drawn down the left like a clustered heatmap. A split
-dandiset's clusters sit together under a red clade. The left panel shows how many decades each group falls from D0
-to D∞ and through which ratio; the right panel shows the same drop as shares. The median group falls 1.58 decades.
-In 60% of groups r1 does more than 90% of that drop, so the tree's largest family is files where everything beyond
-the metadata dust sits in one dataset. A second family carries a heavy r2 tail, and the families at the bottom
-collapse through r2 and r* together. One group has no drop at all: its files hold a single nonzero dataset.
+**8. Ratio composition (`8_ratio_composition.png`).** One row per group from the clustering below, in blocks by
+recording family and ordered by r1 within each block. A group's family is the most common family among its files'
+modality suffixes: ecephys (with spike sorting), icephys, ophys (with fiber photometry and widefield), multimodal
+for files recording more than one of those, then image, behavior, other, and unlabeled for the 14% of files with no
+suffix. The blocks hold 134, 60, 93, 5, 52, 34, 3 and 66 groups. The left panel shows how many decades each group
+falls from D0 to D∞ and through which ratio; the right panel shows the same drop as shares. Red ticks mark clusters
+of split dandisets, which land in different blocks when they were split by modality. The median group falls 1.58
+decades, and in 60% of groups r1 does more than 90% of that drop. icephys stands apart with two populations, one of
+them collapsing mostly through r2, a long tail of mid-sized sweeps.
+
+`8b_ratio_composition_tree.png` shows the same bars ordered instead by a Ward tree on each dandiset's mean (log r1,
+log r2, log r*), drawn down the left like a clustered heatmap. There, a split dandiset's clusters sit together under
+a red clade.
 
 **9. Split dandisets (`9_split_dandisets.png`).** The 48 clusters of the 23 split dandisets, banded by dandiset and
 labeled with each cluster's split basis, file count and modality suffixes, so every split can be checked against
@@ -124,7 +130,7 @@ them whole.
 The result is 447 groups: 399 whole dandisets and 48 clusters from 23 split ones (21 into two, 2 into three).
 `byte_weighted_ratios_by_file.csv` gives every file its group, its ratio-space cluster and that cluster's basis,
 whether or not the split was kept. `byte_weighted_ratios_by_group.csv` carries each group's mean r1, r2 and r*, file
-count, median D0 and storage, modality suffixes, split basis, silhouette and schema similarity. With at most 10
+count, median D0 and storage, recording family, modality suffixes, split basis, silhouette and schema similarity. With at most 10
 files per dandiset, a file type with only one sampled file cannot form a cluster, so minority file types are
 undercounted.
 

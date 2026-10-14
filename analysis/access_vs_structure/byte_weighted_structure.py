@@ -649,6 +649,40 @@ def _modality(asset_path: str) -> str:
     return modality
 
 
+MODALITY_FAMILIES = ("ecephys", "icephys", "ophys", "multimodal", "image", "behavior", "other", "unlabeled")
+_FAMILY_TOKENS = {
+    "ecephys": {"ecephys", "spikesorting"},
+    "icephys": {"icephys"},
+    "ophys": {"ophys", "photometry", "fib", "widefield"},
+}
+
+
+def _modality_family(modality: str) -> str:
+    """
+    The recording family a modality suffix belongs to.
+
+    A file belongs to the physiology it records: ``ecephys`` (with ``spikesorting``, derived from it), ``icephys``,
+    or ``ophys`` (with fiber ``photometry``/``fib`` and ``widefield`` imaging). Tokens riding along, such as
+    ``behavior`` or ``ogen``, do not move it. A file recording more than one is ``multimodal``. Without any of
+    them it is ``image``, then ``behavior``, then ``other``, and a file with no suffix at all is ``unlabeled``.
+    """
+    if not modality:
+        return "unlabeled"
+    tokens = set(modality.split("+"))
+    recorded = [family for family, members in _FAMILY_TOKENS.items() if tokens & members]
+    if len(recorded) > 1:
+        family = "multimodal"
+    elif recorded:
+        family = recorded[0]
+    elif "image" in tokens:
+        family = "image"
+    elif "behavior" in tokens:
+        family = "behavior"
+    else:
+        family = "other"
+    return family
+
+
 def _silhouette(distances: np.ndarray, labels: np.ndarray) -> float:
     """Mean silhouette width; a point alone in its cluster scores 0, as is conventional."""
     scores = []
@@ -748,6 +782,7 @@ def cluster_within_dandisets(
 
     frame = per_file.dropna(subset=RATIO_COLUMNS).reset_index(drop=True).copy()
     frame["modality"] = frame["asset_path"].map(_modality)
+    frame["family"] = frame["modality"].map(_modality_family)
     logs = np.log10(frame[RATIO_COLUMNS].clip(lower=1e-12).to_numpy())
     spread = logs.std(axis=0)
     spread[spread == 0] = 1.0
@@ -815,6 +850,9 @@ def cluster_within_dandisets(
                 "r_star": members["r_star"].mean(),
                 "median_D0": members["D0"].median(),
                 "median_storage_bytes": members["total_storage_bytes"].median(),
+                "family": min(
+                    members["family"].mode(), key=MODALITY_FAMILIES.index
+                ),  # most common family, ties going to the earlier one in MODALITY_FAMILIES
                 "modalities": "; ".join(f"{modality}×{count}" for modality, count in counts.items()),
                 "split_basis": basis,
                 "silhouette": silhouette,
@@ -823,7 +861,8 @@ def cluster_within_dandisets(
             }
         )
     by_group = pd.DataFrame(rows)
-    keep = ["content_id", "dandiset_id", "asset_path", "modality", "group", "cluster", "ratio_cluster", "split_basis"]
+    keep = ["content_id", "dandiset_id", "asset_path", "modality", "family", "group", "cluster", "ratio_cluster"]
+    keep += ["split_basis"]
     keep += ["D0", "D1", "D2", "D_inf", *RATIO_COLUMNS, "total_storage_bytes"]
     by_file = frame[keep].sort_values(["dandiset_id", "group", "content_id"]).reset_index(drop=True)
     return by_file, by_group
@@ -894,6 +933,26 @@ def _row_tree(by_group: pd.DataFrame) -> tuple[list[int], list[tuple[list[float]
     return order, segments, split_mid
 
 
+def _composition_bars(bar_axes: list, groups: pd.DataFrame, rows: np.ndarray) -> None:
+    """Draw each group's drop from D0 to D_inf in decades (first axis) and as shares (second axis), at ``rows``."""
+    steps = _ratio_steps(groups)
+    total = steps.sum(axis=1)
+    shares = steps.div(total.where(total > 0), axis=0).fillna(0)
+    for ax, values, xlabel, title in (
+        (bar_axes[0], steps, "decades from D0 down to D∞   (log10 D0/D∞)", "How far each group collapses"),
+        (bar_axes[1], shares, "share of the drop from D0 to D∞", "Which ratio does the collapsing"),
+    ):
+        left = np.zeros(len(groups))
+        for col in RATIO_COLUMNS:
+            widths = values[col].to_numpy()
+            ax.barh(rows, widths, left=left, height=1.0, color=RATIO_COLORS[col], label=RATIO_LABELS[col])
+            left += widths
+        ax.set_xlabel(xlabel)
+        ax.set_title(title, fontsize=10)
+        ax.tick_params(axis="y", left=False, labelleft=False)
+    bar_axes[1].set_xlim(0, 1)
+
+
 def cluster(args: argparse.Namespace) -> None:
     import matplotlib
 
@@ -942,12 +1001,50 @@ def cluster(args: argparse.Namespace) -> None:
     (out / "ratios_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
 
-    # 8. Composition of each group's drop from D0 to D_inf, rows ordered by a tree like a clustered heatmap
+    # 8. Composition of each group's drop from D0 to D_inf, in blocks by recording family, each block ordered by r1
+    families = [family for family in MODALITY_FAMILIES if (by_group["family"] == family).any()]
+    gap = 2.0
+    order, positions, blocks, cursor = [], [], [], 0.0
+    for family in families:
+        members = by_group[by_group["family"] == family].sort_values("r1", ascending=False)
+        first = cursor
+        for label in members.index:
+            order.append(label)
+            positions.append(cursor)
+            cursor += 1.0
+        blocks.append((family, len(members), first, cursor - 1.0))
+        cursor += gap
+    positions = np.array(positions)
+    fig = plt.figure(figsize=(15, max(8, cursor * 0.03)))
+    grid = fig.add_gridspec(1, 3, width_ratios=[0.9, 3, 3], wspace=0.03, top=0.955, bottom=0.04)
+    label_ax = fig.add_subplot(grid[0])
+    bar_axes = [fig.add_subplot(grid[1], sharey=label_ax), fig.add_subplot(grid[2], sharey=label_ax)]
+    for family, count, first, last in blocks:
+        label_ax.plot([0.82, 0.82], [first - 0.3, last + 0.3], color="0.25", lw=1.2)
+        for end_row in (first - 0.3, last + 0.3):
+            label_ax.plot([0.82, 0.9], [end_row, end_row], color="0.25", lw=1.2)
+        label_ax.text(0.76, (first + last) / 2, f"{family} ({count})", ha="right", va="center", fontsize=9)
+    split_rows = positions[[pd.notna(by_group.loc[label, "cluster"]) for label in order]]
+    for row in split_rows:
+        label_ax.plot([0.93, 1.0], [row, row], color="crimson", lw=1.4, solid_capstyle="butt")
+    label_ax.set_xlim(0, 1)
+    label_ax.axis("off")
+    _composition_bars(bar_axes, by_group.loc[order], positions)
+    label_ax.set_ylim(cursor - gap + 0.5, -0.5)
+    handles, labels = bar_axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, fontsize=8, bbox_to_anchor=(0.6, 0.99), frameon=False)
+    fig.suptitle(
+        f"Hill-ratio composition per dandiset group ({len(by_group)} groups), in blocks by recording family "
+        "(groups per family in brackets), ordered by r1 within each; red ticks mark clusters of split dandisets",
+        fontsize=10,
+        y=1.0,
+    )
+    fig.savefig(out / "8_ratio_composition.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # 8b. The same composition with rows ordered by a tree like a clustered heatmap
     order, segments, split_mid = _row_tree(by_group)
-    steps = _ratio_steps(by_group).loc[order]
-    total = steps.sum(axis=1)
-    shares = steps.div(total.where(total > 0), axis=0).fillna(0)
-    rows = np.arange(len(order))
+    rows = np.arange(len(order), dtype=float)
     fig = plt.figure(figsize=(15, max(8, len(order) * 0.03)))
     grid = fig.add_gridspec(1, 3, width_ratios=[1.6, 3, 3], wspace=0.03, top=0.955, bottom=0.04)
     tree_ax = fig.add_subplot(grid[0])
@@ -967,19 +1064,7 @@ def cluster(args: argparse.Namespace) -> None:
         f"{len(split)} clusters from {len(split_dandisets)} split ones (red clades)",
         fontsize=8,
     )
-    for ax, values, xlabel, title in (
-        (bar_axes[0], steps, "decades from D0 down to D∞   (log10 D0/D∞)", "How far each group collapses"),
-        (bar_axes[1], shares, "share of the drop from D0 to D∞", "Which ratio does the collapsing"),
-    ):
-        left = np.zeros(len(order))
-        for col in RATIO_COLUMNS:
-            widths = values[col].to_numpy()
-            ax.barh(rows, widths, left=left, height=1.0, color=RATIO_COLORS[col], label=RATIO_LABELS[col])
-            left += widths
-        ax.set_xlabel(xlabel)
-        ax.set_title(title, fontsize=10)
-        ax.tick_params(axis="y", left=False, labelleft=False)
-    bar_axes[1].set_xlim(0, 1)
+    _composition_bars(bar_axes, by_group.loc[order], rows)
     for d, mid in split_mid.items():
         bar_axes[1].text(1.01, mid, f"{int(d):06d}", va="center", fontsize=5.5, color="crimson", clip_on=False)
     tree_ax.set_ylim(len(order) - 0.5, -0.5)
@@ -990,7 +1075,7 @@ def cluster(args: argparse.Namespace) -> None:
         fontsize=11,
         y=1.0,
     )
-    fig.savefig(out / "8_ratio_composition.png", dpi=150, bbox_inches="tight")
+    fig.savefig(out / "8b_ratio_composition_tree.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
     # 9. The split dandisets alone, labeled and banded by dandiset, so each split can be checked against its files
