@@ -61,6 +61,7 @@ SECTIONS = (
 JOIN_COLUMNS = [
     "content_id",
     "dandiset_id",
+    "asset_path",
     "groups",
     "datasets",
     "cophenetic_index",
@@ -155,18 +156,33 @@ def stratified_sample(table: pd.DataFrame, max_per_dandiset: int | None, seed: i
 
 
 def hill_metrics(storage: np.ndarray) -> dict:
-    """D0, D1, D2, evenness and top shares over the nonzero entries of one file's byte vector."""
+    """
+    Hill numbers, their successive ratios, and top shares over the nonzero entries of one file's byte vector.
+
+    Hill numbers never increase with their order, D0 >= D1 >= D2 >= D_inf, so the profile is carried exactly by
+    one scale and the successive ratios r1 = D1/D0, r2 = D2/D1 and r* = D_inf/D2, each in (0, 1], since
+    D_inf = D0 * r1 * r2 * r*. r1 is the evenness. r2 falls when a long tail of mid-sized datasets holds real
+    mass, and r* falls when even the leading datasets are unequal. D_inf is 1 / (largest share).
+    """
     nonzero = storage[storage > 0].astype(np.float64)
     if nonzero.size == 0:
-        return {"D0": 0, "D1": np.nan, "D2": np.nan, "evenness": np.nan, "top1_share": np.nan, "top5_share": np.nan}
+        empty = {"D0": 0, "D1": np.nan, "D2": np.nan, "D_inf": np.nan, "evenness": np.nan}
+        empty.update({"r1": np.nan, "r2": np.nan, "r_star": np.nan, "top1_share": np.nan, "top5_share": np.nan})
+        return empty
     shares = nonzero / nonzero.sum()
     d1 = float(np.exp(-np.sum(shares * np.log(shares))))
+    d2 = float(1.0 / np.sum(shares**2))
     ordered = np.sort(shares)[::-1]
+    d_inf = float(1.0 / ordered[0])
     metrics = {
         "D0": int(nonzero.size),
         "D1": d1,
-        "D2": float(1.0 / np.sum(shares**2)),
+        "D2": d2,
+        "D_inf": d_inf,
         "evenness": d1 / nonzero.size,
+        "r1": d1 / nonzero.size,
+        "r2": d2 / d1,
+        "r_star": d_inf / d2,
         "top1_share": float(ordered[0]),
         "top5_share": float(ordered[:5].sum()),
     }
@@ -519,7 +535,9 @@ def plot(args: argparse.Namespace) -> None:
         "log cophenetic": "log_cophenetic",
         "log D1": "log_D1",
         "log D2": "log_D2",
-        "evenness": "evenness",
+        "r1 = D1/D0 (evenness)": "r1",
+        "r2 = D2/D1": "r2",
+        "r* = D∞/D2": "r_star",
     }
     rows = []
     for label, col in metrics.items():
@@ -535,7 +553,7 @@ def plot(args: argparse.Namespace) -> None:
         )
     validation = pd.DataFrame(rows)
     report["validation"] = validation.round(3).to_dict(orient="records")
-    fig, axes = plt.subplots(1, 3, figsize=(13, 3.8), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.6), sharey=True)
     y = np.arange(len(validation))[::-1]
     axes[0].scatter(validation["ICC_dandiset"], y, color="black")
     axes[0].set_xlim(0, 1)
@@ -612,6 +630,404 @@ def _partial_two(x: pd.Series, y: pd.Series, z: np.ndarray) -> float:
     return float(np.corrcoef(res_x, res_y)[0, 1])
 
 
+# --------------------------------------------------------------------------------------------- cluster
+
+RATIO_COLUMNS = ["r1", "r2", "r_star"]
+RATIO_LABELS = {
+    "r1": "r1 = D1/D0  (small-dataset dust)",
+    "r2": "r2 = D2/D1  (long tail)",
+    "r_star": "r* = D∞/D2  (unequal leaders)",
+}
+RATIO_COLORS = {"r1": "tab:blue", "r2": "tab:orange", "r_star": "tab:green"}
+
+
+def _modality(asset_path: str) -> str:
+    """The BIDS-style modality suffix of an NWB asset name (``behavior``, ``ecephys+image``), or '' when absent."""
+    stem = pathlib.PurePosixPath(str(asset_path)).name.removesuffix(".nwb")
+    token = stem.rsplit("_", 1)[-1] if "_" in stem else ""
+    modality = token if token and "-" not in token else ""
+    return modality
+
+
+def _silhouette(distances: np.ndarray, labels: np.ndarray) -> float:
+    """Mean silhouette width; a point alone in its cluster scores 0, as is conventional."""
+    scores = []
+    for i, label in enumerate(labels):
+        own = labels == label
+        if own.sum() < 2:
+            scores.append(0.0)
+            continue
+        a = distances[i, own].sum() / (own.sum() - 1)
+        b = min(distances[i, labels == other].mean() for other in np.unique(labels) if other != label)
+        denominator = max(a, b)
+        scores.append(0.0 if denominator == 0 else (b - a) / denominator)
+    mean_score = float(np.mean(scores))
+    return mean_score
+
+
+SPLIT_BASES = ("modality", "schema", "size", "shape")
+
+
+def file_schemas(datasets: pd.DataFrame) -> dict[str, frozenset]:
+    """
+    Each file's schema: its set of dataset paths with every run of digits replaced by ``#``.
+
+    Numbering is what varies between files of one type, such as ``/acquisition/sweep_0012`` in a longer
+    intracellular recording or ``PlaneSegmentation1`` in a second imaging plane, so it is folded away and two
+    files of one type share a schema however long they ran.
+    """
+    normalized = datasets["path"].str.replace(r"\d+", "#", regex=True)
+    schemas = normalized.groupby(datasets["content_id"]).agg(frozenset).to_dict()
+    return schemas
+
+
+def _majority_schema(content_ids: list[str], schemas: dict[str, frozenset]) -> set[str]:
+    """The paths present in at least half of a cluster's files."""
+    sets = [schemas[c] for c in content_ids if c in schemas]
+    counts = pd.Series([path for paths in sets for path in paths]).value_counts()
+    majority = set(counts[counts >= len(sets) / 2].index)
+    return majority
+
+
+def _split_basis(
+    clusters: list[pd.DataFrame], schemas: dict[str, frozenset], max_schema_jaccard: float, min_size_ratio: float
+) -> tuple[str, float]:
+    """
+    Name what distinguishes a candidate split's clusters, from most to least like a difference in file type.
+
+    ``modality``: each cluster's most common modality suffix is named and they all differ, so the uploader
+    labeled them as different file types. ``schema``: even the most alike pair of clusters shares a Jaccard
+    similarity below ``max_schema_jaccard`` between their majority schemas, so the files hold different
+    datasets. ``size``: the schemas agree but median storage differs by at least ``min_size_ratio``, which r1
+    tracks, so one file type recorded at different lengths separates on it. ``shape``: only the arrangement
+    of bytes differs. Also returns that most-alike Jaccard similarity.
+    """
+    majority = [_majority_schema(members["content_id"].tolist(), schemas) for members in clusters]
+    jaccard = min(len(a & b) / len(a | b) if a | b else 1.0 for i, a in enumerate(majority) for b in majority[i + 1 :])
+    leads = []
+    for members in clusters:
+        named = members.loc[members["modality"] != "", "modality"]
+        leads.append(named.mode().iloc[0] if len(named) else "")
+    if all(leads) and len(set(leads)) == len(leads):
+        return "modality", jaccard
+    if jaccard < max_schema_jaccard:
+        return "schema", jaccard
+    size = [members["total_storage_bytes"].median() for members in clusters]
+    if max(size) >= min_size_ratio * min(size):
+        return "size", jaccard
+    return "shape", jaccard
+
+
+def cluster_within_dandisets(
+    per_file: pd.DataFrame,
+    min_size: int,
+    max_clusters: int,
+    min_silhouette: float,
+    min_separation: float,
+    split_on: set[str],
+    schemas: dict[str, frozenset],
+    max_schema_jaccard: float,
+    min_size_ratio: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Split a dandiset into groups of files only where it clearly holds different kinds of file.
+
+    Files are placed by the logs of r1, r2 and r*, because the ratios multiply (log D_inf = log D0 + log r1 +
+    log r2 + log r*), and each log is scaled by its spread across every file, so that a split demands the same
+    separation in every dandiset. Ward clustering is tried for 2 up to ``max_clusters`` clusters. A candidate
+    split needs every cluster to hold at least ``min_size`` files, a mean silhouette of at least
+    ``min_silhouette``, and its closest pair of centroids at least ``min_separation`` global spreads apart.
+
+    Clear clusters in ratio space are not by themselves different file types, because r1 falls with file size,
+    so one file type recorded at different lengths separates cleanly. A candidate is therefore classified by
+    ``_split_basis`` and kept only when its basis is in ``split_on``; otherwise the dandiset stays one group.
+    The per-file table records every candidate cluster and its basis, kept or not, alongside the final group.
+    """
+    from scipy.cluster import hierarchy
+    from scipy.spatial.distance import pdist, squareform
+
+    frame = per_file.dropna(subset=RATIO_COLUMNS).reset_index(drop=True).copy()
+    frame["modality"] = frame["asset_path"].map(_modality)
+    logs = np.log10(frame[RATIO_COLUMNS].clip(lower=1e-12).to_numpy())
+    spread = logs.std(axis=0)
+    spread[spread == 0] = 1.0
+    features = logs / spread
+
+    frame["ratio_cluster"] = pd.array([pd.NA] * len(frame), dtype="Int64")
+    frame["split_basis"] = ""
+    frame["cluster"] = pd.array([pd.NA] * len(frame), dtype="Int64")
+    frame["group"] = ""
+    split_stats: dict[int, tuple[float, float, str, float]] = {}
+    for dandiset_id, positions in frame.groupby("dandiset_id").indices.items():
+        x = features[positions]
+        best = None
+        if len(positions) >= 2 * min_size and pdist(x).max() > 1e-9:
+            linkage = hierarchy.linkage(x, method="ward")
+            distances = squareform(pdist(x))
+            for k in range(2, min(max_clusters, len(positions) // min_size) + 1):
+                labels = hierarchy.fcluster(linkage, k, criterion="maxclust")
+                sizes = np.bincount(labels)[1:]
+                if len(sizes) != k or sizes.min() < min_size:
+                    continue
+                centroids = np.array([x[labels == c].mean(axis=0) for c in range(1, k + 1)])
+                separation = float(pdist(centroids).min())
+                silhouette = _silhouette(distances, labels)
+                if silhouette >= min_silhouette and separation >= min_separation:
+                    if best is None or silhouette > best[0]:
+                        best = (silhouette, separation, labels)
+        name = f"{int(dandiset_id):06d}"
+        frame.loc[positions, "group"] = name
+        if best is None:
+            continue
+        silhouette, separation, labels = best
+        # Number clusters from the largest down, ties broken by r1, so names are stable from run to run
+        order = sorted(
+            np.unique(labels),
+            key=lambda c: (-(labels == c).sum(), frame.loc[positions[labels == c], "r1"].mean()),
+        )
+        members_by_cluster = [positions[labels == old_label] for old_label in order]
+        basis, jaccard = _split_basis(
+            [frame.loc[m] for m in members_by_cluster], schemas, max_schema_jaccard, min_size_ratio
+        )
+        frame.loc[positions, "split_basis"] = basis
+        for new_index, members in enumerate(members_by_cluster):
+            frame.loc[members, "ratio_cluster"] = new_index
+        if basis not in split_on:
+            continue
+        split_stats[int(dandiset_id)] = (silhouette, separation, basis, jaccard)
+        for new_index, members in enumerate(members_by_cluster):
+            frame.loc[members, "cluster"] = new_index
+            frame.loc[members, "group"] = f"{name}-{new_index}"
+
+    rows = []
+    for group_name, members in frame.groupby("group", sort=True):
+        dandiset_id = int(members["dandiset_id"].iloc[0])
+        counts = members["modality"].replace("", "(none)").value_counts()
+        silhouette, separation, basis, jaccard = split_stats.get(dandiset_id, (np.nan, np.nan, "", np.nan))
+        rows.append(
+            {
+                "group": group_name,
+                "dandiset_id": dandiset_id,
+                "cluster": members["cluster"].iloc[0],
+                "n_files": len(members),
+                "r1": members["r1"].mean(),
+                "r2": members["r2"].mean(),
+                "r_star": members["r_star"].mean(),
+                "median_D0": members["D0"].median(),
+                "median_storage_bytes": members["total_storage_bytes"].median(),
+                "modalities": "; ".join(f"{modality}×{count}" for modality, count in counts.items()),
+                "split_basis": basis,
+                "silhouette": silhouette,
+                "separation": separation,
+                "schema_jaccard": jaccard,
+            }
+        )
+    by_group = pd.DataFrame(rows)
+    keep = ["content_id", "dandiset_id", "asset_path", "modality", "group", "cluster", "ratio_cluster", "split_basis"]
+    keep += ["D0", "D1", "D2", "D_inf", *RATIO_COLUMNS, "total_storage_bytes"]
+    by_file = frame[keep].sort_values(["dandiset_id", "group", "content_id"]).reset_index(drop=True)
+    return by_file, by_group
+
+
+def _ratio_steps(table: pd.DataFrame) -> pd.DataFrame:
+    """The decades each ratio removes on the way from D0 down to D_inf: -log10 r, which sum to log10(D0/D_inf)."""
+    steps = pd.DataFrame({col: -np.log10(table[col].clip(lower=1e-12, upper=1.0)) for col in RATIO_COLUMNS})
+    return steps
+
+
+def _row_tree(by_group: pd.DataFrame) -> tuple[list[int], list[tuple[list[float], list[float], str]], dict[int, float]]:
+    """
+    Order the group rows the way a clustered heatmap orders genes, and return the tree to draw beside them.
+
+    Dandisets are leaves of a Ward tree built on their mean log ratios, each log scaled by its spread, as the
+    within-dandiset clustering does. A split dandiset's clusters stay adjacent and are first joined by a short
+    bracket of their own, a clade, which then attaches to the tree like any other leaf. Every merge of the tree
+    is lifted by that bracket's depth so no line runs backwards. Returns the row order (by_group index labels),
+    the line segments as (heights, rows, kind) with kind "clade" or "tree", and each split dandiset's mid row.
+    """
+    from scipy.cluster import hierarchy
+
+    logs = np.log10(by_group[RATIO_COLUMNS].clip(lower=1e-12, upper=1.0))
+    features = (logs / logs.std(axis=0).replace(0, 1)).to_numpy()
+    dandisets = sorted(by_group["dandiset_id"].unique())
+    member_rows = {d: by_group.index[by_group["dandiset_id"] == d] for d in dandisets}
+    profiles = np.array(
+        [
+            np.average(
+                features[by_group.index.get_indexer(member_rows[d])],
+                axis=0,
+                weights=by_group.loc[member_rows[d], "n_files"],
+            )
+            for d in dandisets
+        ]
+    )
+    linkage = hierarchy.linkage(profiles, method="ward")
+    order: list[int] = []
+    for leaf in hierarchy.leaves_list(linkage):
+        rows = by_group.loc[member_rows[dandisets[leaf]]].sort_values("cluster", na_position="first")
+        order.extend(rows.index.tolist())
+    row_of = {label: position for position, label in enumerate(order)}
+
+    clade_depth = 0.12 * float(linkage[:, 2].max() or 1.0)
+    segments: list[tuple[list[float], list[float], str]] = []
+    node_row: dict[int, float] = {}
+    node_height: dict[int, float] = {}
+    split_mid: dict[int, float] = {}
+    for leaf, d in enumerate(dandisets):
+        rows = [row_of[label] for label in member_rows[d]]
+        if len(rows) == 1:
+            node_row[leaf], node_height[leaf] = float(rows[0]), 0.0
+            continue
+        for row in rows:
+            segments.append(([0.0, clade_depth], [row, row], "clade"))
+        segments.append(([clade_depth, clade_depth], [min(rows), max(rows)], "clade"))
+        node_row[leaf] = split_mid[d] = (min(rows) + max(rows)) / 2
+        node_height[leaf] = clade_depth
+    n = len(dandisets)
+    for i, (a, b, distance, _) in enumerate(linkage):
+        a, b, height = int(a), int(b), clade_depth + float(distance)
+        for child in (a, b):
+            segments.append(([node_height[child], height], [node_row[child], node_row[child]], "tree"))
+        segments.append(([height, height], [node_row[a], node_row[b]], "tree"))
+        node_row[n + i] = (node_row[a] + node_row[b]) / 2
+        node_height[n + i] = height
+    return order, segments, split_mid
+
+
+def cluster(args: argparse.Namespace) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    per_file = pd.read_csv(args.metrics)
+    per_file = per_file[per_file["D0"] > 0]
+    by_file, by_group = cluster_within_dandisets(
+        per_file,
+        min_size=args.min_cluster_size,
+        max_clusters=args.max_clusters,
+        min_silhouette=args.min_silhouette,
+        min_separation=args.min_separation,
+        split_on=set(args.split_on),
+        schemas=file_schemas(pd.read_parquet(args.cache_dir / "datasets.parquet", columns=["content_id", "path"])),
+        max_schema_jaccard=args.max_schema_jaccard,
+        min_size_ratio=args.min_size_ratio,
+    )
+    by_file.to_csv(HERE / "byte_weighted_ratios_by_file.csv", index=False)
+    by_group.to_csv(HERE / "byte_weighted_ratios_by_group.csv", index=False)
+
+    split = by_group[by_group["cluster"].notna()]
+    split_dandisets = split["dandiset_id"].unique()
+    candidates = by_file[by_file["split_basis"] != ""].groupby("dandiset_id")["split_basis"].first()
+    summary = {
+        "files": len(by_file),
+        "dandisets": int(by_file["dandiset_id"].nunique()),
+        "groups": len(by_group),
+        "candidate_splits_by_basis": {basis: int((candidates == basis).sum()) for basis in SPLIT_BASES},
+        "split_on": sorted(args.split_on),
+        "dandisets_split": len(split_dandisets),
+        "clusters_in_split_dandisets": int(len(split)),
+        "split_sizes": {int(k): int(v) for k, v in split.groupby("dandiset_id").size().value_counts().items()},
+        "criteria": {
+            "min_cluster_size": args.min_cluster_size,
+            "max_clusters": args.max_clusters,
+            "min_silhouette": args.min_silhouette,
+            "min_separation_in_global_spreads": args.min_separation,
+            "max_schema_jaccard": args.max_schema_jaccard,
+            "min_size_ratio": args.min_size_ratio,
+        },
+    }
+    out = args.out_dir
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "ratios_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(json.dumps(summary, indent=2))
+
+    # 8. Composition of each group's drop from D0 to D_inf, rows ordered by a tree like a clustered heatmap
+    order, segments, split_mid = _row_tree(by_group)
+    steps = _ratio_steps(by_group).loc[order]
+    total = steps.sum(axis=1)
+    shares = steps.div(total.where(total > 0), axis=0).fillna(0)
+    rows = np.arange(len(order))
+    fig = plt.figure(figsize=(15, max(8, len(order) * 0.03)))
+    grid = fig.add_gridspec(1, 3, width_ratios=[1.6, 3, 3], wspace=0.03, top=0.955, bottom=0.04)
+    tree_ax = fig.add_subplot(grid[0])
+    bar_axes = [fig.add_subplot(grid[1], sharey=tree_ax), fig.add_subplot(grid[2], sharey=tree_ax)]
+    for heights, ys, kind in segments:
+        if kind == "clade":
+            tree_ax.plot([-h for h in heights], ys, color="crimson", lw=1.6, solid_capstyle="butt")
+        else:
+            tree_ax.plot([-h for h in heights], ys, color="0.35", lw=0.5)
+    tree_ax.set_xlim(right=0)
+    tree_ax.set_xticks([])
+    for side in ("top", "right", "bottom", "left"):
+        tree_ax.spines[side].set_visible(False)
+    tree_ax.set_yticks([])
+    tree_ax.set_ylabel(
+        f"groups (n={len(by_group)}): {summary['dandisets'] - len(split_dandisets)} whole dandisets and "
+        f"{len(split)} clusters from {len(split_dandisets)} split ones (red clades)",
+        fontsize=8,
+    )
+    for ax, values, xlabel, title in (
+        (bar_axes[0], steps, "decades from D0 down to D∞   (log10 D0/D∞)", "How far each group collapses"),
+        (bar_axes[1], shares, "share of the drop from D0 to D∞", "Which ratio does the collapsing"),
+    ):
+        left = np.zeros(len(order))
+        for col in RATIO_COLUMNS:
+            widths = values[col].to_numpy()
+            ax.barh(rows, widths, left=left, height=1.0, color=RATIO_COLORS[col], label=RATIO_LABELS[col])
+            left += widths
+        ax.set_xlabel(xlabel)
+        ax.set_title(title, fontsize=10)
+        ax.tick_params(axis="y", left=False, labelleft=False)
+    bar_axes[1].set_xlim(0, 1)
+    for d, mid in split_mid.items():
+        bar_axes[1].text(1.01, mid, f"{int(d):06d}", va="center", fontsize=5.5, color="crimson", clip_on=False)
+    tree_ax.set_ylim(len(order) - 0.5, -0.5)
+    handles, labels = bar_axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, fontsize=8, bbox_to_anchor=(0.6, 0.99), frameon=False)
+    fig.suptitle(
+        "Hill-ratio composition per dandiset group, ordered by a Ward tree on (log r1, log r2, log r*)",
+        fontsize=11,
+        y=1.0,
+    )
+    fig.savefig(out / "8_ratio_composition.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # 9. The split dandisets alone, labeled and banded by dandiset, so each split can be checked against its files
+    if len(split):
+        split_rows = split.sort_values(["dandiset_id", "cluster"]).reset_index(drop=True)
+        split_steps = _ratio_steps(split_rows)
+        fig, ax = plt.subplots(figsize=(11, 1.2 + 0.32 * len(split_rows)))
+        y = np.arange(len(split_rows))[::-1]
+        for band, (_, members) in enumerate(split_rows.groupby("dandiset_id", sort=True)):
+            if band % 2 == 0:
+                rows_of_band = y[members.index]
+                ax.axhspan(rows_of_band.min() - 0.5, rows_of_band.max() + 0.5, color="0.92", zorder=0)
+        left = np.zeros(len(split_rows))
+        for col in RATIO_COLUMNS:
+            ax.barh(y, split_steps[col], left=left, height=0.8, color=RATIO_COLORS[col], label=RATIO_LABELS[col])
+            left += split_steps[col].to_numpy()
+        for yi, (_, row), end in zip(y, split_rows.iterrows(), left):
+            ax.text(end + 0.03, yi, f"r1={row.r1:.3f}  r2={row.r2:.2f}  r*={row.r_star:.2f}", va="center", fontsize=6.5)
+        labels = [
+            f"{row.group}  ({row.split_basis})  n={row.n_files}  [{row.modalities}]" for _, row in split_rows.iterrows()
+        ]
+        ax.set_yticks(y)
+        ax.set_yticklabels(labels, fontsize=7)
+        ax.set_ylim(-0.5, len(split_rows) - 0.5)
+        ax.set_xlim(0, left.max() * 1.45)
+        ax.set_xlabel("decades from D0 down to D∞   (log10 D0/D∞)")
+        ax.legend(fontsize=7, loc="lower right")
+        ax.set_title(
+            f"Dandisets split into file-type clusters ({len(split_dandisets)} dandisets, {len(split)} clusters)\n"
+            "shaded bands group each dandiset's clusters; brackets give each cluster's modality suffixes",
+            fontsize=9,
+        )
+        fig.tight_layout()
+        fig.savefig(out / "9_split_dandisets.png", dpi=150)
+        plt.close(fig)
+
+
 def _walk_one(content_id: str, cache: pathlib.Path) -> None:
     """Child-process entry: walk one file, write its parquet, and print the error if it failed."""
     result = walk_file(content_id)
@@ -651,11 +1067,45 @@ def main() -> None:
     pl = sub.choices["plot"]
     pl.add_argument("--metrics", type=pathlib.Path, default=HERE / "byte_weighted.csv")
     pl.add_argument("--out-dir", type=pathlib.Path, default=HERE / "figures" / "byte_weighted")
+    cl = sub.add_parser("cluster")
+    cl.add_argument("--metrics", type=pathlib.Path, default=HERE / "byte_weighted.csv")
+    cl.add_argument("--out-dir", type=pathlib.Path, default=HERE / "figures" / "byte_weighted")
+    cl.add_argument("--min-cluster-size", type=int, default=2, help="Smallest cluster a split may produce")
+    cl.add_argument("--max-clusters", type=int, default=4, help="Most clusters one dandiset may split into")
+    cl.add_argument("--min-silhouette", type=float, default=0.5, help="Mean silhouette a split must reach")
+    cl.add_argument(
+        "--min-separation",
+        type=float,
+        default=1.0,
+        help="Closest centroid pair must be this many global spreads apart in log-ratio space",
+    )
+    cl.add_argument(
+        "--split-on",
+        nargs="+",
+        choices=SPLIT_BASES,
+        default=["modality", "schema"],
+        help="Which kinds of candidate split to keep; size and shape splits are not different file types",
+    )
+    cl.add_argument(
+        "--max-schema-jaccard",
+        type=float,
+        default=0.7,
+        help="Clusters whose majority schemas are less alike than this are different file types",
+    )
+    cl.add_argument(
+        "--cache-dir",
+        type=pathlib.Path,
+        default=HERE / ".byte_weighted_cache",
+        help="Holds datasets.parquet, read for each file's schema",
+    )
+    cl.add_argument("--min-size-ratio", type=float, default=3.0, help="Storage ratio that labels a size split")
     args = parser.parse_args()
     if args.command == "build":
         build(args)
-    else:
+    elif args.command == "plot":
         plot(args)
+    else:
+        cluster(args)
 
 
 if __name__ == "__main__":

@@ -71,12 +71,28 @@
       "rho_logbytes_dandisets": -0.263
     },
     {
-      "metric": "evenness",
+      "metric": "r1 = D1/D0 (evenness)",
       "ICC_dandiset": 0.869,
       "rho_logD0_files": 0.057,
       "rho_logbytes_files": -0.399,
       "rho_logD0_dandisets": 0.093,
       "rho_logbytes_dandisets": -0.385
+    },
+    {
+      "metric": "r2 = D2/D1",
+      "ICC_dandiset": 0.92,
+      "rho_logD0_files": -0.602,
+      "rho_logbytes_files": 0.167,
+      "rho_logD0_dandisets": -0.584,
+      "rho_logbytes_dandisets": 0.18
+    },
+    {
+      "metric": "r* = D\u221e/D2",
+      "ICC_dandiset": 0.867,
+      "rho_logD0_files": -0.656,
+      "rho_logbytes_files": 0.186,
+      "rho_logD0_dandisets": -0.666,
+      "rho_logbytes_dandisets": 0.189
     }
   ],
   "access_dandiset_level": {

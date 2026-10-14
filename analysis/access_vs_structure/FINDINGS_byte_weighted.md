@@ -56,11 +56,77 @@ component at 45% and its second at 20%. The first component is the acquisition-v
 again (Spearman with log `D0` 0.98). `D1` and `D2` are mostly count, at 0.74 and 0.69 for files and 0.75 and 0.71 for
 dandisets, with a negative size component of −0.28 and −0.27. Evenness is nearly uncorrelated with count (0.06 for
 files, 0.09 for dandisets) and moderately anti-correlated with size (−0.40 for files, −0.39 for dandisets).
+The panel also carries r2 and r*, the next two successive ratios. Each is mostly a dandiset property (ICC 0.92 and
+0.87), and both are tied to count rather than size (see the section on successive ratios below).
 
 **7. Access, at dandiset level only (n = 422, medians).** Log bytes remains the strongest correlate of download
 fraction (Spearman −0.74), followed by log `D0` (−0.48). `D1` (−0.18) and evenness (+0.16) are weak. With log `D0`
 and log bytes both controlled, `D1` keeps a partial Spearman of −0.25 with download fraction. That is a small residual
 signal, not a new predictor. No per-file access model was fitted.
+
+**8. Ratio composition (`8_ratio_composition.png`).** One row per group from the clustering below, ordered by a Ward
+tree on each dandiset's mean (log r1, log r2, log r*), drawn down the left like a clustered heatmap. A split
+dandiset's clusters sit together under a red clade. The left panel shows how many decades each group falls from D0
+to D∞ and through which ratio; the right panel shows the same drop as shares. The median group falls 1.58 decades.
+In 60% of groups r1 does more than 90% of that drop, so the tree's largest family is files where everything beyond
+the metadata dust sits in one dataset. A second family carries a heavy r2 tail, and the families at the bottom
+collapse through r2 and r* together. One group has no drop at all: its files hold a single nonzero dataset.
+
+**9. Split dandisets (`9_split_dandisets.png`).** The 48 clusters of the 23 split dandisets, banded by dandiset and
+labeled with each cluster's split basis, file count and modality suffixes, so every split can be checked against
+its files.
+
+## Successive Hill ratios
+
+Hill numbers never increase with their order, D0 ≥ D1 ≥ D2 ≥ D∞, where D∞ = 1 / (largest share). So the profile is
+carried exactly by one scale and the successive ratios
+
+    r1 = D1/D0,   r2 = D2/D1,   r* = D∞/D2,   each in (0, 1],   with   D∞ = D0 · r1 · r2 · r*.
+
+r1 is the evenness and falls with the metadata dust. r2 falls when a long tail of mid-sized datasets holds real mass.
+r* falls when even the leading datasets are unequal. All three are in `byte_weighted.csv`, and the identity above
+holds in every file. Their medians are 0.030, 0.92 and 0.92, so almost all of the drop happens at the first step.
+
+r2 and r* agree closely (Spearman +0.91), so orders above 2 add almost nothing, and (D0, r1, r2) carries essentially
+the whole profile. r1 and r2 are only weakly related (−0.13), so they are two genuinely different shape axes. They
+**split the confound between them**. r1 is nearly free of count (+0.06) but tied to size (−0.40). r2 is nearly free
+of size (+0.17) but tied to count (−0.60): files with more datasets have heavier tails. Neither escapes both.
+
+## Clustering within dandisets
+
+`byte_weighted_structure.py cluster` groups each dandiset's files by their (log r1, log r2, log r*), each log scaled by
+its spread across all files. It tries Ward clusterings of 2 to 4 clusters and takes the best candidate with every
+cluster at least 2 files, a mean silhouette of at least 0.5, and its closest centroids at least one global spread
+apart. 74 of 422 dandisets have such a candidate.
+
+Clear clusters in ratio space are not by themselves different file types, because r1 falls with file size: one file
+type recorded for minutes and for hours separates cleanly. So each candidate is classified by what distinguishes its
+clusters. A candidate splits by **modality** when each cluster's most common modality suffix (`_ecephys`,
+`_behavior+ophys`) is named and distinct. It splits by **schema** when even the most alike pair of clusters has a
+Jaccard similarity below 0.7 between their majority schemas. A file's schema is its set of dataset paths with digits
+folded to `#`, so `sweep_0012` and `sweep_0013` count as one path. Otherwise the split is labeled **size** (median
+storage differs at least 3 times) or **shape**.
+
+| Basis | Candidates | Median schema Jaccard | Split? |
+|---|---|---|---|
+| modality | 12 | 0.45 | yes |
+| schema | 11 | 0.45 | yes |
+| size | 20 | 0.90 | no |
+| shape | 31 | 0.92 | no |
+
+The schema test is calibrated on the modality splits, the ones the uploaders themselves labeled as different file
+types: their median similarity is 0.45 against about 0.9 for the size and shape candidates. An earlier version tested
+a 1.5-fold difference in dataset count instead. It wrongly admitted intracellular recordings that differ only in
+sweep count, which is length again, measured in datasets rather than bytes. Two modality splits, 000037 and 001942,
+have near-identical schemas (0.81 and 0.85), and 000037's clusters also mix suffixes. `--split-on schema` would keep
+them whole.
+
+The result is 447 groups: 399 whole dandisets and 48 clusters from 23 split ones (21 into two, 2 into three).
+`byte_weighted_ratios_by_file.csv` gives every file its group, its ratio-space cluster and that cluster's basis,
+whether or not the split was kept. `byte_weighted_ratios_by_group.csv` carries each group's mean r1, r2 and r*, file
+count, median D0 and storage, modality suffixes, split basis, silhouette and schema similarity. With at most 10
+files per dandiset, a file type with only one sampled file cannot form a cluster, so minority file types are
+undercounted.
 
 ## What changed from the first sample
 
@@ -78,7 +144,9 @@ carries a moderate size component, though weaker than the smaller sample suggest
 "structure vs. size" collapse. What the byte-weighted view does add is where the bytes sit. Section composition,
 acquisition-dominated versus processing-dominated, is a real, strong, dandiset-level distinction that the
 unlabeled-tree metrics cannot express. If anything here earns a place in the whitepaper, it is that, and not `D1` or
-evenness as a complexity score.
+evenness as a complexity score. Taking the profile apart into successive ratios sharpens the negative result. The
+byte-weighted shape does not escape the count-versus-size collapse; it decomposes along it, into r1 tied to size and
+r2 tied to count.
 
 ## Follow-up
 
