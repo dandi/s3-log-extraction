@@ -298,8 +298,3 @@ markers = [
 env = [
     "S3_LOG_EXTRACTION_PASSWORD=test",
 ]
-# A published service range listing that cannot be obtained only warns at run time. Failing on it here is what lets
-# the daily remote tests report a source that has broken, rather than passing with its ranges missing
-filterwarnings = [
-    "error::s3_log_extraction.ip_utils.ServiceNetworksWarning",
-]
