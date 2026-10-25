@@ -16,6 +16,7 @@ from s3_log_extraction.ip_utils import (
     IpRegionResolver,
     MappingRegionResolver,
     RegionResolver,
+    ServiceNetworksWarning,
     country_alpha_2_to_alpha_3,
     get_region_coordinates,
 )
@@ -282,6 +283,8 @@ def test_github_ranges_are_recognized_by_shape_not_by_key() -> None:
             warnings.catch_warnings(),
         ):
             warnings.simplefilter("error")
+            # The other listings are empty on purpose, which is reported in its own right
+            warnings.simplefilter("ignore", category=ServiceNetworksWarning)
             service_networks = s3_log_extraction.ip_utils.fetch_service_networks()
             resolver = IpRegionResolver(
                 service_networks=service_networks, geolite2_reader=_make_reader(city_responses={})

@@ -9,7 +9,7 @@ packages = ["src/s3_log_extraction"]
 
 [project]
 name = "s3-log-extraction"
-version="1.11.10"
+version="1.11.11"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
@@ -205,9 +205,6 @@ ignore = [
     # built in step with one another, so `strict=True` would be a correctness assertion rather than a
     # style fix, and would newly raise where today it silently drops. Left as-is deliberately
     "B905",
-    # The published service range listings are fetched without a timeout, so a hung connection blocks
-    # the run. Adding one is a robustness improvement rather than a neutral edit
-    "S113",
     # Timestamps are parsed and formatted naive, which is what the summaries have always published
     "DTZ007",
     "UP017",
@@ -300,4 +297,9 @@ markers = [
 ]
 env = [
     "S3_LOG_EXTRACTION_PASSWORD=test",
+]
+# A published service range listing that cannot be obtained only warns at run time. Failing on it here is what lets
+# the daily remote tests report a source that has broken, rather than passing with its ranges missing
+filterwarnings = [
+    "error::s3_log_extraction.ip_utils.ServiceNetworksWarning",
 ]

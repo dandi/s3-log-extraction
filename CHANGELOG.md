@@ -2,6 +2,10 @@
 
 ## Upcoming
 
+### 🐛 Bug Fix
+
+- A published IP range listing that cannot be obtained, such as the Azure service tags when their download page is unreachable or changes, no longer stops summary generation. It is reported with the new `ServiceNetworksWarning`, and requesters in its ranges are labeled by the next service that lists them, or geolocated. The test suite turns the warning into an error, so the daily remote tests still report a broken source. ([#319](https://github.com/dandi/s3-log-extraction/pull/319))
+
 ## v1.11.10
 
 ### 🚀 Enhancement
