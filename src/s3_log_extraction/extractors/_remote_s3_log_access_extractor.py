@@ -132,7 +132,10 @@ class RemoteS3LogAccessExtractor:
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
 
-        unprocessed_s3_urls = self._get_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
+        unprocessed_s3_urls = self.get_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
+
+        # Randomize the order of the remote files for the progress bar to be more accurate
+        random.shuffle(x=unprocessed_s3_urls)
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
         tqdm_style_kwargs = {
@@ -200,24 +203,47 @@ class RemoteS3LogAccessExtractor:
 
         shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
 
-    def _get_unprocessed_s3_urls(
+    def get_unprocessed_s3_urls(
         self,
+        *,
         s3_root: str,
-        inventory_directory: pathlib.Path | None = None,
+        inventory_directory: str | pathlib.Path | None = None,
     ) -> list[str]:
+        """
+        Get the S3 URLs of the log files that have not yet been extracted, without extracting them.
+
+        This is the same list that `extract_s3_bucket` works through, so it can be used to check whether a run
+        has anything to do. It only reads the records of this extractor and writes nothing.
+
+        Parameters
+        ----------
+        s3_root : str
+            The root S3 path of the log bucket (e.g. ``s3://my-logs-bucket``).
+        inventory_directory : str or pathlib.Path or None, optional
+            Path to a local pre-downloaded S3 inventory directory, in the layout described by
+            `extract_s3_bucket`. When omitted, log files are discovered by scanning the remote bucket
+            directly, which can be very slow for large buckets.
+
+        Returns
+        -------
+        list[str]
+            The S3 URLs of the log files that have not yet been extracted.
+
+        Raises
+        ------
+        ValueError
+            If the records of a previous run are corrupted.
+        """
         self._get_end_record_and_check_consistency()
 
         if inventory_directory is not None:
             unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_local_inventory(
-                inventory_directory=inventory_directory, s3_root=s3_root
+                inventory_directory=pathlib.Path(inventory_directory), s3_root=s3_root
             )
         else:
             unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
 
         del self.s3_url_processing_end_record  # Free memory
-
-        # Randomize the order of the remote files for the progress bar to be more accurate
-        random.shuffle(x=unprocessed_s3_urls)
 
         return unprocessed_s3_urls
 

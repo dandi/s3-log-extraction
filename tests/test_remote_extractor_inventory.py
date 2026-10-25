@@ -247,7 +247,7 @@ def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp
     ):
         extractor.s3_url_processing_end_record = set()
 
-        extractor._get_unprocessed_s3_urls(
+        extractor.get_unprocessed_s3_urls(
             s3_root="s3://my-bucket",
             inventory_directory=inventory_dir,
         )
@@ -270,7 +270,7 @@ def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path
     ):
         extractor.s3_url_processing_end_record = set()
 
-        extractor._get_unprocessed_s3_urls(
+        extractor.get_unprocessed_s3_urls(
             s3_root="s3://my-bucket",
         )
 
