@@ -18,7 +18,7 @@ from ..extractors import (
     S3LogAccessExtractor,
     stop_extraction,
 )
-from ..ip_utils import update_geolite2_database, update_region_code_coordinates
+from ..ip_utils import find_excluded_ip_records, update_geolite2_database, update_region_code_coordinates
 from ..summarize import (
     generate_all_dataset_totals,
     generate_archive_summaries,
@@ -317,6 +317,85 @@ def _reset_cli() -> None:
 @_cache_directory_option
 def _reset_extraction_cli(cache_directory: str | None = None) -> None:
     reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
+
+
+# s3logextraction excluded
+@s3logextraction_cli.group(name="excluded")
+def _excluded_cli() -> None:
+    """Maintenance of the extraction cache with respect to the excluded IP addresses."""
+
+
+# s3logextraction excluded scan
+@_excluded_cli.command(name="scan")
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Scan a non-default cache directory. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Decrypt IP addresses in the extraction cache. Enabled by default.",
+    type=rich_click.BOOL,
+    default=True,
+)
+@rich_click.option(
+    "--workers",
+    help=(
+        "The maximum number of workers to use for parallel processing. "
+        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc."
+    ),
+    required=False,
+    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    default=-2,
+)
+@_exclude_option
+def _excluded_scan_cli(
+    cache_directory: str | None = None,
+    use_encryption: bool = True,
+    workers: int = -2,
+    extra_excluded_ips: str | None = None,
+) -> None:
+    """
+    Scan the extraction cache for records made by an excluded IP address.
+
+    These are the addresses listed in '~/.s3-log-extraction/excluded_ips.txt', in the S3_LOG_EXTRACTION_EXCLUDED_IPS
+    environment variable, and given to '--exclude'. Records extracted before an address was excluded stay in the
+    cache until they are removed.
+
+    Each object key with such records is listed with its record count. The addresses themselves are not printed.
+    The command exits with an error when any record is found, so that a scheduled job running it fails.
+    """
+    excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)
+    if not excluded_ips:
+        rich_click.echo("No excluded IP addresses are configured, so there is nothing to scan for.")
+        return
+
+    records = find_excluded_ip_records(
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        excluded_ips=excluded_ips,
+        use_encryption=use_encryption,
+        workers=workers,
+    )
+    if not records:
+        rich_click.echo(f"No records of the {len(excluded_ips)} excluded IP addresses were found.")
+        return
+
+    for object_key, record_counts_per_ip in records.items():
+        rich_click.echo(f"{object_key}: {sum(record_counts_per_ip.values())} records")
+    record_count = sum(count for record_counts_per_ip in records.values() for count in record_counts_per_ip.values())
+    found_ip_count = len({ip for record_counts_per_ip in records.values() for ip in record_counts_per_ip})
+    message = (
+        f"Found {record_count} records of {found_ip_count} excluded IP addresses "
+        f"across {len(records)} object keys of the extraction cache."
+    )
+    raise rich_click.ClickException(message)
 
 
 # s3logextraction update
