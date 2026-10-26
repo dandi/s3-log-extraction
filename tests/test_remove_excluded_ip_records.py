@@ -152,6 +152,24 @@ def test_remove_excluded_ip_records_defaults_to_the_configured_addresses(
 
 
 @pytest.mark.ai_generated
+def test_remove_excluded_ip_records_without_excluded_ips(tmp_path: pathlib.Path) -> None:
+    """With no excluded address at all, nothing is removed."""
+    _write_cache(cache_directory=tmp_path)
+
+    records = remove_excluded_ip_records(cache_directory=tmp_path, excluded_ips=[], use_encryption=False, workers=1)
+
+    assert records == {}
+    assert (tmp_path / "extraction" / _DESCRIPTION_KEY / "ips.txt").exists()
+
+
+@pytest.mark.ai_generated
+def test_remove_excluded_ip_records_requires_an_extraction_directory(tmp_path: pathlib.Path) -> None:
+    """A cache without an extraction directory is refused."""
+    with pytest.raises(FileNotFoundError, match="No extraction directory"):
+        remove_excluded_ip_records(cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], use_encryption=False, workers=1)
+
+
+@pytest.mark.ai_generated
 @pytest.mark.parametrize(
     ("start_record", "end_record"),
     [
@@ -251,15 +269,35 @@ def test_cli_excluded_remove(
 
 
 @pytest.mark.ai_generated
-def test_cli_excluded_remove_without_excluded_ips(dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path) -> None:
-    """With no excluded address at all, the command passes with a short note and changes nothing."""
+@pytest.mark.parametrize(
+    ("dotenv_content", "extra_arguments", "expected_output"),
+    [
+        (None, ["--confirm"], "No excluded IP addresses are configured"),
+        (f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=198.51.100.1\n", [], "No records of the 1 excluded IP addresses"),
+        (
+            f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=198.51.100.1\n",
+            ["--confirm"],
+            "No records of the 1 excluded IP addresses",
+        ),
+    ],
+)
+def test_cli_excluded_remove_without_records(
+    dotenv_file_path: pathlib.Path,
+    tmp_path: pathlib.Path,
+    dotenv_content: str | None,
+    extra_arguments: list[str],
+    expected_output: str,
+) -> None:
+    """With no excluded address, or none with a record in the cache, the command passes and changes nothing."""
+    if dotenv_content is not None:
+        dotenv_file_path.write_text(dotenv_content)
     _write_cache(cache_directory=tmp_path)
 
     result = click.testing.CliRunner().invoke(
         s3_log_extraction.s3logextraction_cli,
-        ["excluded", "remove", "--cache", str(tmp_path), "--encryption", "false", "--workers", "1", "--confirm"],
+        ["excluded", "remove", "--cache", str(tmp_path), "--encryption", "false", "--workers", "1", *extra_arguments],
     )
 
     assert result.exit_code == 0, result.output
-    assert "No excluded IP addresses are configured" in result.output
+    assert expected_output in result.output
     assert (tmp_path / "extraction" / _DESCRIPTION_KEY / "ips.txt").exists()
