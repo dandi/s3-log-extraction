@@ -20,7 +20,7 @@ _ANOTHER_IP = "203.0.113.0"
 
 @pytest.fixture
 def dotenv_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
-    """Point every source of excluded IPs at a temporary location, so that none outside the test contributes."""
+    """Point the dotenv file at a temporary location and clear the variable, so that nothing outside the test counts."""
     dotenv_file_path = tmp_path / ".env"
     monkeypatch.setattr("s3_log_extraction.config._config.DOTENV_FILE_PATH", dotenv_file_path)
     monkeypatch.setattr(
@@ -93,6 +93,25 @@ def test_find_excluded_ip_records(
 
     assert records == expected_records
     assert list(records) == sorted(expected_records)
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("workers", [1, 2])
+def test_find_excluded_ip_records_across_many_batches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, workers: int
+) -> None:
+    """A cache spanning more batches than are kept in flight is scanned in full, as a large real cache would be."""
+    monkeypatch.setattr("s3_log_extraction.ip_utils._excluded_ip_records._BATCH_SIZE", 1)
+    _write_cache(cache_directory=tmp_path)
+
+    records = find_excluded_ip_records(
+        cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], use_encryption=False, workers=workers
+    )
+
+    assert records == {
+        "ds000001/sub-01/data.nii.gz": {_ACTOR_IP: 2},
+        "ds000002/dataset_description.json": {_ACTOR_IP: 1},
+    }
 
 
 @pytest.mark.ai_generated

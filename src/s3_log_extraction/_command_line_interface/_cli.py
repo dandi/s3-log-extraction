@@ -370,9 +370,9 @@ def _excluded_scan_cli(
     """
     Scan the extraction cache for records made by an excluded IP address.
 
-    These are the addresses of the S3_LOG_EXTRACTION_EXCLUDED_IPS entry of '~/.s3-log-extraction/.env' or the
-    environment, and those given to '--exclude'. Records extracted before an address was excluded stay in the
-    cache until they are removed.
+    These are the addresses listed in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set,
+    in '~/.s3-log-extraction/.env', and those given to '--exclude'. Records extracted before an address was excluded
+    stay in the cache until they are removed.
 
     Each object key with such records is listed with its record count. The addresses themselves are not printed.
     The command exits with an error when any record is found, so that a scheduled job running it fails.
@@ -450,8 +450,9 @@ def _excluded_remove_cli(
     """
     Remove the records made by an excluded IP address from the extraction cache.
 
-    These are the addresses of the S3_LOG_EXTRACTION_EXCLUDED_IPS entry of '~/.s3-log-extraction/.env' or the
-    environment, and those given to '--exclude'. Their records leave every summary generated afterwards.
+    These are the addresses listed in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set,
+    in '~/.s3-log-extraction/.env', and those given to '--exclude'. Their records leave every summary generated
+    afterwards.
 
     Without '--confirm', nothing is changed, and the object keys whose records would be removed are listed instead.
     The cache must not be extracted to at the same time, so back it up and hold the extraction lock first.
