@@ -44,8 +44,8 @@ def _exclude_option(command: typing.Callable) -> typing.Callable:
         "extra_excluded_ips",
         help=(
             "A comma-separated list of IP addresses to exclude for this run only. They are added to those listed in "
-            "'~/.s3-log-extraction/excluded_ips.txt' and in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable, "
-            "which can also be set in '~/.s3-log-extraction/.env'."
+            "the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set, in "
+            "'~/.s3-log-extraction/.env'."
         ),
         required=False,
         type=rich_click.STRING,
@@ -462,9 +462,10 @@ def _update_summaries_cli(
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
 
-    Any excluded IP addresses are left out of every summary. These are the addresses listed in
-    '~/.s3-log-extraction/excluded_ips.txt', in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable, and given
-    to '--exclude'. Requesters in the published GitHub ranges are left out of the view and requester counts only.
+    Any excluded IP addresses are left out of every summary. These are the addresses listed in the
+    S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set, in '~/.s3-log-extraction/.env',
+    and those given to '--exclude'. Requesters in the published GitHub ranges are left out of the view and
+    requester counts only.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)

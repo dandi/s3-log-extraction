@@ -56,8 +56,8 @@ class S3LogAccessExtractor:
         none is configured.
     excluded_ips : iterable of str, optional
         The IP addresses whose requests are dropped during extraction, so they never enter the cache.
-        Defaults to `s3_log_extraction.config.get_excluded_ips()`, the union of
-        `~/.s3-log-extraction/excluded_ips.txt` and the `S3_LOG_EXTRACTION_EXCLUDED_IPS` environment variable.
+        Defaults to `s3_log_extraction.config.get_excluded_ips()`, the addresses in the
+        `S3_LOG_EXTRACTION_EXCLUDED_IPS` environment variable or, when it is not set, in `~/.s3-log-extraction/.env`.
         An explicit value replaces that default, so pass an empty list to drop nothing.
     """
 
