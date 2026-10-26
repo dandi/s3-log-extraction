@@ -10,6 +10,8 @@
 
 - Excluded IP addresses are now dropped at extraction too, so `~/.s3-log-extraction/excluded_ips.txt` also affects `extract`. More addresses can be added with the `S3_LOG_EXTRACTION_EXCLUDED_IPS` environment variable, which may also be set in `~/.s3-log-extraction/.env`, and with the new `--exclude` option of `extract` and `update summaries`. Only exact addresses are accepted. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
+- Added `s3logextraction excluded scan` and `ip_utils.find_excluded_ip_records`, which report the object keys whose cached records were made by an excluded IP address, such as those extracted before it was listed. The command exits with an error when any are found, so a scheduled job running it fails. ([#322](https://github.com/dandi/s3-log-extraction/pull/322))
+
 ## v1.11.10
 
 ### 🚀 Enhancement
