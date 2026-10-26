@@ -2,6 +2,14 @@
 
 ## Upcoming
 
+### ⚠️ Breaking
+
+- The `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX` variable of the extraction heuristic pre-validator is removed in favor of the excluded IP addresses below. Its validation record starts over. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
+
+### 🚀 Enhancement
+
+- Excluded IP addresses are now dropped at extraction too, so `~/.s3-log-extraction/excluded_ips.txt` also affects `extract`. More addresses can be added with the `S3_LOG_EXTRACTION_EXCLUDED_IPS` environment variable, which may also be set in `~/.s3-log-extraction/.env`, and with the new `--exclude` option of `extract` and `update summaries`. Only exact addresses are accepted. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
+
 ## v1.11.10
 
 ### 🚀 Enhancement
