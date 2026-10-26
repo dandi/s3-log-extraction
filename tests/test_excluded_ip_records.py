@@ -96,6 +96,25 @@ def test_find_excluded_ip_records(
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize("workers", [1, 2])
+def test_find_excluded_ip_records_across_many_batches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, workers: int
+) -> None:
+    """A cache spanning more batches than are kept in flight is scanned in full, as a large real cache would be."""
+    monkeypatch.setattr("s3_log_extraction.ip_utils._excluded_ip_records._BATCH_SIZE", 1)
+    _write_cache(cache_directory=tmp_path)
+
+    records = find_excluded_ip_records(
+        cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], use_encryption=False, workers=workers
+    )
+
+    assert records == {
+        "ds000001/sub-01/data.nii.gz": {_ACTOR_IP: 2},
+        "ds000002/dataset_description.json": {_ACTOR_IP: 1},
+    }
+
+
+@pytest.mark.ai_generated
 def test_find_excluded_ip_records_decrypts_the_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     """The ``ips.txt`` files of an encrypted cache are decrypted before they are scanned."""
     monkeypatch.setenv("S3_LOG_EXTRACTION_PASSWORD", secrets.token_urlsafe(32))
