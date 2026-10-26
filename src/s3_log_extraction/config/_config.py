@@ -8,10 +8,10 @@ import typing
 import dotenv
 
 from ._globals import (
+    _LEGACY_EXCLUDED_IPS_FILE_PATH,
     DEFAULT_CACHE_DIRECTORY,
     DOTENV_FILE_PATH,
     EXCLUDED_IPS_ENVIRONMENT_VARIABLE,
-    EXCLUDED_IPS_FILE_PATH,
     S3_LOG_EXTRACTION_CONFIG_FILE_PATH,
 )
 
@@ -130,50 +130,45 @@ def get_excluded_ips(extra_ips: collections.abc.Iterable[str] | None = None, /) 
     """
     Get the IP addresses whose requests are dropped at extraction and left out of every published summary.
 
-    The set is the union of three sources.
+    The addresses come from the environment variable ``S3_LOG_EXTRACTION_EXCLUDED_IPS``, plus any ``extra_ips``.
+    When the variable is not set in the environment, it is read with ``python-dotenv`` from the dotenv file
+    ``DOTENV_FILE_PATH`` (``~/.s3-log-extraction/.env``), if that exists. A variable already set in the
+    environment takes precedence over the file, even when it is empty.
 
-    1. The file ``EXCLUDED_IPS_FILE_PATH`` (``~/.s3-log-extraction/excluded_ips.txt``), which is edited by hand
-       and never written by this package. It holds one IPv4 or IPv6 address per line. Blank lines are ignored,
-       as is anything after a ``#``, so each entry can carry a note on why it is excluded.
-    2. The environment variable ``S3_LOG_EXTRACTION_EXCLUDED_IPS``, holding addresses separated by commas or
-       whitespace. When it is not set in the environment, it is read from the dotenv file ``DOTENV_FILE_PATH``
-       (``~/.s3-log-extraction/.env``) if that exists. A variable already set in the environment always wins.
-    3. The ``extra_ips`` given here, such as those passed to the ``--exclude`` option on the command line.
+    The file holds a standard ``S3_LOG_EXTRACTION_EXCLUDED_IPS=...`` entry, so that tools outside Python can read
+    it too, such as a shell (``set -a; . ~/.s3-log-extraction/.env; set +a``), ``docker --env-file``, or a
+    GitHub Actions step appending it to ``$GITHUB_ENV``. Keep the value on a single line, separate the addresses
+    with commas, and do not quote it, which every one of those readers handles alike. Whitespace also separates
+    addresses here, but an unquoted space breaks a shell that sources the file.
 
-    Every entry must be a single address. Networks in CIDR notation and patterns are not accepted.
+    Every entry must be a single IPv4 or IPv6 address. Networks in CIDR notation and patterns are not accepted.
 
     Parameters
     ----------
     extra_ips : iterable of str, optional
-        Further addresses to exclude on top of the file and the environment variable.
+        Further addresses to exclude on top of the environment variable, such as those passed to the
+        ``--exclude`` option on the command line.
 
     Returns
     -------
     frozenset of str
         The addresses in canonical text form, which is the form the extraction cache records.
-        An empty set when no source lists an address, in which case no requester is excluded by address.
+        An empty set when no address is listed, in which case no requester is excluded by address.
 
     Raises
     ------
     ValueError
-        If any entry of any source is something other than a single valid IP address.
+        If any entry is something other than a single valid IP address, or if the ``excluded_ips.txt`` file
+        read by version 1.11.10 still exists.
     """
-    canonical_ips = set()
-
-    if EXCLUDED_IPS_FILE_PATH.exists():
-        for line_number, line in enumerate(EXCLUDED_IPS_FILE_PATH.read_text().splitlines(), start=1):
-            entry = line.split("#", 1)[0].strip()
-            if not entry:
-                continue
-            try:
-                canonical_ips.add(str(ipaddress.ip_address(entry)))
-            except ValueError as exception:
-                message = (
-                    f"\n\nLine {line_number} of '{EXCLUDED_IPS_FILE_PATH}' is not a single valid IP address.\n"
-                    "Each line must hold one IPv4 or IPv6 address, optionally followed by a '#' comment. "
-                    "Networks in CIDR notation are not accepted.\n\n"
-                )
-                raise ValueError(message) from exception
+    if _LEGACY_EXCLUDED_IPS_FILE_PATH.exists():
+        message = (
+            f"\n\nThe excluded IPs file '{_LEGACY_EXCLUDED_IPS_FILE_PATH}' is no longer read.\n"
+            f"Move its addresses into a single '{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=<ip>,<ip>,...' line of "
+            f"'{DOTENV_FILE_PATH}', then delete it. This check stops the run so that no excluded requester is "
+            "silently counted again.\n\n"
+        )
+        raise ValueError(message)
 
     environment_value = os.environ.get(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, None)
     if environment_value is None and DOTENV_FILE_PATH.exists():
@@ -181,9 +176,10 @@ def get_excluded_ips(extra_ips: collections.abc.Iterable[str] | None = None, /) 
     environment_entries = (environment_value or "").replace(",", " ").split()
 
     sources = [
-        (f"the '{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}' environment variable", environment_entries),
+        (f"'{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}'", environment_entries),
         ("the extra excluded IPs", [entry.strip() for entry in extra_ips or [] if entry.strip()]),
     ]
+    canonical_ips = set()
     for source, entries in sources:
         for entry in entries:
             try:

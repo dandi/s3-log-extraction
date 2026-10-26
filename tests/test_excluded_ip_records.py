@@ -19,13 +19,15 @@ _ANOTHER_IP = "203.0.113.0"
 
 
 @pytest.fixture
-def excluded_ips_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
-    """Point every source of excluded IPs at a temporary location, so that none outside the test contributes."""
-    excluded_ips_file_path = tmp_path / "excluded_ips.txt"
-    monkeypatch.setattr("s3_log_extraction.config._config.EXCLUDED_IPS_FILE_PATH", excluded_ips_file_path)
-    monkeypatch.setattr("s3_log_extraction.config._config.DOTENV_FILE_PATH", tmp_path / ".env")
+def dotenv_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
+    """Point the dotenv file at a temporary location and clear the variable, so that nothing outside the test counts."""
+    dotenv_file_path = tmp_path / ".env"
+    monkeypatch.setattr("s3_log_extraction.config._config.DOTENV_FILE_PATH", dotenv_file_path)
+    monkeypatch.setattr(
+        "s3_log_extraction.config._config._LEGACY_EXCLUDED_IPS_FILE_PATH", tmp_path / "excluded_ips.txt"
+    )
     monkeypatch.delenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, raising=False)
-    return excluded_ips_file_path
+    return dotenv_file_path
 
 
 def _write_object_key(*, object_key_directory: pathlib.Path, ips: list[str], use_encryption: bool = False) -> None:
@@ -109,10 +111,10 @@ def test_find_excluded_ip_records_decrypts_the_cache(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.ai_generated
 def test_find_excluded_ip_records_defaults_to_the_configured_addresses(
-    excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path
+    dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """Without explicit addresses, those of the configured sources are looked for."""
-    excluded_ips_file_path.write_text(f"{_SECOND_ACTOR_IP}\n")
+    dotenv_file_path.write_text(f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}={_SECOND_ACTOR_IP}\n")
     _write_cache(cache_directory=tmp_path)
 
     records = find_excluded_ip_records(cache_directory=tmp_path, use_encryption=False, workers=1)
@@ -155,11 +157,10 @@ def test_find_excluded_ip_records_rejects_a_corrupted_cache(
 
 @pytest.mark.ai_generated
 def test_cli_excluded_scan_fails_on_found_records(
-    monkeypatch: pytest.MonkeyPatch, excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path
+    monkeypatch: pytest.MonkeyPatch, dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """Found records are listed per object key and fail the command, without printing the addresses."""
-    excluded_ips_file_path.write_text(f"{_ACTOR_IP}\n")
-    monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, "198.51.100.1")
+    monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, f"{_ACTOR_IP},198.51.100.1")
     _write_cache(cache_directory=tmp_path)
 
     result = click.testing.CliRunner().invoke(
@@ -190,16 +191,19 @@ def test_cli_excluded_scan_fails_on_found_records(
 @pytest.mark.parametrize(
     ("file_content", "expected_output"),
     [
-        ("198.51.100.1\n", "No records of the 1 excluded IP addresses were found."),
+        (
+            f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=198.51.100.1\n",
+            "No records of the 1 excluded IP addresses were found.",
+        ),
         (None, "No excluded IP addresses are configured"),
     ],
 )
 def test_cli_excluded_scan_passes_without_found_records(
-    excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path, file_content: str | None, expected_output: str
+    dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path, file_content: str | None, expected_output: str
 ) -> None:
     """A cache without records of an excluded address, or no excluded address at all, passes with a short note."""
     if file_content is not None:
-        excluded_ips_file_path.write_text(file_content)
+        dotenv_file_path.write_text(file_content)
     _write_cache(cache_directory=tmp_path)
 
     result = click.testing.CliRunner().invoke(
