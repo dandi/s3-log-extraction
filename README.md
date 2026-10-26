@@ -93,6 +93,34 @@ To override the cache or temporary directory for a single extraction run (withou
 s3logextraction extract <log directory> --cache <cache directory> --tmp <temporary directory>
 ```
 
+[Optional] Exclude individually reviewed requesters. Their requests are dropped at extraction, so they never enter the cache, and they are also left out of every summary. The excluded addresses are the union of three sources.
+
+- The file `~/.s3-log-extraction/excluded_ips.txt`. It holds one IPv4 or IPv6 address per line. Blank lines are ignored, as is anything after a `#`.
+- The environment variable `S3_LOG_EXTRACTION_EXCLUDED_IPS`, holding addresses separated by commas or whitespace. When it is not set, it is read from the dotenv file `~/.s3-log-extraction/.env` if that exists. A variable that is already set always takes precedence over the dotenv file.
+- The `--exclude` option of `extract` and `update summaries`, holding a comma-separated list of addresses for that run only.
+
+Every entry must be a single exact address. Networks in CIDR notation, wildcards, and regular expressions are refused with an error.
+
+For example, `~/.s3-log-extraction/excluded_ips.txt` might read
+
+```text
+192.0.2.1  # Reviewed mirror
+```
+
+while `~/.s3-log-extraction/.env` might read
+
+```text
+S3_LOG_EXTRACTION_EXCLUDED_IPS=192.0.2.2,192.0.2.3
+```
+
+and a run might add two more.
+
+```bash
+s3logextraction extract <log directory> --exclude 192.0.2.4,192.0.2.5
+```
+
+Excluding an address only affects logs extracted from then on. Requests from that address already in the cache are still left out of the summaries.
+
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
 
 ```bash
@@ -243,16 +271,9 @@ In lieu of attempting fully validated parsing of each and every line from the lo
 
 These can also be used to verify the current state of the extraction process, such as warning about corrupt records or incomplete cache files.
 
-#### Excluded IP regex configuration
+#### Excluded IPs
 
-The extraction heuristic pre-validator uses an excluded-IP regex.
-By default, no IPs are excluded.
-
-Example custom regex:
-
-```bash
-export S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX='^(192\.0\.2\.1|198\.51\.100\.2)$'
-```
+The extraction heuristic pre-validator skips the lines of the same excluded IP addresses that extraction drops. See the generic usage above for how to list them.
 
 ### Submission of line decoding errors
 

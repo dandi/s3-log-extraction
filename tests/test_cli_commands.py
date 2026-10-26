@@ -196,6 +196,10 @@ def test_cli_extract_in_remote_mode(runner: CliRunner, monkeypatch: pytest.Monke
     monkeypatch.setattr(
         "s3_log_extraction._command_line_interface._cli.RemoteS3LogAccessExtractor", _RecordingRemoteExtractor
     )
+    monkeypatch.setattr(
+        "s3_log_extraction._command_line_interface._cli.get_excluded_ips",
+        lambda extra_ips: frozenset({"198.51.100.0", *extra_ips}),
+    )
     inventory_directory = tmp_path / "inventory"
     inventory_directory.mkdir()
 
@@ -218,6 +222,8 @@ def test_cli_extract_in_remote_mode(runner: CliRunner, monkeypatch: pytest.Monke
             "false",
             "--tmp",
             str(tmp_path / "tmp"),
+            "--exclude",
+            "192.0.2.1,192.0.2.2",
         ],
     )
 
@@ -226,6 +232,7 @@ def test_cli_extract_in_remote_mode(runner: CliRunner, monkeypatch: pytest.Monke
         "cache_directory": tmp_path,
         "use_encryption": False,
         "base_temporary_directory": tmp_path / "tmp",
+        "excluded_ips": frozenset({"198.51.100.0", "192.0.2.1", "192.0.2.2"}),
     }
     assert captured["extract"] == {
         "s3_root": "s3://my-logs-bucket",

@@ -1,7 +1,8 @@
-import os
+import collections.abc
 import pathlib
 
 from ._base_validator import BaseValidator, _hash_awk_script_file, _run_awk_validation
+from ..config import get_excluded_ips
 
 
 class ExtractionHeuristicPreValidator(BaseValidator):
@@ -12,6 +13,12 @@ class ExtractionHeuristicPreValidator(BaseValidator):
       - not parallelized, but could be
       - interruptible
       - updatable
+
+    Parameters
+    ----------
+    excluded_ips : iterable of str, optional
+        The IP addresses whose lines are skipped by the check, matching what extraction drops.
+        Defaults to `s3_log_extraction.config.get_excluded_ips()`.
     """
 
     tqdm_description = "Pre-validating extraction heuristic"
@@ -20,8 +27,8 @@ class ExtractionHeuristicPreValidator(BaseValidator):
         return _hash_awk_script_file(self._relative_awk_script_path)
 
     # TODO: parallelize
-    def __init__(self) -> None:
-        self._excluded_ip_regex = os.environ.get("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX") or "^$"
+    def __init__(self, excluded_ips: collections.abc.Iterable[str] | None = None, /) -> None:
+        self.excluded_ips = frozenset(excluded_ips) if excluded_ips is not None else get_excluded_ips()
 
         # TODO: does this hold after bundling?
         self._relative_awk_script_path = (
@@ -35,5 +42,5 @@ class ExtractionHeuristicPreValidator(BaseValidator):
             script_path=self._relative_awk_script_path,
             file_path=file_path,
             failure_label="Extraction heuristic",
-            environment_variables={"EXCLUDED_IP_REGEX": self._excluded_ip_regex},
+            environment_variables={"EXCLUDED_IPS": " ".join(sorted(self.excluded_ips))},
         )

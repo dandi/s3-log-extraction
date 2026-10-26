@@ -185,8 +185,8 @@ def _collect_unique_ips(
         the collected set. Other cloud services (AWS, GCP, Azure) and VPNs are kept. If not provided, no exclusion
         is applied by label.
     excluded_ips : frozenset of str, optional
-        Individual addresses left out of the collected set regardless of their label, as configured with
-        ``set_excluded_ips``. Defaults to an empty set, which excludes nothing.
+        Individual addresses left out of the collected set regardless of their label, as returned by
+        ``get_excluded_ips``. Defaults to an empty set, which excludes nothing.
 
     Returns
     -------
@@ -310,9 +310,9 @@ def generate_summaries(
         GeoLite2 database in the cache directory.
     excluded_ips : iterable of str, optional
         Individual addresses left out of every summary, including bytes sent, requests, downloads, views, and
-        the requester counts. Defaults to the addresses listed in ``EXCLUDED_IPS_FILE_PATH``,
-        which is none when that file is absent. Pass an empty iterable to exclude no address regardless of
-        that file.
+        the requester counts. Defaults to ``s3_log_extraction.config.get_excluded_ips()``, the union of the
+        addresses listed in ``EXCLUDED_IPS_FILE_PATH`` and in the ``S3_LOG_EXTRACTION_EXCLUDED_IPS`` environment
+        variable. Pass an empty iterable to exclude no address regardless of those.
     """
     if level != 0:
         message = (

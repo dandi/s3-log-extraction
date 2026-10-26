@@ -2,11 +2,13 @@
 
 import pathlib
 
+import click.testing
 import pandas
 import pytest
+from conftest import read_extracted_ips
 
 import s3_log_extraction
-from s3_log_extraction.config import get_excluded_ips
+from s3_log_extraction.config import EXCLUDED_IPS_ENVIRONMENT_VARIABLE, get_excluded_ips
 from s3_log_extraction.ip_utils import MappingRegionResolver, is_excluded_ip
 
 # Every address below is drawn from the documentation ranges (TEST-NET-1, TEST-NET-2, and 2001:db8::/32)
@@ -16,11 +18,21 @@ _STREAMING = 0
 _DOWNLOAD = 1
 
 
+_EXAMPLE_LOGS_DIRECTORY = pathlib.Path(__file__).parent / "example_logs"
+
+
 @pytest.fixture
 def excluded_ips_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
-    """Point the excluded IPs file at a temporary location rather than the user's real one, without creating it."""
+    """
+    Point the excluded IPs file at a temporary location rather than the user's real one, without creating it.
+
+    The environment variable is cleared and the dotenv file is pointed at a temporary location as well, so that
+    no source outside the test contributes an address.
+    """
     excluded_ips_file_path = tmp_path / "excluded_ips.txt"
     monkeypatch.setattr("s3_log_extraction.config._config.EXCLUDED_IPS_FILE_PATH", excluded_ips_file_path)
+    monkeypatch.setattr("s3_log_extraction.config._config.DOTENV_FILE_PATH", tmp_path / ".env")
+    monkeypatch.delenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, raising=False)
     return excluded_ips_file_path
 
 
@@ -69,6 +81,141 @@ def test_excluded_ips_reject_anything_but_single_addresses(
 
     with pytest.raises(ValueError, match="Line 2 of"):
         get_excluded_ips()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("environment_value", "dotenv_content", "extra_ips", "expected"),
+    [
+        # Commas and any whitespace separate the addresses of the environment variable, which are canonicalized
+        ("192.0.2.1, 2001:DB8::0001\n192.0.2.2", None, None, {"192.0.2.1", "192.0.2.2", "2001:db8::1"}),
+        # The dotenv file supplies the variable when it is not set in the environment
+        (None, f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=192.0.2.1,192.0.2.2\n", None, {"192.0.2.1", "192.0.2.2"}),
+        # A variable set in the environment takes precedence over the dotenv file, even when empty
+        ("192.0.2.3", f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=192.0.2.1\n", None, {"192.0.2.3"}),
+        ("", f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=192.0.2.1\n", None, set()),
+        # Extra addresses add to the environment variable rather than replacing it
+        ("192.0.2.1", None, ["192.0.2.2", " 192.0.2.3 ", ""], {"192.0.2.1", "192.0.2.2", "192.0.2.3"}),
+        (None, None, ["192.0.2.2"], {"192.0.2.2"}),
+    ],
+)
+def test_excluded_ips_combine_the_environment_variable_and_extra_addresses(
+    monkeypatch: pytest.MonkeyPatch,
+    excluded_ips_file_path: pathlib.Path,
+    environment_value: str | None,
+    dotenv_content: str | None,
+    extra_ips: list[str] | None,
+    expected: set[str],
+) -> None:
+    """The file, the environment variable (or its dotenv fallback), and any extra addresses are united."""
+    excluded_ips_file_path.write_text("198.51.100.0\n")
+    if environment_value is not None:
+        monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, environment_value)
+    if dotenv_content is not None:
+        (excluded_ips_file_path.parent / ".env").write_text(dotenv_content)
+
+    assert get_excluded_ips(extra_ips) == frozenset({"198.51.100.0", *expected})
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("environment_value", "extra_ips", "expected_message"),
+    [
+        ("192.0.2.1|192.0.2.2", None, "environment variable"),
+        ("192.0.2.0/24", None, "environment variable"),
+        (None, ["192.0.2.*"], "extra excluded IPs"),
+    ],
+)
+def test_excluded_ips_reject_patterns_and_networks_outside_the_file(
+    monkeypatch: pytest.MonkeyPatch,
+    excluded_ips_file_path: pathlib.Path,
+    environment_value: str | None,
+    extra_ips: list[str] | None,
+    expected_message: str,
+) -> None:
+    """A regex, a wildcard or a network is refused, naming its source, rather than silently matching nothing."""
+    if environment_value is not None:
+        monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, environment_value)
+
+    with pytest.raises(ValueError, match=expected_message):
+        get_excluded_ips(extra_ips)
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize(
+    ("file_content", "excluded_ips", "expected_dropped_ips"),
+    [
+        # Nothing listed, so nothing is dropped
+        (None, None, set()),
+        # The listed addresses are dropped by default
+        ("192.0.2.1\n", None, {"192.0.2.1"}),
+        # An explicit argument replaces the default
+        ("192.0.2.1\n", ["198.51.100.0"], {"198.51.100.0"}),
+        ("192.0.2.1\n", [], set()),
+    ],
+)
+def test_extraction_drops_excluded_ips(
+    excluded_ips_file_path: pathlib.Path,
+    tmp_path: pathlib.Path,
+    workers: int,
+    file_content: str | None,
+    excluded_ips: list[str] | None,
+    expected_dropped_ips: set[str],
+) -> None:
+    """Requests from an excluded address never enter the extraction cache, while every other request does."""
+    if file_content is not None:
+        excluded_ips_file_path.write_text(file_content)
+    cache_directory = tmp_path / "cache"
+    cache_directory.mkdir()
+
+    extractor = s3_log_extraction.extractors.S3LogAccessExtractor(
+        cache_directory=cache_directory, use_encryption=False, excluded_ips=excluded_ips
+    )
+    extractor.extract_directory(directory=_EXAMPLE_LOGS_DIRECTORY, workers=workers)
+
+    extracted_ips = set(read_extracted_ips(cache_directory / "extraction", use_encryption=False))
+    assert extracted_ips & expected_dropped_ips == set()
+    assert extracted_ips | expected_dropped_ips == {
+        "192.0.2.0",
+        "192.0.2.1",
+        "192.0.2.2",
+        "198.51.100.0",
+        "198.51.100.1",
+        "203.0.113.0",
+        "203.0.113.1",
+    }
+
+
+@pytest.mark.ai_generated
+def test_cli_extract_drops_the_union_of_every_source(
+    monkeypatch: pytest.MonkeyPatch, excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """The ``--exclude`` addresses are dropped together with those of the file and the environment variable."""
+    excluded_ips_file_path.write_text("192.0.2.1\n")
+    monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, "192.0.2.2")
+    cache_directory = tmp_path / "cache"
+    cache_directory.mkdir()
+
+    result = click.testing.CliRunner().invoke(
+        s3_log_extraction.s3logextraction_cli,
+        [
+            "extract",
+            str(_EXAMPLE_LOGS_DIRECTORY),
+            "--cache",
+            str(cache_directory),
+            "--workers",
+            "1",
+            "--encryption",
+            "false",
+            "--exclude",
+            "198.51.100.0,198.51.100.1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    extracted_ips = set(read_extracted_ips(cache_directory / "extraction", use_encryption=False))
+    assert extracted_ips == {"192.0.2.0", "203.0.113.0", "203.0.113.1"}
 
 
 @pytest.mark.ai_generated
