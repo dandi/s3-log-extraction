@@ -191,7 +191,10 @@ def test_cli_excluded_scan_fails_on_found_records(
 @pytest.mark.parametrize(
     ("file_content", "expected_output"),
     [
-        (f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=198.51.100.1\n", "No records of the 1 excluded IP addresses were found."),
+        (
+            f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=198.51.100.1\n",
+            "No records of the 1 excluded IP addresses were found.",
+        ),
         (None, "No excluded IP addresses are configured"),
     ],
 )

@@ -120,6 +120,14 @@ s3logextraction excluded scan
 
 It lists each object key that holds such requests with its count, without printing the addresses. It exits with an error when it finds any, so a scheduled job running it fails. Pass `--encryption false` for a cache extracted without encryption.
 
+To remove those requests from the cache, so that they leave the summaries generated from then on, run
+
+```bash
+s3logextraction excluded remove --confirm
+```
+
+Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction.
+
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
 
 ```bash
