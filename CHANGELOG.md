@@ -4,6 +4,7 @@
 
 ### ⚠️ Breaking
 
+- `config.EXCLUDED_IPS_FILE_PATH` is no longer public. Read the excluded addresses with `config.get_excluded_ips()`, which reads `~/.s3-log-extraction/excluded_ips.txt` as before. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 - The `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX` variable of the extraction heuristic pre-validator is removed in favor of the addresses listed in `~/.s3-log-extraction/excluded_ips.txt`. Its validation record starts over. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
 ### 🚀 Enhancement

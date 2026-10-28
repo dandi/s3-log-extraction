@@ -3,7 +3,7 @@ import json
 import pathlib
 import typing
 
-from ._globals import DEFAULT_CACHE_DIRECTORY, EXCLUDED_IPS_FILE_PATH, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
+from ._globals import _EXCLUDED_IPS_FILE_PATH, DEFAULT_CACHE_DIRECTORY, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
 
 
 def save_config(config: dict[str, typing.Any]) -> None:
@@ -120,7 +120,7 @@ def get_excluded_ips() -> frozenset[str]:
     """
     Get the IP addresses whose requests are dropped at extraction and left out of every published summary.
 
-    The addresses are read from ``EXCLUDED_IPS_FILE_PATH`` (``~/.s3-log-extraction/excluded_ips.txt``), which
+    The addresses are read from ``~/.s3-log-extraction/excluded_ips.txt``, which
     is edited by hand and never written by this package. It is the only place the excluded addresses are listed.
     It is a plain text file holding one IPv4 or IPv6 address per line. Blank lines are ignored, as is anything
     after a ``#``, so each entry can carry a note on why it is excluded. Networks in CIDR notation are not accepted.
@@ -142,11 +142,11 @@ def get_excluded_ips() -> frozenset[str]:
     ValueError
         If any line holds something other than a single valid IP address.
     """
-    if not EXCLUDED_IPS_FILE_PATH.exists():
+    if not _EXCLUDED_IPS_FILE_PATH.exists():
         return frozenset()
 
     canonical_ips = set()
-    for line_number, line in enumerate(EXCLUDED_IPS_FILE_PATH.read_text().splitlines(), start=1):
+    for line_number, line in enumerate(_EXCLUDED_IPS_FILE_PATH.read_text().splitlines(), start=1):
         entry = line.split("#", 1)[0].strip()
         if not entry:
             continue
@@ -154,7 +154,7 @@ def get_excluded_ips() -> frozenset[str]:
             canonical_ips.add(str(ipaddress.ip_address(entry)))
         except ValueError as exception:
             message = (
-                f"\n\nLine {line_number} of '{EXCLUDED_IPS_FILE_PATH}' is not a single valid IP address.\n"
+                f"\n\nLine {line_number} of '{_EXCLUDED_IPS_FILE_PATH}' is not a single valid IP address.\n"
                 "Each line must hold one IPv4 or IPv6 address, optionally followed by a '#' comment. "
                 "Networks in CIDR notation are not accepted.\n\n"
             )
