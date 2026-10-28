@@ -48,8 +48,8 @@ def inventory_of_example_logs(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib
     inventory_directory = tmp_path / "inventory"
     inventory_directory.mkdir()
     monkeypatch.setattr(
-        "s3_log_extraction.extractors._remote_s3_log_access_extractor._read_s3_urls_from_local_inventory",
-        lambda *, inventory_directory, s3_root: {"2020-01-01": list(_EXAMPLE_LOG_URLS)},
+        "s3_log_extraction.extractors._remote_s3_log_access_extractor._iter_dated_s3_urls_from_local_inventory",
+        lambda *, inventory_directory, s3_root: iter([("2020-01-01", url) for url in _EXAMPLE_LOG_URLS]),
     )
     return inventory_directory
 
@@ -230,7 +230,9 @@ def test_get_unprocessed_s3_urls_from_remote_walks_the_bucket_and_buffers_the_la
     and logs already recorded as processed are left out.
     """
     extractor = RemoteS3LogAccessExtractor(cache_directory=cache_directory, use_encryption=False)
-    extractor.s3_url_processing_end_record = {"2024-01-02-00-0A-00-" + "A" * 16}
+    processed_record = "2024-01-02-00-0A-00-" + "A" * 16 + "\n"
+    extractor.s3_url_processing_start_record_file_path.write_text(processed_record)
+    extractor.s3_url_processing_end_record_file_path.write_text(processed_record)
 
     with (
         unittest.mock.patch(
@@ -239,7 +241,7 @@ def test_get_unprocessed_s3_urls_from_remote_walks_the_bucket_and_buffers_the_la
         ),
         pytest.warns(UserWarning, match="Consider setting up AWS S3 Inventory"),
     ):
-        unprocessed_s3_urls = extractor._get_unprocessed_s3_urls_from_remote(s3_root=_S3_ROOT)
+        unprocessed_s3_urls = extractor.get_unprocessed_s3_urls(s3_root=_S3_ROOT)
 
     # Of the five days listed, 2024-02-02 and 2024-02-03 are held back, and one log of 2024-01-02 is already done
     assert unprocessed_s3_urls == [
