@@ -1,4 +1,5 @@
 import collections
+import collections.abc
 import concurrent.futures
 import functools
 import itertools
@@ -21,7 +22,12 @@ from ._utils import (
     _merge_worker_output_into_extraction,
     _run_awk_extraction,
 )
-from ..config import get_base_temporary_directory, get_cache_directory, get_cache_subdirectory
+from ..config import (
+    get_base_temporary_directory,
+    get_cache_directory,
+    get_cache_subdirectory,
+    get_excluded_ips,
+)
 from ..utils import _handle_max_workers
 from ..utils.inventory import _iter_dated_s3_urls_from_local_inventory
 
@@ -57,6 +63,11 @@ class RemoteS3LogAccessExtractor:
         on the order of one batch of raw logs.
         Defaults to the configured base temporary directory, and to the system temporary directory when
         none is configured.
+    excluded_ips : iterable of str, optional
+        The IP addresses whose requests are dropped during extraction, so they never enter the cache.
+        Defaults to `s3_log_extraction.config.get_excluded_ips()`, the addresses listed in
+        `~/.s3-log-extraction/excluded_ips.txt`.
+        An explicit value replaces that default, so pass an empty list to drop nothing.
     """
 
     def __init__(
@@ -64,6 +75,7 @@ class RemoteS3LogAccessExtractor:
         cache_directory: pathlib.Path | None = None,
         use_encryption: bool = True,
         base_temporary_directory: pathlib.Path | None = None,
+        excluded_ips: collections.abc.Iterable[str] | None = None,
     ) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
         self.use_encryption = use_encryption
@@ -83,7 +95,11 @@ class RemoteS3LogAccessExtractor:
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
-        self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
+        self.excluded_ips = frozenset(excluded_ips) if excluded_ips is not None else get_excluded_ips()
+        self._awk_env = {
+            "EXTRACTION_DIRECTORY": str(self.extraction_directory),
+            "EXCLUDED_IPS": " ".join(sorted(self.excluded_ips)),
+        }
 
     @functools.cached_property
     def temporary_directory(self) -> pathlib.Path:

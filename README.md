@@ -93,6 +93,28 @@ To override the cache or temporary directory for a single extraction run (withou
 s3logextraction extract <log directory> --cache <cache directory> --tmp <temporary directory>
 ```
 
+[Optional] Exclude individually reviewed requesters. List their addresses in `~/.s3-log-extraction/excluded_ips.txt`, which is the only place the excluded addresses are read from. Their requests are dropped at extraction, so they never enter the cache, and they are also left out of every summary.
+
+```text
+192.0.2.1  # Reviewed mirror
+192.0.2.2
+2001:db8::1  # Same actor as 192.0.2.2
+```
+
+The file holds one IPv4 or IPv6 address per line. Anything after a `#` is a comment, so each address can carry a note on why it is excluded, and blank lines are ignored. Every entry must be a single exact address. Networks in CIDR notation, wildcards, and regular expressions are refused with an error. The file is edited by hand and never written by the package, and an absent or empty file excludes no one.
+
+Excluding an address only affects logs extracted from then on. Requests from that address already in the cache are still left out of the summaries.
+
+Exclusion only works in one direction over time. Adding an address can only drop its requests, from future extraction and, once removed, from the cache. Removing an address from the file does not bring its requests back, since they were never extracted or were deleted. To include an address again, rerun the extraction from scratch with `s3logextraction reset extraction` followed by a full `s3logextraction extract`.
+
+To check whether the cache still holds requests from an excluded address, such as those extracted before it was listed, run
+
+```bash
+s3logextraction validate excluded
+```
+
+It lists each object key that holds such requests with its count, without printing the addresses. It exits with an error when it finds any, so a scheduled job running it fails. Pass `--encryption false` for a cache extracted without encryption.
+
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
 
 ```bash
@@ -260,16 +282,9 @@ In lieu of attempting fully validated parsing of each and every line from the lo
 
 These can also be used to verify the current state of the extraction process, such as warning about corrupt records or incomplete cache files.
 
-#### Excluded IP regex configuration
+#### Excluded IPs
 
-The extraction heuristic pre-validator uses an excluded-IP regex.
-By default, no IPs are excluded.
-
-Example custom regex:
-
-```bash
-export S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX='^(192\.0\.2\.1|198\.51\.100\.2)$'
-```
+The extraction heuristic pre-validator skips the lines of the same excluded IP addresses that extraction drops. See the generic usage above for how to list them.
 
 ### Submission of line decoding errors
 

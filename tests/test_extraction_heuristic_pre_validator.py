@@ -11,37 +11,28 @@ from s3_log_extraction.validate._extraction_heuristic_pre_validator import (
 
 
 @pytest.mark.ai_generated
-def test_excluded_ip_regex_defaults_to_no_exclusions(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", raising=False)
+@pytest.mark.parametrize(
+    ("excluded_ips", "expected_excluded_ips"),
+    [
+        pytest.param(None, frozenset({"192.0.2.1"}), id="defaults_to_configured_excluded_ips"),
+        pytest.param([], frozenset(), id="empty_overrides_configured_excluded_ips"),
+        pytest.param(["198.51.100.2"], frozenset({"198.51.100.2"}), id="explicit_overrides_configured_excluded_ips"),
+    ],
+)
+def test_excluded_ips_source(
+    monkeypatch: pytest.MonkeyPatch, excluded_ips: list[str] | None, expected_excluded_ips: frozenset[str]
+) -> None:
+    monkeypatch.setattr(
+        "s3_log_extraction.validate._extraction_heuristic_pre_validator.get_excluded_ips",
+        lambda: frozenset({"192.0.2.1"}),
+    )
 
-    validator = ExtractionHeuristicPreValidator()
-    assert validator._excluded_ip_regex == "^$"
-
-
-@pytest.mark.ai_generated
-def test_excluded_ip_regex_plaintext_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    expected_regex = "^192\\.0\\.2\\.1$"
-    monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
-
-    validator = ExtractionHeuristicPreValidator()
-    assert validator._excluded_ip_regex == expected_regex
-
-
-@pytest.mark.ai_generated
-def test_excluded_ip_regex_env_var_takes_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
-    expected_regex = "^198\\.51\\.100\\.2$"
-    monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
-    monkeypatch.setenv("S3_LOG_EXTRACTION_ENCRYPT_IP_REGEX", "true")
-
-    validator = ExtractionHeuristicPreValidator()
-    assert validator._excluded_ip_regex == expected_regex
+    validator = ExtractionHeuristicPreValidator(excluded_ips)
+    assert validator.excluded_ips == expected_excluded_ips
 
 
 @pytest.mark.ai_generated
-def test_run_validation_passes_excluded_ip_regex_env(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
-    expected_regex = "^198\\.51\\.100\\.2$"
-    monkeypatch.setenv("S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX", expected_regex)
-
+def test_run_validation_passes_excluded_ips_env(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     captured_env: dict[str, str] = {}
 
     def _run_stub(
@@ -59,21 +50,34 @@ def test_run_validation_passes_excluded_ip_regex_env(monkeypatch: pytest.MonkeyP
     log_path = tmp_path / "test.log"
     log_path.write_text("")
 
-    validator = ExtractionHeuristicPreValidator()
+    validator = ExtractionHeuristicPreValidator(["198.51.100.2", "192.0.2.1"])
     validator._run_validation(file_path=log_path)
-    assert captured_env == {"EXCLUDED_IP_REGEX": expected_regex}
+    assert captured_env == {"EXCLUDED_IPS": "192.0.2.1 198.51.100.2"}
 
 
 @pytest.mark.ai_generated
-def test_run_validation_raises_on_aberrant_line(tmp_path: pathlib.Path) -> None:
-    """A `REST.GET.OBJECT` line carrying neither HTTP/1.1 nor HTTP/1.0 should fail the heuristic pre-check."""
+@pytest.mark.parametrize(
+    ("excluded_ips", "expected_to_raise"),
+    [
+        pytest.param([], True, id="aberrant_line_checked"),
+        pytest.param(["192.0.2.1"], False, id="aberrant_line_of_excluded_ip_skipped"),
+        pytest.param(["192.0.2.10"], True, id="neighboring_address_not_skipped"),
+    ],
+)
+def test_run_validation_skips_only_exact_excluded_ips(
+    tmp_path: pathlib.Path, excluded_ips: list[str], expected_to_raise: bool
+) -> None:
+    """Only lines from an exactly listed address are skipped, unlike a regex that could match its neighbors."""
     log_path = tmp_path / "aberrant.log"
     log_path.write_text(
         "abc123 bucket [01/Jan/2020:00:00:00 +0000] 192.0.2.1 - REQ123 REST.GET.OBJECT test/file.dat "
         '"GET /test/file.dat HTTP/2" 200 - 10 10 "-" "TestAgent" -\n'
     )
 
-    validator = ExtractionHeuristicPreValidator()
+    validator = ExtractionHeuristicPreValidator(excluded_ips)
 
-    with pytest.raises(RuntimeError, match="Extraction heuristic pre-check failed"):
+    if expected_to_raise:
+        with pytest.raises(RuntimeError, match="Extraction heuristic pre-check failed"):
+            validator._run_validation(file_path=log_path)
+    else:
         validator._run_validation(file_path=log_path)
