@@ -125,6 +125,11 @@ def get_excluded_ips() -> frozenset[str]:
     It is a plain text file holding one IPv4 or IPv6 address per line. Blank lines are ignored, as is anything
     after a ``#``, so each entry can carry a note on why it is excluded. Networks in CIDR notation are not accepted.
 
+    Exclusion only works in one direction over time. Adding an address stops its requests from being extracted
+    from then on, and its records already in the cache can then be removed. Removing an address does not bring its
+    records back, since they were never extracted or were deleted. To include an address again, rerun the extraction
+    from scratch, with ``s3logextraction reset extraction`` and then a full ``s3logextraction extract``.
+
     Returns
     -------
     frozenset of str
