@@ -1,5 +1,6 @@
 """CLI integration tests for the validate, reset, stop, and config commands."""
 
+import inspect
 import pathlib
 
 import pytest
@@ -74,6 +75,28 @@ def test_cli_validate(
     }
 
     assert recorded_lines == {str(log_file.absolute()) for log_file in clean_logs_directory.rglob(pattern="*.log")}
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("protocol", "validator_class"),
+    [
+        ("downloads_logic", s3_log_extraction.validate.DownloadsLogicPreValidator),
+        ("http_empty_split", s3_log_extraction.validate.HttpEmptySplitPreValidator),
+        ("http_split_count", s3_log_extraction.validate.HttpSplitCountPreValidator),
+        ("extraction_heuristic", s3_log_extraction.validate.ExtractionHeuristicPreValidator),
+        ("timestamps_parsing", s3_log_extraction.validate.TimestampsParsingPreValidator),
+    ],
+)
+def test_cli_validate_protocol_help_comes_from_the_validator(
+    runner: CliRunner, protocol: str, validator_class: type
+) -> None:
+    """Each protocol is a subcommand of `validate` whose help opens with the first line of its validator's docstring."""
+    result = runner.invoke(s3_log_extraction.s3logextraction_cli, ["validate", protocol, "--help"])
+
+    assert result.exit_code == 0, result.output
+    first_docstring_line = inspect.getdoc(validator_class).splitlines()[0]
+    assert " ".join(first_docstring_line.split()[:6]) in " ".join(result.output.split())
 
 
 @pytest.mark.ai_generated

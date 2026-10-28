@@ -11,7 +11,7 @@
 
 - Excluded IP addresses are now dropped at extraction too, not only left out of the summaries. The new `--exclude` option of `extract` and `update summaries` adds addresses for one run. Only exact addresses are accepted. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
-- Added `s3logextraction excluded scan` and `ip_utils.find_excluded_ip_records`, which report the object keys whose cached records were made by an excluded IP address, such as those extracted before it was listed. The command exits with an error when any are found, so a scheduled job running it fails. ([#322](https://github.com/dandi/s3-log-extraction/pull/322))
+- Added `s3logextraction validate excluded` and `ip_utils.find_excluded_ip_records`, which report the object keys whose cached records were made by an excluded IP address, such as those extracted before it was listed. The command exits with an error when any are found, so a scheduled job running it fails. `validate` is now a command group, and existing `validate <protocol> <directory>` invocations are unchanged. ([#322](https://github.com/dandi/s3-log-extraction/pull/322))
 
 - Added `s3logextraction reset excluded` and `ip_utils.remove_excluded_ip_records`, which remove the cached records of excluded IP addresses so they leave the summaries from their next run. Without `--confirm` the command only lists what it would remove. It refuses to run while an extraction is unfinished. ([#323](https://github.com/dandi/s3-log-extraction/pull/323))
 

@@ -102,7 +102,7 @@ S3_LOG_EXTRACTION_EXCLUDED_IPS=192.0.2.1,192.0.2.2,2001:db8::1
 
 Keep the value on one line, separate the addresses with commas, and leave it unquoted. Then the same file can be read by tools outside Python too, such as a shell (`set -a; . ~/.s3-log-extraction/.env; set +a`), `docker --env-file`, or a GitHub Actions step that appends it to `$GITHUB_ENV`. Lines starting with `#` are comments. Every entry must be a single exact address. Networks in CIDR notation, wildcards, and regular expressions are refused with an error.
 
-The file is read with [python-dotenv](https://pypi.org/project/python-dotenv/) only when `S3_LOG_EXTRACTION_EXCLUDED_IPS` is not already set in the environment. A variable that is already set takes precedence over the file, even when it is empty. The `--exclude` option of `extract`, `update summaries`, and `excluded scan` adds a comma-separated list of addresses for that run only.
+The file is read with [python-dotenv](https://pypi.org/project/python-dotenv/) only when `S3_LOG_EXTRACTION_EXCLUDED_IPS` is not already set in the environment. A variable that is already set takes precedence over the file, even when it is empty. The `--exclude` option of `extract`, `update summaries`, `validate excluded`, and `reset excluded` adds a comma-separated list of addresses for that run only.
 
 ```bash
 s3logextraction extract <log directory> --exclude 192.0.2.4,192.0.2.5
@@ -115,7 +115,7 @@ The one-address-per-line `~/.s3-log-extraction/excluded_ips.txt` of version 1.11
 To check whether the cache still holds requests from an excluded address, such as those extracted before it was listed, run
 
 ```bash
-s3logextraction excluded scan
+s3logextraction validate excluded
 ```
 
 It lists each object key that holds such requests with its count, without printing the addresses. It exits with an error when it finds any, so a scheduled job running it fails. Pass `--encryption false` for a cache extracted without encryption.
