@@ -376,6 +376,9 @@ def _reset_excluded_cli(
     in '~/.s3-log-extraction/.env', and those given to '--exclude'. Their records leave every summary generated
     afterwards.
 
+    The removal is permanent. Taking an address off the excluded list later does not bring its records back, so
+    un-excluding one requires 'reset extraction' followed by a new 'extract'.
+
     Without '--confirm', nothing is changed, and the object keys whose records would be removed are listed instead.
     The cache must not be extracted to at the same time, so back it up and hold the extraction lock first.
     Each affected object key is listed with its record count. The addresses themselves are not printed.

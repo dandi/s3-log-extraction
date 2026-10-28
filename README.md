@@ -131,7 +131,7 @@ To remove those requests from the cache, so that they leave the summaries genera
 s3logextraction reset excluded --confirm
 ```
 
-Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction.
+Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction. The removal is permanent. Taking an address off the list later does not bring its requests back, so un-excluding one requires `s3logextraction reset extraction` followed by a new `extract`.
 
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
 

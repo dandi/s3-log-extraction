@@ -127,6 +127,9 @@ def remove_excluded_ip_records(
     files together. An object key left without any record has its files and its directory deleted, along with any
     parent directory this leaves empty.
 
+    The removal is permanent. Taking an address off the excluded list later does not bring its records back, so
+    un-excluding one requires a full re-extraction with ``reset_extraction`` followed by a new extraction.
+
     Each rewritten file is written in full to a temporary sibling and then moved over the original, so a crash never
     leaves a partially written file. The files of one object key are still replaced one after another, so take a
     backup of the cache first. A crash between those replacements leaves the object key misaligned, which every later
