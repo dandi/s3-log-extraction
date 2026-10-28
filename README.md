@@ -191,6 +191,23 @@ To report what percentage of log files have already been processed:
 s3logextraction completion --inventory /path/to/inventory
 ```
 
+To check whether an extraction has anything to do, without extracting anything, add `--check` to the same command:
+
+```bash
+s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory --check
+```
+
+It stops at the first log file that has not been extracted. It exits with status 3 when some are pending and 0 when
+none are, which keeps pending work apart from an error (status 1). A scheduled job can then start an extraction only
+when there is something to do.
+
+```bash
+s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory --check
+if [ $? -eq 3 ]; then
+    s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory
+fi
+```
+
 ### Without an S3 Inventory (not recommended)
 
 If you do not have an S3 Inventory available, do **not** use `--mode remote` without `--inventory` — the live bucket

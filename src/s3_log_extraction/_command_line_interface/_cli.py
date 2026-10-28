@@ -2,6 +2,7 @@
 
 import os
 import pathlib
+import sys
 import typing
 
 import rich_click
@@ -59,6 +60,10 @@ def _cache_directory_option(command: typing.Callable) -> typing.Callable:
     )(command)
 
 
+# The exit status of `extract --check` when log files are pending, kept apart from 1 (an unhandled error) and
+# 2 (a usage error) so that a script can tell pending work apart from a failure.
+_CHECK_PENDING_EXIT_CODE = 3
+
 # Protocol names offered by `s3logextraction validate`, in the order they are listed in its help text.
 _PRE_VALIDATORS: dict[str, type] = {
     "downloads_logic": DownloadsLogicPreValidator,
@@ -67,6 +72,16 @@ _PRE_VALIDATORS: dict[str, type] = {
     "extraction_heuristic": ExtractionHeuristicPreValidator,
     "timestamps_parsing": TimestampsParsingPreValidator,
 }
+
+
+def _report_check(is_pending: bool, /) -> None:
+    """Report the outcome of `extract --check`, exiting with the pending status when there is work to do."""
+    if is_pending is False:
+        rich_click.echo("No log files are pending extraction.")
+        return
+
+    rich_click.echo("Log files are pending extraction.")
+    sys.exit(_CHECK_PENDING_EXIT_CODE)
 
 
 # s3logextraction
@@ -151,6 +166,16 @@ def s3logextraction_cli():
     type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
     default=None,
 )
+@rich_click.option(
+    "--check",
+    help=(
+        "Only check whether any log files are pending extraction, then exit without extracting anything. "
+        f"Exits with status {_CHECK_PENDING_EXIT_CODE} when some are pending and 0 when none are. "
+        "The check stops at the first pending file, and writes no records and no temporary directory."
+    ),
+    is_flag=True,
+    default=False,
+)
 def _extract_cli(
     directory: str,
     limit: int | None = None,
@@ -160,6 +185,7 @@ def _extract_cli(
     inventory_directory: str | None = None,
     use_encryption: bool = True,
     base_temporary_directory: str | None = None,
+    check: bool = False,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -179,6 +205,13 @@ def _extract_cli(
                 use_encryption=use_encryption,
                 base_temporary_directory=base_temporary_path,
             )
+            if check is True:
+                is_pending = extractor.has_unprocessed_s3_urls(
+                    s3_root=directory, inventory_directory=inventory_directory
+                )
+                _report_check(is_pending)
+                return
+
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -191,6 +224,11 @@ def _extract_cli(
                 use_encryption=use_encryption,
                 base_temporary_directory=base_temporary_path,
             )
+            if check is True:
+                is_pending = extractor.has_unextracted_files(directory=directory)
+                _report_check(is_pending)
+                return
+
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
