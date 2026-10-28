@@ -113,7 +113,7 @@ To check whether the cache still holds requests from an excluded address, such a
 s3logextraction validate excluded
 ```
 
-It lists each object key that holds such requests with its count, without printing the addresses. It exits with an error when it finds any, so a scheduled job running it fails. Pass `--encryption false` for a cache extracted without encryption.
+It prints how many object keys it scanned, then lists each object key that holds such requests with its count, without printing the addresses. It exits with an error when it finds any, or when a directory of the cache cannot be read, so a scheduled job running it fails. Pass `--encryption false` for a cache extracted without encryption.
 
 To remove those requests from the cache, so that they leave the summaries generated from then on, run
 

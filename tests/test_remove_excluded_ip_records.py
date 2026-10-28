@@ -109,10 +109,10 @@ def test_remove_excluded_ip_records(tmp_path: pathlib.Path, workers: int) -> Non
     assert not (extraction_directory / "ds000003").exists()
     assert not list(extraction_directory.rglob(pattern="*.tmp"))
 
-    remaining_records = find_excluded_ip_records(
+    remaining_scan = find_excluded_ip_records(
         cache_directory=tmp_path, excluded_ips=[_ACTOR_IP, _SECOND_ACTOR_IP], use_encryption=False, workers=1
     )
-    assert remaining_records == {}
+    assert remaining_scan.records == {}
 
 
 @pytest.mark.ai_generated
@@ -254,10 +254,10 @@ def test_cli_reset_excluded(
     for ip in (_ACTOR_IP, _ANOTHER_IP):
         assert ip not in result.output
 
-    remaining_records = find_excluded_ip_records(
+    remaining_scan = find_excluded_ip_records(
         cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], use_encryption=False, workers=1
     )
-    assert remaining_records == expected_remaining_records
+    assert remaining_scan.records == expected_remaining_records
 
 
 @pytest.mark.ai_generated

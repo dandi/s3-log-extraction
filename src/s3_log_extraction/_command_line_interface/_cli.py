@@ -408,7 +408,7 @@ def _reset_excluded_cli(
     if not confirm:
         records = find_excluded_ip_records(
             cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
-        )
+        ).records
     else:
         records = remove_excluded_ip_records(
             cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
@@ -705,20 +705,24 @@ def _validate_excluded_cli(
     These are the addresses listed in '~/.s3-log-extraction/excluded_ips.txt'. Records extracted before an address
     was excluded stay in the cache until they are removed.
 
-    Each object key with such records is listed with its record count. The addresses themselves are not printed.
-    The command exits with an error when any record is found, so that a scheduled job running it fails.
+    The number of object keys scanned is printed first, so that a run shows how much of the cache it covered.
+    Each object key with such records is then listed with its record count. The addresses themselves are not printed.
+    The command exits with an error when any record is found, or when a directory of the cache cannot be read, so
+    that a scheduled job running it fails.
     """
     excluded_ips = get_excluded_ips()
     if not excluded_ips:
         rich_click.echo("No excluded IP addresses are configured, so there is nothing to scan for.")
         return
 
-    records = find_excluded_ip_records(
+    scan = find_excluded_ip_records(
         cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
         excluded_ips=excluded_ips,
         use_encryption=use_encryption,
         workers=workers,
     )
+    records = scan.records
+    rich_click.echo(f"Scanned {scan.object_key_count} object keys of the extraction cache.")
     if not records:
         rich_click.echo(f"No records of the {len(excluded_ips)} excluded IP addresses were found.")
         return
