@@ -37,7 +37,6 @@ dependencies = [
     "psutil",
     "cryptography",
     "beartype",
-    "python-dotenv",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

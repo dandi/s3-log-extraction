@@ -4,12 +4,11 @@
 
 ### ⚠️ Breaking
 
-- Excluded IP addresses are now listed in the `S3_LOG_EXTRACTION_EXCLUDED_IPS` entry of the dotenv file `~/.s3-log-extraction/.env`, one per line inside double quotes with optional `#` comments, or comma-separated on one line. A set environment variable takes precedence. `~/.s3-log-extraction/excluded_ips.txt` is no longer read and stops any run while it exists, so move its lines into the `.env` value and delete it. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
-- The `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX` variable of the extraction heuristic pre-validator is removed in favor of the excluded IP addresses. Its validation record starts over. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
+- The `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX` variable of the extraction heuristic pre-validator is removed in favor of the addresses listed in `~/.s3-log-extraction/excluded_ips.txt`. Its validation record starts over. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
 ### 🚀 Enhancement
 
-- Excluded IP addresses are now dropped at extraction too, not only left out of the summaries. The new `--exclude` option of `extract` and `update summaries` adds addresses for one run. Only exact addresses are accepted. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
+- The addresses listed in `~/.s3-log-extraction/excluded_ips.txt` are now also dropped at extraction, so their requests never enter the cache, and are skipped by the extraction heuristic pre-validator. The file format is unchanged, and it stays the only place excluded addresses are listed. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
 - Added `s3logextraction validate excluded` and `ip_utils.find_excluded_ip_records`, which report the object keys whose cached records were made by an excluded IP address, such as those extracted before it was listed. The command exits with an error when any are found, so a scheduled job running it fails. `validate` is now a command group, and existing `validate <protocol> <directory>` invocations are unchanged. ([#322](https://github.com/dandi/s3-log-extraction/pull/322))
 

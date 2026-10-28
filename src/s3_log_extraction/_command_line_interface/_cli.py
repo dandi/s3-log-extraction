@@ -38,22 +38,6 @@ from ..validate import (
 )
 
 
-def _exclude_option(command: typing.Callable) -> typing.Callable:
-    """Attach the shared ``--exclude`` option, which adds addresses to the configured excluded IPs, to a command."""
-    return rich_click.option(
-        "--exclude",
-        "extra_excluded_ips",
-        help=(
-            "A comma-separated list of IP addresses to exclude for this run only. They are added to those listed in "
-            "the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set, in "
-            "'~/.s3-log-extraction/.env'."
-        ),
-        required=False,
-        type=rich_click.STRING,
-        default=None,
-    )(command)
-
-
 def _cache_directory_option(command: typing.Callable) -> typing.Callable:
     """
     Attach the shared ``--cache`` option to a command.
@@ -169,7 +153,6 @@ def s3logextraction_cli():
     type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
     default=None,
 )
-@_exclude_option
 def _extract_cli(
     directory: str,
     limit: int | None = None,
@@ -179,7 +162,6 @@ def _extract_cli(
     inventory_directory: str | None = None,
     use_encryption: bool = True,
     base_temporary_directory: str | None = None,
-    extra_excluded_ips: str | None = None,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -187,21 +169,19 @@ def _extract_cli(
     Note that you should not attempt to interrupt the extraction process using Ctrl+C or pkill, as this may lead to
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
 
-    Requests from the excluded IP addresses are dropped and never enter the cache.
+    Requests from the addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are dropped and never enter the
+    cache.
 
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     base_temporary_path = pathlib.Path(base_temporary_directory) if base_temporary_directory is not None else None
-    excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)
-
     match mode:
         case "remote":
             extractor = RemoteS3LogAccessExtractor(
                 cache_directory=cache_path,
                 use_encryption=use_encryption,
                 base_temporary_directory=base_temporary_path,
-                excluded_ips=excluded_ips,
             )
             extractor.extract_s3_bucket(
                 s3_root=directory,
@@ -214,7 +194,6 @@ def _extract_cli(
                 cache_directory=cache_path,
                 use_encryption=use_encryption,
                 base_temporary_directory=base_temporary_path,
-                excluded_ips=excluded_ips,
             )
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
@@ -444,7 +423,6 @@ def _update_ip_coordinates_cli(cache_directory: str | None = None, use_encryptio
     type=rich_click.BOOL,
     default=True,
 )
-@_exclude_option
 def _update_summaries_cli(
     mode: typing.Literal["archive"] | None = None,
     pick: str | None = None,
@@ -454,7 +432,6 @@ def _update_summaries_cli(
     region_disclosure_threshold: int = REGION_DISCLOSURE_THRESHOLD,
     cache_directory: str | None = None,
     use_encryption: bool = True,
-    extra_excluded_ips: str | None = None,
 ) -> None:
     """
     Generate condensed summaries of activity.
@@ -463,13 +440,10 @@ def _update_summaries_cli(
     services and VPNs and the local GeoLite2 database. The database is downloaded on first use and refreshed once
     a week old, which requires the MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY environment variables.
 
-    Any excluded IP addresses are left out of every summary. These are the addresses listed in the
-    S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set, in '~/.s3-log-extraction/.env',
-    and those given to '--exclude'. Requesters in the published GitHub ranges are left out of the view and
-    requester counts only.
+    Any addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are left out of every summary. Requesters in the
+    published GitHub ranges are left out of the view and requester counts only.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
-    excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)
     match mode:
         case "archive":
             parsed_asset_types_in_order = asset_types_in_order.split(",") if asset_types_in_order is not None else None
@@ -483,7 +457,6 @@ def _update_summaries_cli(
                 cache_directory=cache_path,
                 use_encryption=use_encryption,
                 region_disclosure_threshold=region_disclosure_threshold,
-                excluded_ips=excluded_ips,
             )
 
 
@@ -588,24 +561,21 @@ for _protocol, _validator_class in _PRE_VALIDATORS.items():
     type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
     default=-2,
 )
-@_exclude_option
 def _validate_excluded_cli(
     cache_directory: str | None = None,
     use_encryption: bool = True,
     workers: int = -2,
-    extra_excluded_ips: str | None = None,
 ) -> None:
     """
     Scan the extraction cache for records made by an excluded IP address.
 
-    These are the addresses listed in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set,
-    in '~/.s3-log-extraction/.env', and those given to '--exclude'. Records extracted before an address was excluded
-    stay in the cache until they are removed.
+    These are the addresses listed in '~/.s3-log-extraction/excluded_ips.txt'. Records extracted before an address
+    was excluded stay in the cache until they are removed.
 
     Each object key with such records is listed with its record count. The addresses themselves are not printed.
     The command exits with an error when any record is found, so that a scheduled job running it fails.
     """
-    excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)
+    excluded_ips = get_excluded_ips()
     if not excluded_ips:
         rich_click.echo("No excluded IP addresses are configured, so there is nothing to scan for.")
         return
