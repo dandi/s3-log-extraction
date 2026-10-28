@@ -175,7 +175,7 @@ def test_find_excluded_ip_records_rejects_a_corrupted_cache(
 
 
 @pytest.mark.ai_generated
-def test_cli_excluded_scan_fails_on_found_records(
+def test_cli_validate_excluded_fails_on_found_records(
     monkeypatch: pytest.MonkeyPatch, dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """Found records are listed per object key and fail the command, without printing the addresses."""
@@ -185,8 +185,8 @@ def test_cli_excluded_scan_fails_on_found_records(
     result = click.testing.CliRunner().invoke(
         s3_log_extraction.s3logextraction_cli,
         [
+            "validate",
             "excluded",
-            "scan",
             "--cache",
             str(tmp_path),
             "--encryption",
@@ -217,7 +217,7 @@ def test_cli_excluded_scan_fails_on_found_records(
         (None, "No excluded IP addresses are configured"),
     ],
 )
-def test_cli_excluded_scan_passes_without_found_records(
+def test_cli_validate_excluded_passes_without_found_records(
     dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path, file_content: str | None, expected_output: str
 ) -> None:
     """A cache without records of an excluded address, or no excluded address at all, passes with a short note."""
@@ -227,7 +227,7 @@ def test_cli_excluded_scan_passes_without_found_records(
 
     result = click.testing.CliRunner().invoke(
         s3_log_extraction.s3logextraction_cli,
-        ["excluded", "scan", "--cache", str(tmp_path), "--encryption", "false", "--workers", "1"],
+        ["validate", "excluded", "--cache", str(tmp_path), "--encryption", "false", "--workers", "1"],
     )
 
     assert result.exit_code == 0, result.output
