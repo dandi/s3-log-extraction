@@ -1,6 +1,7 @@
 import collections
 import collections.abc
 import concurrent.futures
+import dataclasses
 import functools
 import os
 import pathlib
@@ -17,14 +18,40 @@ _PER_REQUEST_FILE_NAMES = ("timestamps.txt", "bytes_sent.txt", "ips.txt", "downl
 _BATCH_SIZE = 1_000
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ExcludedIpScan:
+    """
+    The result of scanning the extraction cache for records made by an excluded IP address.
+
+    Attributes
+    ----------
+    records : dict of str to dict of str to int
+        For each object key with any record of an excluded address, the number of its records made by each such
+        address. Object keys are paths relative to the ``extraction`` directory, and are sorted.
+        An empty dictionary means the scanned object keys hold no record of an excluded address.
+    object_key_count : int
+        The number of object keys scanned, whether or not they hold a record of an excluded address.
+        Zero when no excluded address was given, since the cache is then not scanned.
+    """
+
+    records: dict[str, dict[str, int]]
+    object_key_count: int
+
+
+def _raise_walk_error(error: OSError, /) -> None:
+    """Raise an error of the walk over the extraction cache, which ``os.walk`` would otherwise ignore."""
+    raise error
+
+
 def _iter_object_key_directories(extraction_directory: pathlib.Path, /) -> collections.abc.Iterator[pathlib.Path]:
     """
     Yield every directory of the extraction cache that holds extracted requests, one at a time.
 
     An object key directory is any directory holding at least one of the per-request files. The tree is walked
-    lazily, so memory does not grow with the number of object keys.
+    lazily, so memory does not grow with the number of object keys. A directory that cannot be listed, such as one
+    the current user may not read, raises its error rather than being skipped.
     """
-    for directory, _, file_names in os.walk(top=extraction_directory):
+    for directory, _, file_names in os.walk(top=extraction_directory, onerror=_raise_walk_error):
         if any(file_name in _PER_REQUEST_FILE_NAMES for file_name in file_names):
             yield pathlib.Path(directory)
 
@@ -95,8 +122,8 @@ def _scan_batch(
     extraction_directory: pathlib.Path,
     excluded_ips: frozenset[str],
     use_encryption: bool,
-) -> dict[str, dict[str, int]]:
-    """Scan a batch of object key directories, keeping only those with a record of an excluded IP."""
+) -> ExcludedIpScan:
+    """Scan a batch of object key directories, keeping the records of only those with a record of an excluded IP."""
     batch_records: dict[str, dict[str, int]] = {}
     for object_key_directory in object_key_directories:
         record_counts_per_ip = _scan_object_key_directory(
@@ -105,7 +132,9 @@ def _scan_batch(
         if record_counts_per_ip:
             object_key = object_key_directory.relative_to(extraction_directory).as_posix()
             batch_records[object_key] = record_counts_per_ip
-    return batch_records
+
+    batch_scan = ExcludedIpScan(records=batch_records, object_key_count=len(object_key_directories))
+    return batch_scan
 
 
 def _iter_batches(
@@ -159,7 +188,7 @@ def find_excluded_ip_records(
     excluded_ips: collections.abc.Iterable[str] | None = None,
     use_encryption: bool = True,
     workers: int = -2,
-) -> dict[str, dict[str, int]]:
+) -> ExcludedIpScan:
     """
     Find the records of the extraction cache that were made by an excluded IP address.
 
@@ -185,15 +214,15 @@ def find_excluded_ip_records(
 
     Returns
     -------
-    dict of str to dict of str to int
-        For each object key with any record of an excluded address, the number of its records made by each such
-        address. Object keys are paths relative to the ``extraction`` directory, and are sorted.
-        An empty dictionary means the cache holds no record of an excluded address.
+    ExcludedIpScan
+        The records of excluded addresses found in each object key, and the number of object keys scanned.
 
     Raises
     ------
     FileNotFoundError
         If the cache directory holds no ``extraction`` directory.
+    OSError
+        If a directory of the cache cannot be listed, such as one the current user may not read.
     RuntimeError
         If an object key directory is missing a per-request file, or if one holding a record of an excluded address
         is not line-aligned.
@@ -209,7 +238,8 @@ def find_excluded_ip_records(
 
     excluded_ip_set = frozenset(excluded_ips) if excluded_ips is not None else get_excluded_ips()
     if not excluded_ip_set:
-        return {}
+        empty_scan = ExcludedIpScan(records={}, object_key_count=0)
+        return empty_scan
 
     max_workers = _handle_max_workers(workers=workers)
     batches = _iter_batches(_iter_object_key_directories(extraction_directory))
@@ -221,8 +251,10 @@ def find_excluded_ip_records(
     )
 
     records: dict[str, dict[str, int]] = {}
-    for batch_records in _map_batches(batch_function=scan_batch, batches=batches, max_workers=max_workers):
-        records.update(batch_records)
+    object_key_count = 0
+    for batch_scan in _map_batches(batch_function=scan_batch, batches=batches, max_workers=max_workers):
+        records.update(batch_scan.records)
+        object_key_count += batch_scan.object_key_count
 
-    sorted_records = dict(sorted(records.items()))
-    return sorted_records
+    scan = ExcludedIpScan(records=dict(sorted(records.items())), object_key_count=object_key_count)
+    return scan

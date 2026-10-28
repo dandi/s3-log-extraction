@@ -1,13 +1,17 @@
 """Tests for scanning the extraction cache for records made by an excluded IP address."""
 
+import collections.abc
+import errno
+import os
 import pathlib
 import secrets
+import typing
 
 import click.testing
 import pytest
 
 import s3_log_extraction
-from s3_log_extraction.ip_utils import find_excluded_ip_records
+from s3_log_extraction.ip_utils import find_excluded_ip_records, remove_excluded_ip_records
 from s3_log_extraction.utils import write_text_to_file
 
 # Every address below is drawn from the documentation ranges (TEST-NET-1, TEST-NET-2, TEST-NET-3, and 2001:db8::/32)
@@ -61,7 +65,7 @@ def _write_cache(*, cache_directory: pathlib.Path, use_encryption: bool = False)
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize(
-    ("excluded_ips", "expected_records"),
+    ("excluded_ips", "expected_records", "expected_object_key_count"),
     [
         (
             [_ACTOR_IP, _SECOND_ACTOR_IP],
@@ -69,25 +73,31 @@ def _write_cache(*, cache_directory: pathlib.Path, use_encryption: bool = False)
                 "ds000001/sub-01/data.nii.gz": {_ACTOR_IP: 2, _SECOND_ACTOR_IP: 1},
                 "ds000002/dataset_description.json": {_ACTOR_IP: 1},
             },
+            4,
         ),
-        ([_SECOND_ACTOR_IP], {"ds000001/sub-01/data.nii.gz": {_SECOND_ACTOR_IP: 1}}),
-        # An address with no record in the cache, and no address at all, both find nothing
-        (["198.51.100.1"], {}),
-        ([], {}),
+        ([_SECOND_ACTOR_IP], {"ds000001/sub-01/data.nii.gz": {_SECOND_ACTOR_IP: 1}}, 4),
+        # An address with no record in the cache still scans every object key, while no address at all scans none
+        (["198.51.100.1"], {}, 4),
+        ([], {}, 0),
     ],
 )
 def test_find_excluded_ip_records(
-    tmp_path: pathlib.Path, workers: int, excluded_ips: list[str], expected_records: dict[str, dict[str, int]]
+    tmp_path: pathlib.Path,
+    workers: int,
+    excluded_ips: list[str],
+    expected_records: dict[str, dict[str, int]],
+    expected_object_key_count: int,
 ) -> None:
     """Each object key with records of an excluded address is reported with its count per address, sorted by key."""
     _write_cache(cache_directory=tmp_path)
 
-    records = find_excluded_ip_records(
+    scan = find_excluded_ip_records(
         cache_directory=tmp_path, excluded_ips=excluded_ips, use_encryption=False, workers=workers
     )
 
-    assert records == expected_records
-    assert list(records) == sorted(expected_records)
+    assert scan.records == expected_records
+    assert list(scan.records) == sorted(expected_records)
+    assert scan.object_key_count == expected_object_key_count
 
 
 @pytest.mark.ai_generated
@@ -99,14 +109,15 @@ def test_find_excluded_ip_records_across_many_batches(
     monkeypatch.setattr("s3_log_extraction.ip_utils._excluded_ip_records._BATCH_SIZE", 1)
     _write_cache(cache_directory=tmp_path)
 
-    records = find_excluded_ip_records(
+    scan = find_excluded_ip_records(
         cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], use_encryption=False, workers=workers
     )
 
-    assert records == {
+    assert scan.records == {
         "ds000001/sub-01/data.nii.gz": {_ACTOR_IP: 2},
         "ds000002/dataset_description.json": {_ACTOR_IP: 1},
     }
+    assert scan.object_key_count == 4
 
 
 @pytest.mark.ai_generated
@@ -115,9 +126,9 @@ def test_find_excluded_ip_records_decrypts_the_cache(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("S3_LOG_EXTRACTION_PASSWORD", secrets.token_urlsafe(32))
     _write_cache(cache_directory=tmp_path, use_encryption=True)
 
-    records = find_excluded_ip_records(cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], workers=1)
+    scan = find_excluded_ip_records(cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], workers=1)
 
-    assert records == {
+    assert scan.records == {
         "ds000001/sub-01/data.nii.gz": {_ACTOR_IP: 2},
         "ds000002/dataset_description.json": {_ACTOR_IP: 1},
     }
@@ -131,9 +142,9 @@ def test_find_excluded_ip_records_defaults_to_the_configured_addresses(
     excluded_ips_file_path.write_text(f"{_SECOND_ACTOR_IP}  # Reviewed\n")
     _write_cache(cache_directory=tmp_path)
 
-    records = find_excluded_ip_records(cache_directory=tmp_path, use_encryption=False, workers=1)
+    scan = find_excluded_ip_records(cache_directory=tmp_path, use_encryption=False, workers=1)
 
-    assert records == {"ds000001/sub-01/data.nii.gz": {_SECOND_ACTOR_IP: 1}}
+    assert scan.records == {"ds000001/sub-01/data.nii.gz": {_SECOND_ACTOR_IP: 1}}
 
 
 @pytest.mark.ai_generated
@@ -170,6 +181,30 @@ def test_find_excluded_ip_records_rejects_a_corrupted_cache(
 
 
 @pytest.mark.ai_generated
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("cache_function", [find_excluded_ip_records, remove_excluded_ip_records])
+def test_unreadable_directory_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, cache_function: typing.Callable, workers: int
+) -> None:
+    """A directory of the cache that cannot be listed raises its error rather than being skipped unscanned."""
+    _write_cache(cache_directory=tmp_path)
+    unreadable_directory = tmp_path / "extraction" / "ds000002"
+    original_scandir = os.scandir
+
+    def scandir(path: str = ".") -> collections.abc.Iterator[os.DirEntry[str]]:
+        if pathlib.Path(path) == unreadable_directory:
+            raise PermissionError(errno.EACCES, "Permission denied", str(path))
+        return original_scandir(path)
+
+    # File permissions cannot deny a directory to the root user that some test environments run as, so the
+    # listing that `os.walk` makes through `os.scandir` is failed instead
+    monkeypatch.setattr(os, "scandir", scandir)
+
+    with pytest.raises(PermissionError, match="Permission denied"):
+        cache_function(cache_directory=tmp_path, excluded_ips=[_ACTOR_IP], use_encryption=False, workers=workers)
+
+
+@pytest.mark.ai_generated
 def test_cli_validate_excluded_fails_on_found_records(
     excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
@@ -192,6 +227,7 @@ def test_cli_validate_excluded_fails_on_found_records(
     )
 
     assert result.exit_code == 1
+    assert "Scanned 4 object keys of the extraction cache." in result.output
     assert "ds000001/sub-01/data.nii.gz: 3 records" in result.output
     assert "ds000002/dataset_description.json: 1 records" in result.output
     assert "Found 4 records of 2 excluded IP addresses across 2 object keys" in result.output
@@ -205,7 +241,7 @@ def test_cli_validate_excluded_fails_on_found_records(
     [
         (
             "198.51.100.1\n",
-            "No records of the 1 excluded IP addresses were found.",
+            "Scanned 4 object keys of the extraction cache.\nNo records of the 1 excluded IP addresses were found.",
         ),
         (None, "No excluded IP addresses are configured"),
     ],

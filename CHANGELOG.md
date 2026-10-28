@@ -2,6 +2,18 @@
 
 ## Upcoming
 
+### ⚠️ Breaking
+
+- `ip_utils.find_excluded_ip_records` now returns an `ip_utils.ExcludedIpScan`. Its `records` attribute holds the dictionary the function used to return, and its `object_key_count` is the number of object keys scanned. ([#327](https://github.com/dandi/s3-log-extraction/pull/327))
+
+### 🚀 Enhancement
+
+- `s3logextraction validate excluded` now prints how many object keys of the extraction cache it scanned, so a clean run shows how much of the cache it covered. ([#327](https://github.com/dandi/s3-log-extraction/pull/327))
+
+### 🐛 Bug Fix
+
+- Scanning the extraction cache for excluded IP addresses, and removing their records, now fails on a directory of the cache that cannot be read. It used to skip that directory and report the rest of the cache as clean. ([#327](https://github.com/dandi/s3-log-extraction/pull/327))
+
 ## v1.14.1
 
 ### ⚠️ Breaking

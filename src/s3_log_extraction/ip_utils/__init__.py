@@ -4,7 +4,7 @@ from ._ip_utils import ServiceNetworksWarning
 from ._region_codes import country_alpha_2_to_alpha_3, get_region_coordinates
 from ._resolver import IpRegionResolver, MappingRegionResolver, RegionResolver, fetch_service_networks
 from ._update_region_code_coordinates import update_region_code_coordinates
-from ._excluded_ip_records import find_excluded_ip_records
+from ._excluded_ip_records import ExcludedIpScan, find_excluded_ip_records
 from ._remove_excluded_ip_records import remove_excluded_ip_records
 from ._globals import (
     EXCLUDED_REGION_LABELS,
@@ -15,6 +15,7 @@ from ._globals import (
 
 __all__ = [
     "EXCLUDED_REGION_LABELS",
+    "ExcludedIpScan",
     "IpRegionResolver",
     "MappingRegionResolver",
     "RegionResolver",

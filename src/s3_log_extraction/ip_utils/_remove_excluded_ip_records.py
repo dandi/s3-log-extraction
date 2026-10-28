@@ -167,6 +167,9 @@ def remove_excluded_ip_records(
     ------
     FileNotFoundError
         If the cache directory holds no ``extraction`` directory.
+    OSError
+        If a directory of the cache cannot be listed, such as one the current user may not read. Object keys that
+        were already cleaned when the error is raised stay cleaned.
     RuntimeError
         If an extraction record shows an unfinished extraction, if an object key directory is missing a per-request
         file, or if one holding a record of an excluded address is not line-aligned. Object keys that were already
