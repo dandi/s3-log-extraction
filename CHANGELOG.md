@@ -2,6 +2,8 @@
 
 ## Upcoming
 
+## v1.15.0
+
 ### ⚠️ Breaking
 
 - `ip_utils.find_excluded_ip_records` now returns an `ip_utils.ExcludedIpScan`. Its `records` attribute holds the dictionary the function used to return, and its `object_key_count` is the number of object keys scanned. ([#327](https://github.com/dandi/s3-log-extraction/pull/327))
