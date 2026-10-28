@@ -105,7 +105,7 @@ The file holds one IPv4 or IPv6 address per line. Anything after a `#` is a comm
 
 Excluding an address only affects logs extracted from then on. Requests from that address already in the cache are still left out of the summaries.
 
-Exclusion only works in one direction over time. Adding an address can only drop its requests, from future extraction and, once removed, from the cache. Removing an address from the file does not bring its requests back, since they were never extracted or were deleted. To include an address again, rerun the extraction from scratch with `s3logextraction reset extraction` followed by a full `s3logextraction extract`.
+Exclusion only works in one direction over time. Adding an address can only drop its requests, from future extraction and, once removed with `s3logextraction reset excluded`, from the cache. Removing an address from the file does not bring its requests back, since they were never extracted or were deleted. To include an address again, rerun the extraction from scratch with `s3logextraction reset extraction` followed by a full `s3logextraction extract`.
 
 To check whether the cache still holds requests from an excluded address, such as those extracted before it was listed, run
 
@@ -114,6 +114,14 @@ s3logextraction validate excluded
 ```
 
 It lists each object key that holds such requests with its count, without printing the addresses. It exits with an error when it finds any, so a scheduled job running it fails. Pass `--encryption false` for a cache extracted without encryption.
+
+To remove those requests from the cache, so that they leave the summaries generated from then on, run
+
+```bash
+s3logextraction reset excluded --confirm
+```
+
+Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction. The removal is permanent, as described above.
 
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
 

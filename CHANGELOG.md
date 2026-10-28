@@ -15,6 +15,8 @@
 
 - Added a `--check` flag to `s3logextraction extract`, which reports whether any log files are pending extraction and exits without extracting. It exits with status 3 when some are pending and 0 when none are, so a scheduled job can start an extraction only when needed. The extractors gain matching `has_unprocessed_s3_urls`, `get_unprocessed_s3_urls` and `has_unextracted_files` methods. ([#320](https://github.com/dandi/s3-log-extraction/pull/320))
 
+- Added `s3logextraction reset excluded` and `ip_utils.remove_excluded_ip_records`, which remove the cached records of excluded IP addresses so they leave the summaries from their next run. Without `--confirm` the command only lists what it would remove. It refuses to run while an extraction is unfinished. ([#323](https://github.com/dandi/s3-log-extraction/pull/323))
+
 ## v1.11.10
 
 ### 🚀 Enhancement

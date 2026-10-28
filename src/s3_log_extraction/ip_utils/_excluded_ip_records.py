@@ -122,6 +122,37 @@ def _iter_batches(
         yield batch
 
 
+def _map_batches[T](
+    *,
+    batch_function: collections.abc.Callable[..., T],
+    batches: collections.abc.Iterator[list[pathlib.Path]],
+    max_workers: int,
+) -> collections.abc.Iterator[T]:
+    """
+    Apply a function to every batch of object key directories, yielding its results in order of completion.
+
+    A ``max_workers`` of 1 runs in the current process. Otherwise only a few batches per worker are submitted ahead,
+    so the walk is never drained into memory at once.
+    """
+    if max_workers == 1:
+        for batch in batches:
+            yield batch_function(object_key_directories=batch)
+        return
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        pending_futures: set[concurrent.futures.Future[T]] = set()
+        for batch in batches:
+            pending_futures.add(executor.submit(batch_function, object_key_directories=batch))
+            if len(pending_futures) >= 2 * max_workers:
+                done_futures, pending_futures = concurrent.futures.wait(
+                    pending_futures, return_when=concurrent.futures.FIRST_COMPLETED
+                )
+                for future in done_futures:
+                    yield future.result()
+        for future in concurrent.futures.as_completed(pending_futures):
+            yield future.result()
+
+
 def find_excluded_ip_records(
     *,
     cache_directory: str | pathlib.Path | None = None,
@@ -190,23 +221,8 @@ def find_excluded_ip_records(
     )
 
     records: dict[str, dict[str, int]] = {}
-    if max_workers == 1:
-        for batch in batches:
-            records.update(scan_batch(object_key_directories=batch))
-    else:
-        # Only a few batches per worker are submitted ahead, so the walk is never drained into memory at once
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            pending_futures: set[concurrent.futures.Future] = set()
-            for batch in batches:
-                pending_futures.add(executor.submit(scan_batch, object_key_directories=batch))
-                if len(pending_futures) >= 2 * max_workers:
-                    done_futures, pending_futures = concurrent.futures.wait(
-                        pending_futures, return_when=concurrent.futures.FIRST_COMPLETED
-                    )
-                    for future in done_futures:
-                        records.update(future.result())
-            for future in concurrent.futures.as_completed(pending_futures):
-                records.update(future.result())
+    for batch_records in _map_batches(batch_function=scan_batch, batches=batches, max_workers=max_workers):
+        records.update(batch_records)
 
     sorted_records = dict(sorted(records.items()))
     return sorted_records
