@@ -13,6 +13,18 @@ from s3_log_extraction.utils import read_text_from_file
 _MOCKED_IP_TO_REGION_FILE_PATH = pathlib.Path(__file__).parent / "mocked_ips" / "ip_to_region.yaml"
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """
+    Fail any test that meets a published service range listing which cannot be obtained.
+
+    The tools only warn about it at run time. Failing on it here is what lets the daily remote tests report a source
+    that has broken, rather than pass with its ranges missing. The filter is added here rather than under
+    ``filterwarnings`` in ``pyproject.toml``, because resolving the warning category there imports the package before
+    coverage starts, which leaves every module-level line uncovered.
+    """
+    config.addinivalue_line("filterwarnings", "error::s3_log_extraction.ip_utils.ServiceNetworksWarning")
+
+
 @pytest.fixture
 def mocked_region_resolver() -> MappingRegionResolver:
     """

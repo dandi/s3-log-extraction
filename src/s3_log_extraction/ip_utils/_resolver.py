@@ -44,7 +44,12 @@ class RegionResolver(typing.Protocol):
 
 
 def fetch_service_networks() -> ServiceNetworks:
-    """Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, Azure, VPN)."""
+    """
+    Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, Azure, VPN).
+
+    A listing that cannot be obtained does not fail the fetch. It is reported with a ``ServiceNetworksWarning`` and
+    left empty, so that the ranges of the other services are still used.
+    """
     return {
         service_name: list(_get_cidr_address_ranges_and_subregions(service_name=service_name))
         for service_name in _KNOWN_SERVICES
