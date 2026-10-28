@@ -62,7 +62,7 @@ def _collect_asset_views(
         Maximum gap between two consecutive streaming requests of the same session.
         Defaults to ``SESSION_TIMEOUT_IN_SECONDS`` (8 hours).
     excluded_ips : frozenset of str, optional
-        Individual addresses whose sessions are excluded, as returned by ``get_excluded_ips``.
+        Individual addresses whose sessions are excluded, as listed in ``EXCLUDED_IPS_FILE_PATH``.
         Defaults to an empty set, which excludes nothing and counts every IP.
     region_resolver : RegionResolver, optional
         Resolves each IP address to its region/service label, used to leave out the sessions of requesters
@@ -244,7 +244,7 @@ def _summarize_dataset_requester_count(
         If ``True`` (default), ``ips.txt`` files are decrypted before reading.
         If ``False``, files are read as plaintext.
     excluded_ips : frozenset of str, optional
-        Individual addresses left out of the requester count, as returned by ``get_excluded_ips``.
+        Individual addresses left out of the requester count, as listed in ``EXCLUDED_IPS_FILE_PATH``.
         Defaults to an empty set, which excludes nothing.
     """
     unique_ips = _collect_unique_ips(
@@ -310,9 +310,9 @@ def generate_summaries(
         GeoLite2 database in the cache directory.
     excluded_ips : iterable of str, optional
         Individual addresses left out of every summary, including bytes sent, requests, downloads, views, and
-        the requester counts. Defaults to ``s3_log_extraction.config.get_excluded_ips()``, the addresses in the
-        ``S3_LOG_EXTRACTION_EXCLUDED_IPS`` environment variable or, when it is not set, in
-        ``~/.s3-log-extraction/.env``. Pass an empty iterable to exclude no address regardless of those.
+        the requester counts. Defaults to the addresses listed in ``EXCLUDED_IPS_FILE_PATH``,
+        which is none when that file is absent. Pass an empty iterable to exclude no address regardless of
+        that file.
     """
     if level != 0:
         message = (

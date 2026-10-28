@@ -93,29 +93,17 @@ To override the cache or temporary directory for a single extraction run (withou
 s3logextraction extract <log directory> --cache <cache directory> --tmp <temporary directory>
 ```
 
-[Optional] Exclude individually reviewed requesters. Their requests are dropped at extraction, so they never enter the cache, and they are also left out of every summary. List their addresses in the standard dotenv file `~/.s3-log-extraction/.env`, as a double-quoted `S3_LOG_EXTRACTION_EXCLUDED_IPS` value with one address per line.
+[Optional] Exclude individually reviewed requesters. List their addresses in `~/.s3-log-extraction/excluded_ips.txt`, which is the only place the excluded addresses are read from. Their requests are dropped at extraction, so they never enter the cache, and they are also left out of every summary.
 
 ```text
-S3_LOG_EXTRACTION_EXCLUDED_IPS="
 192.0.2.1  # Reviewed mirror
 192.0.2.2
 2001:db8::1  # Same actor as 192.0.2.2
-"
 ```
 
-Anything after a `#` on a line is a comment, so each address can carry a note on why it is excluded. Blank lines are ignored. Every entry must be a single exact address. Networks in CIDR notation, wildcards, and regular expressions are refused with an error.
-
-A shell can read the same file with `set -a; . ~/.s3-log-extraction/.env; set +a`, and the value it exports is parsed exactly like the file. Other readers do not all understand a multi-line value. `docker --env-file` does not, and appending the file to `$GITHUB_ENV` needs GitHub's `NAME<<DELIMITER` heredoc form. Where those matter, write the value on a single line instead, with commas between the addresses and no quotes, such as `S3_LOG_EXTRACTION_EXCLUDED_IPS=192.0.2.1,192.0.2.2`.
-
-The file is read with [python-dotenv](https://pypi.org/project/python-dotenv/) only when `S3_LOG_EXTRACTION_EXCLUDED_IPS` is not already set in the environment. A variable that is already set takes precedence over the file, even when it is empty. The `--exclude` option of `extract`, `update summaries`, `validate excluded`, and `reset excluded` adds a comma-separated list of addresses for that run only.
-
-```bash
-s3logextraction extract <log directory> --exclude 192.0.2.4,192.0.2.5
-```
+The file holds one IPv4 or IPv6 address per line. Anything after a `#` is a comment, so each address can carry a note on why it is excluded, and blank lines are ignored. Every entry must be a single exact address. Networks in CIDR notation, wildcards, and regular expressions are refused with an error. The file is edited by hand and never written by the package, and an absent or empty file excludes no one.
 
 Excluding an address only affects logs extracted from then on. Requests from that address already in the cache are still left out of the summaries.
-
-The `~/.s3-log-extraction/excluded_ips.txt` of version 1.11.10 is no longer read. If it still exists, every command that reads the excluded addresses stops with an error, so that no requester is silently counted again. Move its lines, comments included, inside the double quotes of the `.env` value shown above, then delete it.
 
 To check whether the cache still holds requests from an excluded address, such as those extracted before it was listed, run
 

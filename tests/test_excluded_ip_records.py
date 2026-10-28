@@ -7,7 +7,6 @@ import click.testing
 import pytest
 
 import s3_log_extraction
-from s3_log_extraction.config import EXCLUDED_IPS_ENVIRONMENT_VARIABLE
 from s3_log_extraction.ip_utils import find_excluded_ip_records
 from s3_log_extraction.utils import write_text_to_file
 
@@ -19,15 +18,11 @@ _ANOTHER_IP = "203.0.113.0"
 
 
 @pytest.fixture
-def dotenv_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
-    """Point the dotenv file at a temporary location and clear the variable, so that nothing outside the test counts."""
-    dotenv_file_path = tmp_path / ".env"
-    monkeypatch.setattr("s3_log_extraction.config._config.DOTENV_FILE_PATH", dotenv_file_path)
-    monkeypatch.setattr(
-        "s3_log_extraction.config._config._LEGACY_EXCLUDED_IPS_FILE_PATH", tmp_path / "excluded_ips.txt"
-    )
-    monkeypatch.delenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, raising=False)
-    return dotenv_file_path
+def excluded_ips_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
+    """Point the excluded IPs file at a temporary location rather than the user's real one, without creating it."""
+    excluded_ips_file_path = tmp_path / "excluded_ips.txt"
+    monkeypatch.setattr("s3_log_extraction.config._config.EXCLUDED_IPS_FILE_PATH", excluded_ips_file_path)
+    return excluded_ips_file_path
 
 
 def _write_object_key(*, object_key_directory: pathlib.Path, ips: list[str], use_encryption: bool = False) -> None:
@@ -130,10 +125,10 @@ def test_find_excluded_ip_records_decrypts_the_cache(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.ai_generated
 def test_find_excluded_ip_records_defaults_to_the_configured_addresses(
-    dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path
+    excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """Without explicit addresses, those of the configured sources are looked for."""
-    dotenv_file_path.write_text(f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}={_SECOND_ACTOR_IP}\n")
+    """Without explicit addresses, those listed in the excluded IPs file are looked for."""
+    excluded_ips_file_path.write_text(f"{_SECOND_ACTOR_IP}  # Reviewed\n")
     _write_cache(cache_directory=tmp_path)
 
     records = find_excluded_ip_records(cache_directory=tmp_path, use_encryption=False, workers=1)
@@ -176,10 +171,10 @@ def test_find_excluded_ip_records_rejects_a_corrupted_cache(
 
 @pytest.mark.ai_generated
 def test_cli_validate_excluded_fails_on_found_records(
-    monkeypatch: pytest.MonkeyPatch, dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path
+    excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """Found records are listed per object key and fail the command, without printing the addresses."""
-    monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, f"{_ACTOR_IP},198.51.100.1")
+    excluded_ips_file_path.write_text(f"{_ACTOR_IP}\n198.51.100.1\n{_SECOND_ACTOR_IP}\n")
     _write_cache(cache_directory=tmp_path)
 
     result = click.testing.CliRunner().invoke(
@@ -193,8 +188,6 @@ def test_cli_validate_excluded_fails_on_found_records(
             "false",
             "--workers",
             "1",
-            "--exclude",
-            _SECOND_ACTOR_IP,
         ],
     )
 
@@ -211,18 +204,18 @@ def test_cli_validate_excluded_fails_on_found_records(
     ("file_content", "expected_output"),
     [
         (
-            f"{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=198.51.100.1\n",
+            "198.51.100.1\n",
             "No records of the 1 excluded IP addresses were found.",
         ),
         (None, "No excluded IP addresses are configured"),
     ],
 )
 def test_cli_validate_excluded_passes_without_found_records(
-    dotenv_file_path: pathlib.Path, tmp_path: pathlib.Path, file_content: str | None, expected_output: str
+    excluded_ips_file_path: pathlib.Path, tmp_path: pathlib.Path, file_content: str | None, expected_output: str
 ) -> None:
     """A cache without records of an excluded address, or no excluded address at all, passes with a short note."""
     if file_content is not None:
-        dotenv_file_path.write_text(file_content)
+        excluded_ips_file_path.write_text(file_content)
     _write_cache(cache_directory=tmp_path)
 
     result = click.testing.CliRunner().invoke(

@@ -1,19 +1,9 @@
-import collections.abc
 import ipaddress
 import json
-import os
 import pathlib
 import typing
 
-import dotenv
-
-from ._globals import (
-    _LEGACY_EXCLUDED_IPS_FILE_PATH,
-    DEFAULT_CACHE_DIRECTORY,
-    DOTENV_FILE_PATH,
-    EXCLUDED_IPS_ENVIRONMENT_VARIABLE,
-    S3_LOG_EXTRACTION_CONFIG_FILE_PATH,
-)
+from ._globals import DEFAULT_CACHE_DIRECTORY, EXCLUDED_IPS_FILE_PATH, S3_LOG_EXTRACTION_CONFIG_FILE_PATH
 
 
 def save_config(config: dict[str, typing.Any]) -> None:
@@ -126,90 +116,44 @@ def get_base_temporary_directory() -> pathlib.Path | None:
     return base_temporary_directory
 
 
-def get_excluded_ips(extra_ips: collections.abc.Iterable[str] | None = None, /) -> frozenset[str]:
+def get_excluded_ips() -> frozenset[str]:
     """
     Get the IP addresses whose requests are dropped at extraction and left out of every published summary.
 
-    The addresses come from the environment variable ``S3_LOG_EXTRACTION_EXCLUDED_IPS``, plus any ``extra_ips``.
-    When the variable is not set in the environment, it is read with ``python-dotenv`` from the dotenv file
-    ``DOTENV_FILE_PATH`` (``~/.s3-log-extraction/.env``), if that exists. A variable already set in the
-    environment takes precedence over the file, even when it is empty.
-
-    The recommended layout is a double-quoted value spanning several lines, with one address per line. Anything
-    after a ``#`` on a line is a comment, so each address can carry a note on why it is excluded, and blank
-    lines are ignored.
-
-    .. code-block:: text
-
-        S3_LOG_EXTRACTION_EXCLUDED_IPS="
-        192.0.2.1  # Reviewed mirror
-        198.51.100.5
-        "
-
-    Commas and whitespace also separate addresses, so a single line such as
-    ``S3_LOG_EXTRACTION_EXCLUDED_IPS=192.0.2.1,198.51.100.5`` works too.
-
-    A shell that sources the file (``set -a; . ~/.s3-log-extraction/.env; set +a``) keeps the newlines and the
-    ``#`` text of a multi-line value, and the value it exports parses exactly as the file does. A multi-line value
-    is not understood by ``docker --env-file``, and appending the file to ``$GITHUB_ENV`` needs GitHub's
-    ``NAME<<DELIMITER`` heredoc form. Use the single-line form where those readers matter.
-
-    Every entry must be a single IPv4 or IPv6 address. Networks in CIDR notation and patterns are not accepted.
-
-    Parameters
-    ----------
-    extra_ips : iterable of str, optional
-        Further addresses to exclude on top of the environment variable, such as those passed to the
-        ``--exclude`` option on the command line.
+    The addresses are read from ``EXCLUDED_IPS_FILE_PATH`` (``~/.s3-log-extraction/excluded_ips.txt``), which
+    is edited by hand and never written by this package. It is the only place the excluded addresses are listed.
+    It is a plain text file holding one IPv4 or IPv6 address per line. Blank lines are ignored, as is anything
+    after a ``#``, so each entry can carry a note on why it is excluded. Networks in CIDR notation are not accepted.
 
     Returns
     -------
     frozenset of str
-        The addresses in canonical text form, which is the form the extraction cache records.
-        An empty set when no address is listed, in which case no requester is excluded by address.
+        The listed addresses in canonical text form, which is the form the extraction cache records.
+        An empty set when the file does not exist or lists no address, in which case no requester is
+        excluded by address.
 
     Raises
     ------
     ValueError
-        If any entry is something other than a single valid IP address, or if the ``excluded_ips.txt`` file
-        read by version 1.11.10 still exists.
+        If any line holds something other than a single valid IP address.
     """
-    if _LEGACY_EXCLUDED_IPS_FILE_PATH.exists():
-        message = (
-            f"\n\nThe excluded IPs file '{_LEGACY_EXCLUDED_IPS_FILE_PATH}' is no longer read.\n"
-            f"Move its lines, comments included, into a double-quoted value in '{DOTENV_FILE_PATH}', then delete "
-            "it. This check stops the run so that no excluded requester is silently counted again.\n\n"
-            f'{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}="\n'
-            "192.0.2.1  # Why it is excluded\n"
-            "198.51.100.5\n"
-            '"\n\n'
-        )
-        raise ValueError(message)
+    if not EXCLUDED_IPS_FILE_PATH.exists():
+        return frozenset()
 
-    environment_value = os.environ.get(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, None)
-    if environment_value is None and DOTENV_FILE_PATH.exists():
-        environment_value = dotenv.dotenv_values(dotenv_path=DOTENV_FILE_PATH).get(EXCLUDED_IPS_ENVIRONMENT_VARIABLE)
-    environment_entries = [
-        entry
-        for line in (environment_value or "").splitlines()
-        for entry in line.split("#", 1)[0].replace(",", " ").split()
-    ]
-
-    sources = [
-        (f"'{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}'", environment_entries),
-        ("the extra excluded IPs", [entry.strip() for entry in extra_ips or [] if entry.strip()]),
-    ]
     canonical_ips = set()
-    for source, entries in sources:
-        for entry in entries:
-            try:
-                canonical_ips.add(str(ipaddress.ip_address(entry)))
-            except ValueError as exception:
-                message = (
-                    f"\n\nThe entry '{entry}' of {source} is not a single valid IP address.\n"
-                    "Networks in CIDR notation and patterns are not accepted.\n\n"
-                )
-                raise ValueError(message) from exception
+    for line_number, line in enumerate(EXCLUDED_IPS_FILE_PATH.read_text().splitlines(), start=1):
+        entry = line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        try:
+            canonical_ips.add(str(ipaddress.ip_address(entry)))
+        except ValueError as exception:
+            message = (
+                f"\n\nLine {line_number} of '{EXCLUDED_IPS_FILE_PATH}' is not a single valid IP address.\n"
+                "Each line must hold one IPv4 or IPv6 address, optionally followed by a '#' comment. "
+                "Networks in CIDR notation are not accepted.\n\n"
+            )
+            raise ValueError(message) from exception
 
     excluded_ips = frozenset(canonical_ips)
     return excluded_ips
