@@ -1,5 +1,7 @@
 import collections
+import collections.abc
 import concurrent.futures
+import functools
 import itertools
 import math
 import os
@@ -17,7 +19,12 @@ from ._utils import (
     _merge_worker_output_into_extraction,
     _run_awk_extraction,
 )
-from ..config import get_base_temporary_directory, get_cache_directory, get_cache_subdirectory
+from ..config import (
+    get_base_temporary_directory,
+    get_cache_directory,
+    get_cache_subdirectory,
+    get_excluded_ips,
+)
 from ..utils import _handle_max_workers
 
 
@@ -48,6 +55,11 @@ class S3LogAccessExtractor:
         The base directory to create this run's temporary directory inside.
         Defaults to the configured base temporary directory, and to the system temporary directory when
         none is configured.
+    excluded_ips : iterable of str, optional
+        The IP addresses whose requests are dropped during extraction, so they never enter the cache.
+        Defaults to `s3_log_extraction.config.get_excluded_ips()`, the addresses listed in
+        `~/.s3-log-extraction/excluded_ips.txt`.
+        An explicit value replaces that default, so pass an empty list to drop nothing.
     """
 
     def __init__(
@@ -56,6 +68,7 @@ class S3LogAccessExtractor:
         cache_directory: pathlib.Path | None = None,
         use_encryption: bool = True,
         base_temporary_directory: pathlib.Path | None = None,
+        excluded_ips: collections.abc.Iterable[str] | None = None,
     ) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
         self.use_encryption = use_encryption
@@ -64,7 +77,6 @@ class S3LogAccessExtractor:
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_cache_subdirectory(cache_directory=self.cache_directory, name="records")
         self.base_temporary_directory = base_temporary_directory or get_base_temporary_directory()
-        self.temporary_directory = _create_temporary_directory(self.base_temporary_directory)
 
         class_name = self.__class__.__name__
         file_processing_start_record_file_name = f"{class_name}_file-processing-start.txt"
@@ -74,7 +86,11 @@ class S3LogAccessExtractor:
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
-        self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
+        self.excluded_ips = frozenset(excluded_ips) if excluded_ips is not None else get_excluded_ips()
+        self._awk_env = {
+            "EXTRACTION_DIRECTORY": str(self.extraction_directory),
+            "EXCLUDED_IPS": " ".join(sorted(self.excluded_ips)),
+        }
 
         self.file_processing_end_record: set[str] = set()
         file_processing_record_difference: set[str] = set()
@@ -90,6 +106,41 @@ class S3LogAccessExtractor:
                 "please call `s3logextraction reset extraction` to clean the extraction cache and records.\n\n"
             )
             raise ValueError(message)
+
+    @functools.cached_property
+    def temporary_directory(self) -> pathlib.Path:
+        """
+        The temporary directory of this run, created inside the base temporary directory on first use.
+
+        It is created lazily so that an extractor which only checks for pending work never makes one.
+        """
+        temporary_directory = _create_temporary_directory(self.base_temporary_directory)
+        return temporary_directory
+
+    def has_unextracted_files(self, *, directory: str | pathlib.Path) -> bool:
+        """
+        Check whether any log files in a directory have not yet been extracted, without extracting them.
+
+        The directory is only walked up to the first log file that has not been extracted. This only reads the
+        records of this extractor and writes nothing.
+
+        Parameters
+        ----------
+        directory : str or pathlib.Path
+            The path to the folder containing all raw S3 log files, as passed to `extract_directory`.
+
+        Returns
+        -------
+        bool
+            Whether at least one log file has not yet been extracted.
+        """
+        directory = pathlib.Path(directory)
+        has_unextracted_files = any(
+            str(file_path.relative_to(directory)) not in self.file_processing_end_record
+            for file_path in directory.rglob(pattern="*-*-*-*-*-*-*")
+        )
+
+        return has_unextracted_files
 
     def extract_directory(
         self,
@@ -112,6 +163,9 @@ class S3LogAccessExtractor:
 
         files_to_extract = unextracted_files[:limit] if limit is not None else unextracted_files
         random.shuffle(files_to_extract)
+
+        # Created before any worker starts, so that every worker shares the same directory
+        temporary_directory = self.temporary_directory
 
         tqdm_style_kwargs = {
             "total": len(files_to_extract),
@@ -164,15 +218,15 @@ class S3LogAccessExtractor:
                         maxlen=0,
                     )
 
-                    files_to_copy = list(self.temporary_directory.rglob(pattern="*.txt"))
+                    files_to_copy = list(temporary_directory.rglob(pattern="*.txt"))
                     _merge_worker_output_into_extraction(
                         files_to_copy=files_to_copy,
-                        temporary_directory=self.temporary_directory,
+                        temporary_directory=temporary_directory,
                         extraction_directory=self.extraction_directory,
                         use_encryption=self.use_encryption,
                     )
 
-        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+        shutil.rmtree(path=temporary_directory, ignore_errors=True)
 
     def extract_file(
         self,

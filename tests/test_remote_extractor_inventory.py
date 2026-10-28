@@ -110,9 +110,11 @@ def test_get_unprocessed_s3_urls_from_local_inventory_basic(tmp_path: pathlib.Pa
     ]
     inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
+    result = list(
+        extractor._iter_unprocessed_s3_urls_from_local_inventory(
+            inventory_directory=inventory_dir,
+            s3_root=s3_root,
+        )
     )
 
     expected = {f"s3://{source_bucket}/{k}" for k in keys}
@@ -138,9 +140,11 @@ def test_get_unprocessed_s3_urls_from_local_inventory_skips_already_done_urls(tm
     ]
     inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
+    result = list(
+        extractor._iter_unprocessed_s3_urls_from_local_inventory(
+            inventory_directory=inventory_dir,
+            s3_root=s3_root,
+        )
     )
 
     assert result == ["s3://my-bucket/2024/01/01/2024-01-01-00-05-00-BBBB"]
@@ -161,9 +165,11 @@ def test_get_unprocessed_s3_urls_from_local_inventory_ignores_non_matching_prefi
     ]
     inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=keys)
 
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
+    result = list(
+        extractor._iter_unprocessed_s3_urls_from_local_inventory(
+            inventory_directory=inventory_dir,
+            s3_root=s3_root,
+        )
     )
 
     assert result == ["s3://my-bucket/logs/2024/01/01/2024-01-01-00-00-00-KEEP"]
@@ -214,9 +220,11 @@ def test_get_unprocessed_s3_urls_from_local_inventory_uses_latest_partition(tmp_
     new_partition_dir.mkdir()
     (new_partition_dir / "symlink.txt").write_text(f"s3://inventory-bucket/inventory/{source_bucket}/data/{new_uuid}\n")
 
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
+    result = list(
+        extractor._iter_unprocessed_s3_urls_from_local_inventory(
+            inventory_directory=inventory_dir,
+            s3_root=s3_root,
+        )
     )
 
     assert result == ["s3://my-bucket/2024/01/05/2024-01-05-00-00-00-NEW"]
@@ -235,19 +243,19 @@ def test_get_unprocessed_s3_urls_routes_to_inventory_when_inventory_provided(tmp
     with (
         unittest.mock.patch.object(
             extractor,
-            "_get_unprocessed_s3_urls_from_local_inventory",
-            wraps=extractor._get_unprocessed_s3_urls_from_local_inventory,
+            "_iter_unprocessed_s3_urls_from_local_inventory",
+            wraps=extractor._iter_unprocessed_s3_urls_from_local_inventory,
         ) as mock_inventory,
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_remote") as mock_remote,
+        unittest.mock.patch.object(extractor, "_iter_unprocessed_s3_urls_from_remote") as mock_remote,
         unittest.mock.patch.object(extractor, "_get_end_record_and_check_consistency"),
         unittest.mock.patch(
-            "s3_log_extraction.extractors._remote_s3_log_access_extractor._read_s3_urls_from_local_inventory",
-            return_value={},
+            "s3_log_extraction.extractors._remote_s3_log_access_extractor._iter_dated_s3_urls_from_local_inventory",
+            return_value=iter([]),
         ),
     ):
         extractor.s3_url_processing_end_record = set()
 
-        extractor._get_unprocessed_s3_urls(
+        extractor.get_unprocessed_s3_urls(
             s3_root="s3://my-bucket",
             inventory_directory=inventory_dir,
         )
@@ -264,15 +272,16 @@ def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path
     extractor = _make_extractor(tmp_path)
 
     with (
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_local_inventory") as mock_inventory,
-        unittest.mock.patch.object(extractor, "_get_unprocessed_s3_urls_from_remote", return_value=[]) as mock_remote,
+        unittest.mock.patch.object(extractor, "_iter_unprocessed_s3_urls_from_local_inventory") as mock_inventory,
+        unittest.mock.patch.object(
+            extractor, "_iter_unprocessed_s3_urls_from_remote", return_value=iter([])
+        ) as mock_remote,
         unittest.mock.patch.object(extractor, "_get_end_record_and_check_consistency"),
     ):
         extractor.s3_url_processing_end_record = set()
 
-        extractor._get_unprocessed_s3_urls(
-            s3_root="s3://my-bucket",
-        )
+        with pytest.warns(UserWarning, match="Consider setting up AWS S3 Inventory"):
+            extractor.get_unprocessed_s3_urls(s3_root="s3://my-bucket")
 
     mock_inventory.assert_not_called()
     mock_remote.assert_called_once()
@@ -281,7 +290,7 @@ def test_get_unprocessed_s3_urls_routes_to_remote_when_neither_provided(tmp_path
 @pytest.mark.ai_generated
 def test_get_unprocessed_s3_urls_from_remote_emits_performance_warning(tmp_path: pathlib.Path) -> None:
     """
-    Calling ``_get_unprocessed_s3_urls_from_remote`` without an inventory directory
+    Calling ``get_unprocessed_s3_urls`` without an inventory directory
     must emit a ``UserWarning`` recommending S3 Inventory for better performance.
     """
     extractor = _make_extractor(tmp_path)
@@ -292,7 +301,7 @@ def test_get_unprocessed_s3_urls_from_remote_emits_performance_warning(tmp_path:
         return_value="",
     ):
         with pytest.warns(UserWarning, match="Consider setting up AWS S3 Inventory"):
-            extractor._get_unprocessed_s3_urls_from_remote(s3_root="s3://my-bucket")
+            extractor.get_unprocessed_s3_urls(s3_root="s3://my-bucket")
 
 
 @pytest.mark.ai_generated
@@ -335,9 +344,11 @@ def test_get_unprocessed_s3_urls_from_local_inventory_mixed_flat_and_nested(
 
     inventory_dir = build_key_inventory_directory(tmp_path, source_bucket=source_bucket, keys=all_keys)
 
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
+    result = list(
+        extractor._iter_unprocessed_s3_urls_from_local_inventory(
+            inventory_directory=inventory_dir,
+            s3_root=s3_root,
+        )
     )
 
     expected = {f"s3://{source_bucket}/{k}" for k in all_keys}
@@ -378,9 +389,11 @@ def test_local_inventory_filename_only_record(
         keys=[flat_key, nested_key, other_key],
     )
 
-    result = extractor._get_unprocessed_s3_urls_from_local_inventory(
-        inventory_directory=inventory_dir,
-        s3_root=s3_root,
+    result = list(
+        extractor._iter_unprocessed_s3_urls_from_local_inventory(
+            inventory_directory=inventory_dir,
+            s3_root=s3_root,
+        )
     )
 
     # Only the one file not in the end-record should be returned

@@ -7,6 +7,12 @@ BEGIN {
     }
     EXTRACTION_DIRECTORY = ENVIRON["EXTRACTION_DIRECTORY"] "/"
 
+    # A space-separated list of exact addresses, empty or unset to exclude nothing
+    number_of_excluded_ips = split(ENVIRON["EXCLUDED_IPS"], excluded_ip_list, " ")
+    for (i = 1; i <= number_of_excluded_ips; i++) {
+        EXCLUDED_IPS[excluded_ip_list[i]] = 1
+    }
+
     MONTH_TO_NUMERIC["Jan"] = "01"
     MONTH_TO_NUMERIC["Feb"] = "02"
     MONTH_TO_NUMERIC["Mar"] = "03"
@@ -29,6 +35,9 @@ BEGIN {
     request_type = pre_uri_fields[8]
     if (request_type != "REST.GET.OBJECT") {next}
 
+    ip = pre_uri_fields[5]
+    if (ip in EXCLUDED_IPS) {next}
+
     split($2, post_uri_fields, " ")
     status = post_uri_fields[2]
     if (substr(status, 1, 1) != "2") {next}
@@ -45,7 +54,6 @@ BEGIN {
         substr(datetime, 20, 2)
 
     bytes_sent = (post_uri_fields[4] == "-" ? 0 : post_uri_fields[4])
-    ip = pre_uri_fields[5]
     download = (status == "200" ? 1 : 0)
 
     data[object_key]["timestamps"][++data[object_key]["timestamps_count"]] = parsed_timestamp

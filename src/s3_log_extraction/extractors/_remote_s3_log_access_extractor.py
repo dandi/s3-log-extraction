@@ -1,11 +1,14 @@
 import collections
+import collections.abc
 import concurrent.futures
+import functools
 import itertools
 import math
 import os
 import pathlib
 import random
 import shutil
+import typing
 import warnings
 
 import tqdm
@@ -19,8 +22,14 @@ from ._utils import (
     _merge_worker_output_into_extraction,
     _run_awk_extraction,
 )
-from ..config import get_base_temporary_directory, get_cache_directory, get_cache_subdirectory
-from ..utils import _handle_max_workers, _read_s3_urls_from_local_inventory
+from ..config import (
+    get_base_temporary_directory,
+    get_cache_directory,
+    get_cache_subdirectory,
+    get_excluded_ips,
+)
+from ..utils import _handle_max_workers
+from ..utils.inventory import _iter_dated_s3_urls_from_local_inventory
 
 
 class RemoteS3LogAccessExtractor:
@@ -54,6 +63,11 @@ class RemoteS3LogAccessExtractor:
         on the order of one batch of raw logs.
         Defaults to the configured base temporary directory, and to the system temporary directory when
         none is configured.
+    excluded_ips : iterable of str, optional
+        The IP addresses whose requests are dropped during extraction, so they never enter the cache.
+        Defaults to `s3_log_extraction.config.get_excluded_ips()`, the addresses listed in
+        `~/.s3-log-extraction/excluded_ips.txt`.
+        An explicit value replaces that default, so pass an empty list to drop nothing.
     """
 
     def __init__(
@@ -61,6 +75,7 @@ class RemoteS3LogAccessExtractor:
         cache_directory: pathlib.Path | None = None,
         use_encryption: bool = True,
         base_temporary_directory: pathlib.Path | None = None,
+        excluded_ips: collections.abc.Iterable[str] | None = None,
     ) -> None:
         self.cache_directory = cache_directory or get_cache_directory()
         self.use_encryption = use_encryption
@@ -69,7 +84,6 @@ class RemoteS3LogAccessExtractor:
         self.stop_file_path = self.extraction_directory / _STOP_EXTRACTION_FILE_NAME
         self.records_directory = get_cache_subdirectory(cache_directory=self.cache_directory, name="records")
         self.base_temporary_directory = base_temporary_directory or get_base_temporary_directory()
-        self.temporary_directory = _create_temporary_directory(self.base_temporary_directory)
 
         class_name = self.__class__.__name__
         s3_url_processing_start_record_file_name = f"{class_name}_s3-url-processing-start.txt"
@@ -81,7 +95,21 @@ class RemoteS3LogAccessExtractor:
 
         # TODO: does this hold after bundling?
         self._relative_script_path = pathlib.Path(__file__).parent / "_generic_extraction.awk"
-        self._awk_env = {"EXTRACTION_DIRECTORY": str(self.extraction_directory)}
+        self.excluded_ips = frozenset(excluded_ips) if excluded_ips is not None else get_excluded_ips()
+        self._awk_env = {
+            "EXTRACTION_DIRECTORY": str(self.extraction_directory),
+            "EXCLUDED_IPS": " ".join(sorted(self.excluded_ips)),
+        }
+
+    @functools.cached_property
+    def temporary_directory(self) -> pathlib.Path:
+        """
+        The temporary directory of this run, created inside the base temporary directory on first use.
+
+        It is created lazily so that an extractor which only checks for pending work never makes one.
+        """
+        temporary_directory = _create_temporary_directory(self.base_temporary_directory)
+        return temporary_directory
 
     def extract_s3_bucket(
         self,
@@ -132,7 +160,13 @@ class RemoteS3LogAccessExtractor:
         _handle_aws_credentials()
         max_workers = _handle_max_workers(workers=workers)
 
-        unprocessed_s3_urls = self._get_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
+        unprocessed_s3_urls = self.get_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
+
+        # Created before any worker starts, so that every worker shares the same directory
+        temporary_directory = self.temporary_directory
+
+        # Randomize the order of the remote files for the progress bar to be more accurate
+        random.shuffle(x=unprocessed_s3_urls)
         s3_urls_to_extract = unprocessed_s3_urls[:limit] if limit is not None else unprocessed_s3_urls
 
         tqdm_style_kwargs = {
@@ -159,7 +193,7 @@ class RemoteS3LogAccessExtractor:
                     leave=True,
                 ):
                     if self.stop_file_path.exists():
-                        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+                        shutil.rmtree(path=temporary_directory, ignore_errors=True)
                         return
 
                     tqdm_style_kwargs["total"] = len(batch)
@@ -187,38 +221,118 @@ class RemoteS3LogAccessExtractor:
                     )
 
                     files_to_copy = [
-                        path for path in self.temporary_directory.rglob(pattern="*.txt") if path.is_file() is True
+                        path for path in temporary_directory.rglob(pattern="*.txt") if path.is_file() is True
                     ]
                     _merge_worker_output_into_extraction(
                         files_to_copy=files_to_copy,
-                        temporary_directory=self.temporary_directory,
+                        temporary_directory=temporary_directory,
                         extraction_directory=self.extraction_directory,
                         use_encryption=self.use_encryption,
                     )
-                    shutil.rmtree(path=self.temporary_directory)
-                    self.temporary_directory.mkdir()
+                    shutil.rmtree(path=temporary_directory)
+                    temporary_directory.mkdir()
 
-        shutil.rmtree(path=self.temporary_directory, ignore_errors=True)
+        shutil.rmtree(path=temporary_directory, ignore_errors=True)
 
-    def _get_unprocessed_s3_urls(
+    def get_unprocessed_s3_urls(
         self,
+        *,
         s3_root: str,
-        inventory_directory: pathlib.Path | None = None,
+        inventory_directory: str | pathlib.Path | None = None,
     ) -> list[str]:
+        """
+        Get the S3 URLs of the log files that have not yet been extracted, without extracting them.
+
+        This is the same list that `extract_s3_bucket` works through. It only reads the records of this extractor
+        and writes nothing. Use `has_unprocessed_s3_urls` to only check whether there are any.
+
+        Parameters
+        ----------
+        s3_root : str
+            The root S3 path of the log bucket (e.g. ``s3://my-logs-bucket``).
+        inventory_directory : str or pathlib.Path or None, optional
+            Path to a local pre-downloaded S3 inventory directory, in the layout described by
+            `extract_s3_bucket`. When omitted, log files are discovered by scanning the remote bucket
+            directly, which can be very slow for large buckets.
+
+        Returns
+        -------
+        list[str]
+            The S3 URLs of the log files that have not yet been extracted.
+
+        Raises
+        ------
+        ValueError
+            If the records of a previous run are corrupted.
+        """
+        unprocessed_s3_urls = list(
+            self._iter_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
+        )
+        del self.s3_url_processing_end_record  # Free memory
+
+        return unprocessed_s3_urls
+
+    def has_unprocessed_s3_urls(
+        self,
+        *,
+        s3_root: str,
+        inventory_directory: str | pathlib.Path | None = None,
+    ) -> bool:
+        """
+        Check whether any log files have not yet been extracted, without extracting them.
+
+        The inventory or bucket listing is only walked up to the first log file that has not been extracted,
+        so this is much cheaper than `get_unprocessed_s3_urls` when there is work to do. It only reads the
+        records of this extractor and writes nothing.
+
+        Parameters
+        ----------
+        s3_root : str
+            The root S3 path of the log bucket (e.g. ``s3://my-logs-bucket``).
+        inventory_directory : str or pathlib.Path or None, optional
+            Path to a local pre-downloaded S3 inventory directory, in the layout described by
+            `extract_s3_bucket`. When omitted, log files are discovered by scanning the remote bucket
+            directly, which can be very slow for large buckets.
+
+        Returns
+        -------
+        bool
+            Whether at least one log file has not yet been extracted.
+
+        Raises
+        ------
+        ValueError
+            If the records of a previous run are corrupted.
+        """
+        unprocessed_s3_urls = self._iter_unprocessed_s3_urls(s3_root=s3_root, inventory_directory=inventory_directory)
+        has_unprocessed_s3_urls = next(unprocessed_s3_urls, None) is not None
+        del self.s3_url_processing_end_record  # Free memory
+
+        return has_unprocessed_s3_urls
+
+    def _iter_unprocessed_s3_urls(
+        self,
+        *,
+        s3_root: str,
+        inventory_directory: str | pathlib.Path | None,
+    ) -> typing.Iterator[str]:
+        # Not a generator itself, so that the consistency check and the warning happen at call time
         self._get_end_record_and_check_consistency()
 
         if inventory_directory is not None:
-            unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_local_inventory(
-                inventory_directory=inventory_directory, s3_root=s3_root
+            unprocessed_s3_urls = self._iter_unprocessed_s3_urls_from_local_inventory(
+                inventory_directory=pathlib.Path(inventory_directory), s3_root=s3_root
             )
-        else:
-            unprocessed_s3_urls = self._get_unprocessed_s3_urls_from_remote(s3_root=s3_root)
+            return unprocessed_s3_urls
 
-        del self.s3_url_processing_end_record  # Free memory
-
-        # Randomize the order of the remote files for the progress bar to be more accurate
-        random.shuffle(x=unprocessed_s3_urls)
-
+        warnings.warn(
+            "Fetching log file listings directly from S3 via network requests can be very slow for large buckets. "
+            "Consider setting up AWS S3 Inventory on your bucket and using the `inventory_directory` argument "
+            "for significantly better performance.",
+            # Points past the public method that called this, at its own caller
+            stacklevel=3,
+        )
+        unprocessed_s3_urls = self._iter_unprocessed_s3_urls_from_remote(s3_root=s3_root)
         return unprocessed_s3_urls
 
     def _get_end_record_and_check_consistency(self) -> None:
@@ -242,11 +356,11 @@ class RemoteS3LogAccessExtractor:
             )
             raise ValueError(message)
 
-    def _get_unprocessed_s3_urls_from_local_inventory(
-        self, inventory_directory: pathlib.Path, s3_root: str
-    ) -> list[str]:
+    def _iter_unprocessed_s3_urls_from_local_inventory(
+        self, *, inventory_directory: pathlib.Path, s3_root: str
+    ) -> typing.Iterator[str]:
         """
-        Get unprocessed S3 URLs from a pre-downloaded local AWS S3 Inventory directory.
+        Yield unprocessed S3 URLs from a pre-downloaded local AWS S3 Inventory directory, lazily.
 
         The inventory directory must follow the standard AWS S3 Inventory layout,
         with timestamped subdirectories (e.g. ``2026-05-03T01-00Z/``), a ``data/``
@@ -263,10 +377,10 @@ class RemoteS3LogAccessExtractor:
             The root S3 path used for extraction (e.g. ``s3://my-logs-bucket``).
             Only object keys that fall under this prefix are considered.
 
-        Returns
-        -------
-        list[str]
-            Deduplicated list of S3 URLs that have not yet been processed.
+        Yields
+        ------
+        str
+            The S3 URL of a log file that has not yet been processed, in inventory order.
 
         Raises
         ------
@@ -275,25 +389,13 @@ class RemoteS3LogAccessExtractor:
         ValueError
             If the ``Key`` column is absent from the inventory schema.
         """
-        inventory = _read_s3_urls_from_local_inventory(
-            inventory_directory=pathlib.Path(inventory_directory),
-            s3_root=s3_root,
-        )
+        for _, s3_url in _iter_dated_s3_urls_from_local_inventory(
+            inventory_directory=pathlib.Path(inventory_directory), s3_root=s3_root
+        ):
+            if s3_url.split("/")[-1] not in self.s3_url_processing_end_record:
+                yield s3_url
 
-        s3_urls = [url for urls in inventory.values() for url in urls]
-
-        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
-        return unprocessed_s3_urls
-
-    def _get_unprocessed_s3_urls_from_remote(self, s3_root: str) -> list[str]:
-        warnings.warn(
-            "Fetching log file listings directly from S3 via network requests can be very slow for large buckets. "
-            "Consider setting up AWS S3 Inventory on your bucket and using the `inventory_directory` argument "
-            "for significantly better performance.",
-            # stacklevel=3 surfaces the warning at the user-facing extract_s3_bucket() call site
-            # rather than inside the internal helper chain.
-            stacklevel=3,
-        )
+    def _iter_unprocessed_s3_urls_from_remote(self, *, s3_root: str) -> typing.Iterator[str]:
         years_result = _deploy_subprocess(
             command=f"s5cmd ls {s3_root}/", error_message=f"Failed to scan years of nested structure at {s3_root}."
         )
@@ -318,7 +420,8 @@ class RemoteS3LogAccessExtractor:
         sorted_dates = sorted(set(dates_with_logs))
         unprocessed_dates = sorted_dates[:-2]  # Give a 2-day buffer to allow AWS to catch up
 
-        s3_urls = []
+        # Each day is listed only once the previous one has been consumed, so a caller that stops early saves
+        # the listing of every later day
         for date in tqdm.tqdm(
             iterable=unprocessed_dates,
             total=len(unprocessed_dates),
@@ -333,12 +436,10 @@ class RemoteS3LogAccessExtractor:
             s3_urls_result = _deploy_subprocess(
                 command=f"s5cmd ls {subdirectory}/", error_message=f"Failed to list structure of {subdirectory}/."
             )
-            s3_urls.extend(
-                [f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}" for line in s3_urls_result.splitlines()]
-            )
-
-        unprocessed_s3_urls = [url for url in s3_urls if url.split("/")[-1] not in self.s3_url_processing_end_record]
-        return unprocessed_s3_urls
+            for line in s3_urls_result.splitlines():
+                s3_url = f"{subdirectory}/{line.split(" ")[-1].rstrip("\n")}"
+                if s3_url.split("/")[-1] not in self.s3_url_processing_end_record:
+                    yield s3_url
 
     def _extract_s3_url(
         self,

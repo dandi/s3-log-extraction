@@ -1,12 +1,15 @@
 """Command line interface definitions for the S3 log extraction tool."""
 
+import inspect
 import os
 import pathlib
+import sys
 import typing
 
 import rich_click
 
 from ..config import (
+    get_excluded_ips,
     reset_extraction,
     set_base_temporary_directory,
     set_cache_directory,
@@ -17,7 +20,12 @@ from ..extractors import (
     S3LogAccessExtractor,
     stop_extraction,
 )
-from ..ip_utils import update_geolite2_database, update_region_code_coordinates
+from ..ip_utils import (
+    find_excluded_ip_records,
+    remove_excluded_ip_records,
+    update_geolite2_database,
+    update_region_code_coordinates,
+)
 from ..summarize import (
     generate_all_dataset_totals,
     generate_archive_summaries,
@@ -59,7 +67,11 @@ def _cache_directory_option(command: typing.Callable) -> typing.Callable:
     )(command)
 
 
-# Protocol names offered by `s3logextraction validate`, in the order they are listed in its help text.
+# The exit status of `extract --check` when log files are pending, kept apart from 1 (an unhandled error) and
+# 2 (a usage error) so that a script can tell pending work apart from a failure.
+_CHECK_PENDING_EXIT_CODE = 3
+
+# Pre-validation protocols, each offered as a `s3logextraction validate <protocol> <directory>` subcommand.
 _PRE_VALIDATORS: dict[str, type] = {
     "downloads_logic": DownloadsLogicPreValidator,
     "http_empty_split": HttpEmptySplitPreValidator,
@@ -67,6 +79,16 @@ _PRE_VALIDATORS: dict[str, type] = {
     "extraction_heuristic": ExtractionHeuristicPreValidator,
     "timestamps_parsing": TimestampsParsingPreValidator,
 }
+
+
+def _report_check(is_pending: bool, /) -> None:
+    """Report the outcome of `extract --check`, exiting with the pending status when there is work to do."""
+    if is_pending is False:
+        rich_click.echo("No log files are pending extraction.")
+        return
+
+    rich_click.echo("Log files are pending extraction.")
+    sys.exit(_CHECK_PENDING_EXIT_CODE)
 
 
 # s3logextraction
@@ -151,6 +173,16 @@ def s3logextraction_cli():
     type=rich_click.Path(writable=True, file_okay=False, dir_okay=True),
     default=None,
 )
+@rich_click.option(
+    "--check",
+    help=(
+        "Only check whether any log files are pending extraction, then exit without extracting anything. "
+        f"Exits with status {_CHECK_PENDING_EXIT_CODE} when some are pending and 0 when none are. "
+        "The check stops at the first pending file, and writes no records and no temporary directory."
+    ),
+    is_flag=True,
+    default=False,
+)
 def _extract_cli(
     directory: str,
     limit: int | None = None,
@@ -160,6 +192,7 @@ def _extract_cli(
     inventory_directory: str | None = None,
     use_encryption: bool = True,
     base_temporary_directory: str | None = None,
+    check: bool = False,
 ) -> None:
     """
     Extract S3 log access data from the specified directory.
@@ -167,11 +200,15 @@ def _extract_cli(
     Note that you should not attempt to interrupt the extraction process using Ctrl+C or pkill, as this may lead to
     incomplete data extraction. Instead, use this command to safely stop the extraction process.
 
+    Requests from the addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are dropped and never enter the
+    cache.
+    Removing an address from that file does not bring back its requests. To include it again, run
+    'reset extraction' and then a full 'extract'.
+
     DIRECTORY : The path to the folder containing all raw S3 log files.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     base_temporary_path = pathlib.Path(base_temporary_directory) if base_temporary_directory is not None else None
-
     match mode:
         case "remote":
             extractor = RemoteS3LogAccessExtractor(
@@ -179,6 +216,13 @@ def _extract_cli(
                 use_encryption=use_encryption,
                 base_temporary_directory=base_temporary_path,
             )
+            if check is True:
+                is_pending = extractor.has_unprocessed_s3_urls(
+                    s3_root=directory, inventory_directory=inventory_directory
+                )
+                _report_check(is_pending)
+                return
+
             extractor.extract_s3_bucket(
                 s3_root=directory,
                 limit=limit,
@@ -191,6 +235,11 @@ def _extract_cli(
                 use_encryption=use_encryption,
                 base_temporary_directory=base_temporary_path,
             )
+            if check is True:
+                is_pending = extractor.has_unextracted_files(directory=directory)
+                _report_check(is_pending)
+                return
+
             extractor.extract_directory(directory=directory, limit=limit, workers=workers)
 
 
@@ -293,6 +342,92 @@ def _reset_cli() -> None:
 @_cache_directory_option
 def _reset_extraction_cli(cache_directory: str | None = None) -> None:
     reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
+
+
+# s3logextraction reset excluded
+@_reset_cli.command(name="excluded")
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Clean a non-default cache directory. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Decrypt and re-encrypt IP addresses in the extraction cache. Enabled by default.",
+    type=rich_click.BOOL,
+    default=True,
+)
+@rich_click.option(
+    "--workers",
+    help=(
+        "The maximum number of workers to use for parallel processing. "
+        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc."
+    ),
+    required=False,
+    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    default=-2,
+)
+@rich_click.option(
+    "--confirm",
+    help="Actually remove the records. Without it, the records that would be removed are only listed.",
+    is_flag=True,
+    default=False,
+)
+def _reset_excluded_cli(
+    cache_directory: str | None = None,
+    use_encryption: bool = True,
+    workers: int = -2,
+    confirm: bool = False,
+) -> None:
+    """
+    Remove the records made by an excluded IP address from the extraction cache.
+
+    These are the addresses listed in '~/.s3-log-extraction/excluded_ips.txt'. Their records leave every summary
+    generated afterwards.
+
+    The removal is permanent. Taking an address off the excluded list later does not bring its records back, so
+    un-excluding one requires 'reset extraction' followed by a new 'extract'.
+
+    Without '--confirm', nothing is changed, and the object keys whose records would be removed are listed instead.
+    The cache must not be extracted to at the same time, so back it up and hold the extraction lock first.
+    Each affected object key is listed with its record count. The addresses themselves are not printed.
+    """
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    excluded_ips = get_excluded_ips()
+    if not excluded_ips:
+        rich_click.echo("No excluded IP addresses are configured, so there is nothing to remove.")
+        return
+
+    if not confirm:
+        records = find_excluded_ip_records(
+            cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
+        )
+    else:
+        records = remove_excluded_ip_records(
+            cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
+        )
+    if not records:
+        rich_click.echo(f"No records of the {len(excluded_ips)} excluded IP addresses were found.")
+        return
+
+    for object_key, record_counts_per_ip in records.items():
+        rich_click.echo(f"{object_key}: {sum(record_counts_per_ip.values())} records")
+    record_count = sum(count for record_counts_per_ip in records.values() for count in record_counts_per_ip.values())
+    found_ip_count = len({ip for record_counts_per_ip in records.values() for ip in record_counts_per_ip})
+    verb = "Removed" if confirm else "Would remove"
+    rich_click.echo(
+        f"{verb} {record_count} records of {found_ip_count} excluded IP addresses "
+        f"across {len(records)} object keys of the extraction cache."
+    )
+    if not confirm:
+        rich_click.echo("Nothing was changed. Run again with '--confirm' to remove them.")
 
 
 # s3logextraction update
@@ -438,6 +573,8 @@ def _update_summaries_cli(
 
     Any addresses listed in '~/.s3-log-extraction/excluded_ips.txt' are left out of every summary. Requesters in the
     published GitHub ranges are left out of the view and requester counts only.
+    Removing an address from that file does not bring back requests that extraction already dropped. To include it
+    again, run 'reset extraction' and then a full 'extract'.
     """
     cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
     match mode:
@@ -503,22 +640,98 @@ def _generate_benchmark_cli(directory: str) -> None:
     generate_benchmark(directory=directory)
 
 
+# s3logextraction validate
+@s3logextraction_cli.group(name="validate")
+def _validate_cli() -> None:
+    """Validate the raw logs with a pre-validation protocol, or the extraction cache against the excluded IPs."""
+
+
+def _add_pre_validator_command(*, protocol: str, validator_class: type) -> None:
+    """Register ``s3logextraction validate <protocol> <directory>``, taking its help text from the validator."""
+
+    def _pre_validator_cli(directory: str) -> None:
+        validator = validator_class()
+        validator.validate_directory(directory=directory)
+
+    summary = (inspect.getdoc(validator_class) or "").split("\n\n", 1)[0]
+    help_text = f"{summary}\n\nDIRECTORY : The path to the folder containing the raw S3 log files to validate."
+    directory_argument = rich_click.argument("directory", type=rich_click.Path(writable=False))
+    _validate_cli.command(name=protocol, help=help_text)(directory_argument(_pre_validator_cli))
+
+
 # s3logextraction validate < protocol > < directory >
-@s3logextraction_cli.command(name="validate")
-@rich_click.argument(
-    "protocol",
-    type=rich_click.Choice(list(_PRE_VALIDATORS)),
+for _protocol, _validator_class in _PRE_VALIDATORS.items():
+    _add_pre_validator_command(protocol=_protocol, validator_class=_validator_class)
+
+
+# s3logextraction validate excluded
+@_validate_cli.command(name="excluded")
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Scan a non-default cache directory. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
 )
-@rich_click.argument("directory", type=rich_click.Path(writable=False))
-def _validate_cli(
-    protocol: typing.Literal[
-        "downloads_logic", "http_empty_split", "http_split_count", "extraction_heuristic", "timestamps_parsing"
-    ],
-    directory: str,
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Decrypt IP addresses in the extraction cache. Enabled by default.",
+    type=rich_click.BOOL,
+    default=True,
+)
+@rich_click.option(
+    "--workers",
+    help=(
+        "The maximum number of workers to use for parallel processing. "
+        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc."
+    ),
+    required=False,
+    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    default=-2,
+)
+def _validate_excluded_cli(
+    cache_directory: str | None = None,
+    use_encryption: bool = True,
+    workers: int = -2,
 ) -> None:
-    """Run a pre-validation protocol."""
-    validator = _PRE_VALIDATORS[protocol]()
-    validator.validate_directory(directory=directory)
+    """
+    Scan the extraction cache for records made by an excluded IP address.
+
+    These are the addresses listed in '~/.s3-log-extraction/excluded_ips.txt'. Records extracted before an address
+    was excluded stay in the cache until they are removed.
+
+    Each object key with such records is listed with its record count. The addresses themselves are not printed.
+    The command exits with an error when any record is found, so that a scheduled job running it fails.
+    """
+    excluded_ips = get_excluded_ips()
+    if not excluded_ips:
+        rich_click.echo("No excluded IP addresses are configured, so there is nothing to scan for.")
+        return
+
+    records = find_excluded_ip_records(
+        cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None,
+        excluded_ips=excluded_ips,
+        use_encryption=use_encryption,
+        workers=workers,
+    )
+    if not records:
+        rich_click.echo(f"No records of the {len(excluded_ips)} excluded IP addresses were found.")
+        return
+
+    for object_key, record_counts_per_ip in records.items():
+        rich_click.echo(f"{object_key}: {sum(record_counts_per_ip.values())} records")
+    record_count = sum(count for record_counts_per_ip in records.values() for count in record_counts_per_ip.values())
+    found_ip_count = len({ip for record_counts_per_ip in records.values() for ip in record_counts_per_ip})
+    message = (
+        f"Found {record_count} records of {found_ip_count} excluded IP addresses "
+        f"across {len(records)} object keys of the extraction cache."
+    )
+    raise rich_click.ClickException(message)
 
 
 # s3logextraction stats --inventory <path> [--cache <path>]
