@@ -4,7 +4,7 @@
 
 ### ⚠️ Breaking
 
-- Excluded IP addresses are now listed as one comma-separated `S3_LOG_EXTRACTION_EXCLUDED_IPS` entry in the dotenv file `~/.s3-log-extraction/.env`, which shells, docker and Actions can read too. A set environment variable takes precedence. `~/.s3-log-extraction/excluded_ips.txt` is no longer read and stops any run while it exists, so move its addresses into the `.env` entry and delete it. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
+- Excluded IP addresses are now listed in the `S3_LOG_EXTRACTION_EXCLUDED_IPS` entry of the dotenv file `~/.s3-log-extraction/.env`, one per line inside double quotes with optional `#` comments, or comma-separated on one line. A set environment variable takes precedence. `~/.s3-log-extraction/excluded_ips.txt` is no longer read and stops any run while it exists, so move its lines into the `.env` value and delete it. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 - The `S3_LOG_EXTRACTION_EXCLUDED_IP_REGEX` variable of the extraction heuristic pre-validator is removed in favor of the excluded IP addresses. Its validation record starts over. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
 ### 🚀 Enhancement
