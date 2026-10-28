@@ -223,7 +223,7 @@ def test_remove_excluded_ip_records_refuses_a_misaligned_object_key(tmp_path: pa
         (["--confirm"], "Removed 5 records of 2 excluded IP addresses across 2 object keys", {}),
     ],
 )
-def test_cli_excluded_remove(
+def test_cli_reset_excluded(
     monkeypatch: pytest.MonkeyPatch,
     dotenv_file_path: pathlib.Path,
     tmp_path: pathlib.Path,
@@ -241,8 +241,8 @@ def test_cli_excluded_remove(
     result = click.testing.CliRunner().invoke(
         s3_log_extraction.s3logextraction_cli,
         [
+            "reset",
             "excluded",
-            "remove",
             "--cache",
             str(tmp_path),
             "--encryption",
@@ -281,7 +281,7 @@ def test_cli_excluded_remove(
         ),
     ],
 )
-def test_cli_excluded_remove_without_records(
+def test_cli_reset_excluded_without_records(
     dotenv_file_path: pathlib.Path,
     tmp_path: pathlib.Path,
     dotenv_content: str | None,
@@ -295,7 +295,7 @@ def test_cli_excluded_remove_without_records(
 
     result = click.testing.CliRunner().invoke(
         s3_log_extraction.s3logextraction_cli,
-        ["excluded", "remove", "--cache", str(tmp_path), "--encryption", "false", "--workers", "1", *extra_arguments],
+        ["reset", "excluded", "--cache", str(tmp_path), "--encryption", "false", "--workers", "1", *extra_arguments],
     )
 
     assert result.exit_code == 0, result.output

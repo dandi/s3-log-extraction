@@ -324,6 +324,92 @@ def _reset_extraction_cli(cache_directory: str | None = None) -> None:
     reset_extraction(cache_directory=pathlib.Path(cache_directory) if cache_directory is not None else None)
 
 
+# s3logextraction reset excluded
+@_reset_cli.command(name="excluded")
+@rich_click.option(
+    "--cache",
+    "cache_directory",
+    help=(
+        "Clean a non-default cache directory. "
+        "This overrides the configured cache directory without modifying saved config."
+    ),
+    required=False,
+    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+)
+@rich_click.option(
+    "--encryption",
+    "use_encryption",
+    help="Decrypt and re-encrypt IP addresses in the extraction cache. Enabled by default.",
+    type=rich_click.BOOL,
+    default=True,
+)
+@rich_click.option(
+    "--workers",
+    help=(
+        "The maximum number of workers to use for parallel processing. "
+        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc."
+    ),
+    required=False,
+    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
+    default=-2,
+)
+@rich_click.option(
+    "--confirm",
+    help="Actually remove the records. Without it, the records that would be removed are only listed.",
+    is_flag=True,
+    default=False,
+)
+@_exclude_option
+def _reset_excluded_cli(
+    cache_directory: str | None = None,
+    use_encryption: bool = True,
+    workers: int = -2,
+    confirm: bool = False,
+    extra_excluded_ips: str | None = None,
+) -> None:
+    """
+    Remove the records made by an excluded IP address from the extraction cache.
+
+    These are the addresses listed in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set,
+    in '~/.s3-log-extraction/.env', and those given to '--exclude'. Their records leave every summary generated
+    afterwards.
+
+    Without '--confirm', nothing is changed, and the object keys whose records would be removed are listed instead.
+    The cache must not be extracted to at the same time, so back it up and hold the extraction lock first.
+    Each affected object key is listed with its record count. The addresses themselves are not printed.
+    """
+    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
+    excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)
+    if not excluded_ips:
+        rich_click.echo("No excluded IP addresses are configured, so there is nothing to remove.")
+        return
+
+    if not confirm:
+        records = find_excluded_ip_records(
+            cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
+        )
+    else:
+        records = remove_excluded_ip_records(
+            cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
+        )
+    if not records:
+        rich_click.echo(f"No records of the {len(excluded_ips)} excluded IP addresses were found.")
+        return
+
+    for object_key, record_counts_per_ip in records.items():
+        rich_click.echo(f"{object_key}: {sum(record_counts_per_ip.values())} records")
+    record_count = sum(count for record_counts_per_ip in records.values() for count in record_counts_per_ip.values())
+    found_ip_count = len({ip for record_counts_per_ip in records.values() for ip in record_counts_per_ip})
+    verb = "Removed" if confirm else "Would remove"
+    rich_click.echo(
+        f"{verb} {record_count} records of {found_ip_count} excluded IP addresses "
+        f"across {len(records)} object keys of the extraction cache."
+    )
+    if not confirm:
+        rich_click.echo("Nothing was changed. Run again with '--confirm' to remove them.")
+
+
 # s3logextraction excluded
 @s3logextraction_cli.group(name="excluded")
 def _excluded_cli() -> None:
@@ -401,92 +487,6 @@ def _excluded_scan_cli(
         f"across {len(records)} object keys of the extraction cache."
     )
     raise rich_click.ClickException(message)
-
-
-# s3logextraction excluded remove
-@_excluded_cli.command(name="remove")
-@rich_click.option(
-    "--cache",
-    "cache_directory",
-    help=(
-        "Clean a non-default cache directory. "
-        "This overrides the configured cache directory without modifying saved config."
-    ),
-    required=False,
-    type=rich_click.Path(exists=True, file_okay=False, dir_okay=True),
-    default=None,
-)
-@rich_click.option(
-    "--encryption",
-    "use_encryption",
-    help="Decrypt and re-encrypt IP addresses in the extraction cache. Enabled by default.",
-    type=rich_click.BOOL,
-    default=True,
-)
-@rich_click.option(
-    "--workers",
-    help=(
-        "The maximum number of workers to use for parallel processing. "
-        "Allows negative slicing semantics, where -1 means all available cores, -2 means all but one, etc."
-    ),
-    required=False,
-    type=rich_click.IntRange(min=-os.cpu_count() + 1, max=os.cpu_count()),
-    default=-2,
-)
-@rich_click.option(
-    "--confirm",
-    help="Actually remove the records. Without it, the records that would be removed are only listed.",
-    is_flag=True,
-    default=False,
-)
-@_exclude_option
-def _excluded_remove_cli(
-    cache_directory: str | None = None,
-    use_encryption: bool = True,
-    workers: int = -2,
-    confirm: bool = False,
-    extra_excluded_ips: str | None = None,
-) -> None:
-    """
-    Remove the records made by an excluded IP address from the extraction cache.
-
-    These are the addresses listed in the S3_LOG_EXTRACTION_EXCLUDED_IPS environment variable or, when it is not set,
-    in '~/.s3-log-extraction/.env', and those given to '--exclude'. Their records leave every summary generated
-    afterwards.
-
-    Without '--confirm', nothing is changed, and the object keys whose records would be removed are listed instead.
-    The cache must not be extracted to at the same time, so back it up and hold the extraction lock first.
-    Each affected object key is listed with its record count. The addresses themselves are not printed.
-    """
-    cache_path = pathlib.Path(cache_directory) if cache_directory is not None else None
-    excluded_ips = get_excluded_ips(extra_excluded_ips.split(",") if extra_excluded_ips is not None else None)
-    if not excluded_ips:
-        rich_click.echo("No excluded IP addresses are configured, so there is nothing to remove.")
-        return
-
-    if not confirm:
-        records = find_excluded_ip_records(
-            cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
-        )
-    else:
-        records = remove_excluded_ip_records(
-            cache_directory=cache_path, excluded_ips=excluded_ips, use_encryption=use_encryption, workers=workers
-        )
-    if not records:
-        rich_click.echo(f"No records of the {len(excluded_ips)} excluded IP addresses were found.")
-        return
-
-    for object_key, record_counts_per_ip in records.items():
-        rich_click.echo(f"{object_key}: {sum(record_counts_per_ip.values())} records")
-    record_count = sum(count for record_counts_per_ip in records.values() for count in record_counts_per_ip.values())
-    found_ip_count = len({ip for record_counts_per_ip in records.values() for ip in record_counts_per_ip})
-    verb = "Removed" if confirm else "Would remove"
-    rich_click.echo(
-        f"{verb} {record_count} records of {found_ip_count} excluded IP addresses "
-        f"across {len(records)} object keys of the extraction cache."
-    )
-    if not confirm:
-        rich_click.echo("Nothing was changed. Run again with '--confirm' to remove them.")
 
 
 # s3logextraction update

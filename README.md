@@ -123,7 +123,7 @@ It lists each object key that holds such requests with its count, without printi
 To remove those requests from the cache, so that they leave the summaries generated from then on, run
 
 ```bash
-s3logextraction excluded remove --confirm
+s3logextraction reset excluded --confirm
 ```
 
 Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction.
