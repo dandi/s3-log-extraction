@@ -27,7 +27,7 @@ _ONLY_ACTOR_KEY = "ds000003/sub-01/only.json"
 def excluded_ips_file_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
     """Point the excluded IPs file at a temporary location rather than the user's real one, without creating it."""
     excluded_ips_file_path = tmp_path / "excluded_ips.txt"
-    monkeypatch.setattr("s3_log_extraction.config._config.EXCLUDED_IPS_FILE_PATH", excluded_ips_file_path)
+    monkeypatch.setattr("s3_log_extraction.config._config._EXCLUDED_IPS_FILE_PATH", excluded_ips_file_path)
     return excluded_ips_file_path
 
 
