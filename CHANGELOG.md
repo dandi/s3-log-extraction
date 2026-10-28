@@ -8,9 +8,11 @@
 
 ### 🚀 Enhancement
 
-- The addresses listed in `~/.s3-log-extraction/excluded_ips.txt` are now also dropped at extraction, so their requests never enter the cache, and are skipped by the extraction heuristic pre-validator. The file format is unchanged, and it stays the only place excluded addresses are listed. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
+- The addresses listed in `~/.s3-log-extraction/excluded_ips.txt` are now also dropped at extraction, so their requests never enter the cache, and are skipped by the extraction heuristic pre-validator. The file format is unchanged, and it stays the only place excluded addresses are listed. Removing an address later needs a fresh extraction to bring its requests back. ([#321](https://github.com/dandi/s3-log-extraction/pull/321))
 
 - Added `s3logextraction validate excluded` and `ip_utils.find_excluded_ip_records`, which report the object keys whose cached records were made by an excluded IP address, such as those extracted before it was listed. The command exits with an error when any are found, so a scheduled job running it fails. `validate` is now a command group, and existing `validate <protocol> <directory>` invocations are unchanged. ([#322](https://github.com/dandi/s3-log-extraction/pull/322))
+
+- Added a `--check` flag to `s3logextraction extract`, which reports whether any log files are pending extraction and exits without extracting. It exits with status 3 when some are pending and 0 when none are, so a scheduled job can start an extraction only when needed. The extractors gain matching `has_unprocessed_s3_urls`, `get_unprocessed_s3_urls` and `has_unextracted_files` methods. ([#320](https://github.com/dandi/s3-log-extraction/pull/320))
 
 - Added `s3logextraction reset excluded` and `ip_utils.remove_excluded_ip_records`, which remove the cached records of excluded IP addresses so they leave the summaries from their next run. Without `--confirm` the command only lists what it would remove. It refuses to run while an extraction is unfinished. ([#323](https://github.com/dandi/s3-log-extraction/pull/323))
 

@@ -105,6 +105,8 @@ The file holds one IPv4 or IPv6 address per line. Anything after a `#` is a comm
 
 Excluding an address only affects logs extracted from then on. Requests from that address already in the cache are still left out of the summaries.
 
+Exclusion only works in one direction over time. Adding an address can only drop its requests, from future extraction and, once removed with `s3logextraction reset excluded`, from the cache. Removing an address from the file does not bring its requests back, since they were never extracted or were deleted. To include an address again, rerun the extraction from scratch with `s3logextraction reset extraction` followed by a full `s3logextraction extract`.
+
 To check whether the cache still holds requests from an excluded address, such as those extracted before it was listed, run
 
 ```bash
@@ -119,7 +121,7 @@ To remove those requests from the cache, so that they leave the summaries genera
 s3logextraction reset excluded --confirm
 ```
 
-Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction. The removal is permanent. Taking an address off the list later does not bring its requests back, so un-excluding one requires `s3logextraction reset extraction` followed by a new `extract`.
+Without `--confirm`, it only lists what it would remove. The matching lines are removed from every per-request file of an object key together, and an object key left without any request is deleted. Back up the cache first, and do not run an extraction at the same time. It refuses to start while the extraction records show an unfinished extraction. The removal is permanent, as described above.
 
 **NOTE**: If you feel like this command is taking a long time on your system, DO NOT interrupt it via `ctrl+C` or `pkill`. Instead, you can safely interrupt it by running:
 
@@ -217,6 +219,23 @@ To report what percentage of log files have already been processed:
 
 ```bash
 s3logextraction completion --inventory /path/to/inventory
+```
+
+To check whether an extraction has anything to do, without extracting anything, add `--check` to the same command:
+
+```bash
+s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory --check
+```
+
+It stops at the first log file that has not been extracted. It exits with status 3 when some are pending and 0 when
+none are, which keeps pending work apart from an error (status 1). A scheduled job can then start an extraction only
+when there is something to do.
+
+```bash
+s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory --check
+if [ $? -eq 3 ]; then
+    s3logextraction extract s3://my-logs-bucket --mode remote --inventory /path/to/inventory
+fi
 ```
 
 ### Without an S3 Inventory (not recommended)

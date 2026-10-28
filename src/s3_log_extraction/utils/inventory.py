@@ -379,6 +379,70 @@ def _iter_inventory_rows(snapshot: _InventorySnapshot, /) -> typing.Iterator[lis
                 yield row
 
 
+def _iter_dated_s3_urls_from_local_inventory(
+    *,
+    inventory_directory: pathlib.Path,
+    s3_root: str,
+) -> typing.Iterator[tuple[str, str]]:
+    """
+    Yield the date and S3 URL of every log file under ``s3_root`` in a local AWS S3 Inventory, lazily.
+
+    Rows are read in the order the inventory lists them, so a caller that only needs the first match stops
+    reading the inventory there. The dating rules are those of ``_read_s3_urls_from_local_inventory``, and keys
+    that carry no date are skipped.
+
+    Parameters
+    ----------
+    inventory_directory : pathlib.Path
+        Root of the pre-downloaded S3 inventory tree.
+    s3_root : str
+        S3 prefix used to filter object keys.
+
+    Yields
+    ------
+    tuple of str
+        The ``"YYYY-MM-DD"`` date and the S3 URL of one log file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no ``dt=*`` hive partitions are found.
+    ValueError
+        If the ``Key`` column is absent from the inventory schema.
+    """
+    snapshot = _load_inventory_snapshot(inventory_directory)
+
+    # Parse each local CSV.gz file referenced by the symlink.
+    s3_root_prefix = s3_root.rstrip("/") + "/"
+    for row in _iter_inventory_rows(snapshot):
+        key = row[snapshot.key_index]
+        s3_url = f"s3://{snapshot.source_bucket}/{key}"
+        if not s3_url.startswith(s3_root_prefix):
+            continue
+        relative_path = s3_url[len(s3_root_prefix) :]
+        parts = relative_path.split("/")
+
+        # Strategy 1: path-based date extraction for year/month/day/... structure.
+        # Validate that the first three components look like a calendar date so that
+        # deeply-nested paths (e.g. account-id/region/bucket/year/month/day/logfile)
+        # are not misidentified.
+        date = None
+        if len(parts) >= 4:
+            date = _format_date_if_valid(parts[0], parts[1], parts[2])
+
+        # Strategy 2: filename-based date extraction as a fallback.
+        # Handles flat files stored directly in the bucket root as well as
+        # files nested under a non-date prefix (e.g. account-id/region/bucket/).
+        # S3 server access log filenames always start with YYYY-MM-DD-HH-MM-SS-*.
+        if date is None:
+            date = _extract_date_from_log_filename(parts[-1])
+
+        if date is None:
+            continue
+
+        yield date, s3_url
+
+
 def _read_s3_urls_from_local_inventory(
     inventory_directory: pathlib.Path,
     s3_root: str,
@@ -443,37 +507,10 @@ def _read_s3_urls_from_local_inventory(
     ValueError
         If the ``Key`` column is absent from the inventory schema.
     """
-    snapshot = _load_inventory_snapshot(inventory_directory)
-
-    # Parse each local CSV.gz file referenced by the symlink.
-    s3_root_prefix = s3_root.rstrip("/") + "/"
     inventory: dict[str, list[str]] = collections.defaultdict(list)
-    for row in _iter_inventory_rows(snapshot):
-        key = row[snapshot.key_index]
-        s3_url = f"s3://{snapshot.source_bucket}/{key}"
-        if not s3_url.startswith(s3_root_prefix):
-            continue
-        relative_path = s3_url[len(s3_root_prefix) :]
-        parts = relative_path.split("/")
-
-        # Strategy 1: path-based date extraction for year/month/day/... structure.
-        # Validate that the first three components look like a calendar date so that
-        # deeply-nested paths (e.g. account-id/region/bucket/year/month/day/logfile)
-        # are not misidentified.
-        date = None
-        if len(parts) >= 4:
-            date = _format_date_if_valid(parts[0], parts[1], parts[2])
-
-        # Strategy 2: filename-based date extraction as a fallback.
-        # Handles flat files stored directly in the bucket root as well as
-        # files nested under a non-date prefix (e.g. account-id/region/bucket/).
-        # S3 server access log filenames always start with YYYY-MM-DD-HH-MM-SS-*.
-        if date is None:
-            date = _extract_date_from_log_filename(parts[-1])
-
-        if date is None:
-            continue
-
+    for date, s3_url in _iter_dated_s3_urls_from_local_inventory(
+        inventory_directory=inventory_directory, s3_root=s3_root
+    ):
         inventory[date].append(s3_url)
 
     return dict(inventory)
