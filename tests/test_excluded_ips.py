@@ -22,6 +22,17 @@ _DOWNLOAD = 1
 
 _EXAMPLE_LOGS_DIRECTORY = pathlib.Path(__file__).parent / "example_logs"
 _KEY = EXCLUDED_IPS_ENVIRONMENT_VARIABLE
+_MULTI_LINE_DOTENV_CONTENT = (
+    "# Reviewed requesters\n"
+    f'{_KEY}="\n'
+    "198.51.100.0  # Reviewed mirror\n"
+    "\n"
+    "   # A comment on a line of its own\n"
+    "2001:DB8::0001 # Same actor, second address\n"
+    "192.0.2.1, 192.0.2.2\n"
+    '"\n'
+)
+_MULTI_LINE_EXPECTED_IPS = frozenset({"198.51.100.0", "2001:db8::1", "192.0.2.1", "192.0.2.2"})
 
 
 @pytest.fixture
@@ -76,6 +87,9 @@ def test_excluded_ips_are_empty_without_any_listed_address(
             None,
             {"198.51.100.0", "2001:db8::1"},
         ),
+        # A multi-line value holds one address per line, each optionally followed by a comment
+        (None, _MULTI_LINE_DOTENV_CONTENT, None, set(_MULTI_LINE_EXPECTED_IPS)),
+        (None, _MULTI_LINE_DOTENV_CONTENT, ["203.0.113.0"], {*_MULTI_LINE_EXPECTED_IPS, "203.0.113.0"}),
         # Whitespace also separates addresses, as when the variable is set in Python or a quoted shell value
         ("192.0.2.1, 2001:DB8::0001\n192.0.2.2", None, None, {"192.0.2.1", "192.0.2.2", "2001:db8::1"}),
         # A variable set in the environment takes precedence over the dotenv file, even when empty
@@ -105,9 +119,28 @@ def test_excluded_ips_combine_the_dotenv_entry_and_extra_addresses(
 
 
 @pytest.mark.ai_generated
-def test_dotenv_entry_reads_the_same_in_a_shell(dotenv_file_path: pathlib.Path) -> None:
-    """A shell that sources the dotenv file sees the same value that Python parses, so one file serves both."""
-    dotenv_file_path.write_text(f"# Reviewed requesters\n{_KEY}=192.0.2.1,198.51.100.0\n")
+@pytest.mark.parametrize(
+    ("dotenv_content", "expected"),
+    [
+        pytest.param(_MULTI_LINE_DOTENV_CONTENT, _MULTI_LINE_EXPECTED_IPS, id="multi_line"),
+        pytest.param(
+            f"# Reviewed requesters\n{_KEY}=192.0.2.1,198.51.100.0\n",
+            frozenset({"192.0.2.1", "198.51.100.0"}),
+            id="single_line",
+        ),
+    ],
+)
+def test_dotenv_entry_parses_the_same_when_a_shell_exports_it(
+    monkeypatch: pytest.MonkeyPatch, dotenv_file_path: pathlib.Path, dotenv_content: str, expected: frozenset[str]
+) -> None:
+    """
+    The value a shell exports by sourcing the dotenv file parses exactly as the file read by python-dotenv does.
+
+    A sourcing shell keeps the newlines of a double-quoted value and leaves its ``#`` text literal, so the
+    comments reach the parser in the environment variable too.
+    """
+    dotenv_file_path.write_text(dotenv_content)
+    from_dotenv_file = get_excluded_ips()
 
     # The command is a fixed string around a temporary path, so nothing untrusted reaches the shell
     result = subprocess.run(  # noqa: S603
@@ -116,9 +149,12 @@ def test_dotenv_entry_reads_the_same_in_a_shell(dotenv_file_path: pathlib.Path) 
         text=True,
         check=True,
     )
+    dotenv_file_path.unlink()
+    monkeypatch.setenv(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, result.stdout)
+    from_environment = get_excluded_ips()
 
-    assert frozenset(result.stdout.split(",")) == get_excluded_ips()
-    assert get_excluded_ips() == frozenset({"192.0.2.1", "198.51.100.0"})
+    assert from_dotenv_file == expected
+    assert from_environment == expected
 
 
 @pytest.mark.ai_generated
@@ -126,8 +162,10 @@ def test_excluded_ips_refuse_to_run_while_the_legacy_file_exists(dotenv_file_pat
     """A leftover 1.11.10 file stops the run, rather than silently counting its requesters again."""
     (dotenv_file_path.parent / "excluded_ips.txt").write_text("192.0.2.1\n")
 
-    with pytest.raises(ValueError, match="is no longer read"):
+    with pytest.raises(ValueError, match="is no longer read") as exception_info:
         get_excluded_ips()
+
+    assert f'{_KEY}="\n192.0.2.1  # Why it is excluded\n' in str(exception_info.value)
 
 
 @pytest.mark.ai_generated

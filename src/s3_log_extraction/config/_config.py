@@ -135,11 +135,24 @@ def get_excluded_ips(extra_ips: collections.abc.Iterable[str] | None = None, /) 
     ``DOTENV_FILE_PATH`` (``~/.s3-log-extraction/.env``), if that exists. A variable already set in the
     environment takes precedence over the file, even when it is empty.
 
-    The file holds a standard ``S3_LOG_EXTRACTION_EXCLUDED_IPS=...`` entry, so that tools outside Python can read
-    it too, such as a shell (``set -a; . ~/.s3-log-extraction/.env; set +a``), ``docker --env-file``, or a
-    GitHub Actions step appending it to ``$GITHUB_ENV``. Keep the value on a single line, separate the addresses
-    with commas, and do not quote it, which every one of those readers handles alike. Whitespace also separates
-    addresses here, but an unquoted space breaks a shell that sources the file.
+    The recommended layout is a double-quoted value spanning several lines, with one address per line. Anything
+    after a ``#`` on a line is a comment, so each address can carry a note on why it is excluded, and blank
+    lines are ignored.
+
+    .. code-block:: text
+
+        S3_LOG_EXTRACTION_EXCLUDED_IPS="
+        192.0.2.1  # Reviewed mirror
+        198.51.100.5
+        "
+
+    Commas and whitespace also separate addresses, so a single line such as
+    ``S3_LOG_EXTRACTION_EXCLUDED_IPS=192.0.2.1,198.51.100.5`` works too.
+
+    A shell that sources the file (``set -a; . ~/.s3-log-extraction/.env; set +a``) keeps the newlines and the
+    ``#`` text of a multi-line value, and the value it exports parses exactly as the file does. A multi-line value
+    is not understood by ``docker --env-file``, and appending the file to ``$GITHUB_ENV`` needs GitHub's
+    ``NAME<<DELIMITER`` heredoc form. Use the single-line form where those readers matter.
 
     Every entry must be a single IPv4 or IPv6 address. Networks in CIDR notation and patterns are not accepted.
 
@@ -164,16 +177,23 @@ def get_excluded_ips(extra_ips: collections.abc.Iterable[str] | None = None, /) 
     if _LEGACY_EXCLUDED_IPS_FILE_PATH.exists():
         message = (
             f"\n\nThe excluded IPs file '{_LEGACY_EXCLUDED_IPS_FILE_PATH}' is no longer read.\n"
-            f"Move its addresses into a single '{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}=<ip>,<ip>,...' line of "
-            f"'{DOTENV_FILE_PATH}', then delete it. This check stops the run so that no excluded requester is "
-            "silently counted again.\n\n"
+            f"Move its lines, comments included, into a double-quoted value in '{DOTENV_FILE_PATH}', then delete "
+            "it. This check stops the run so that no excluded requester is silently counted again.\n\n"
+            f'{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}="\n'
+            "192.0.2.1  # Why it is excluded\n"
+            "198.51.100.5\n"
+            '"\n\n'
         )
         raise ValueError(message)
 
     environment_value = os.environ.get(EXCLUDED_IPS_ENVIRONMENT_VARIABLE, None)
     if environment_value is None and DOTENV_FILE_PATH.exists():
         environment_value = dotenv.dotenv_values(dotenv_path=DOTENV_FILE_PATH).get(EXCLUDED_IPS_ENVIRONMENT_VARIABLE)
-    environment_entries = (environment_value or "").replace(",", " ").split()
+    environment_entries = [
+        entry
+        for line in (environment_value or "").splitlines()
+        for entry in line.split("#", 1)[0].replace(",", " ").split()
+    ]
 
     sources = [
         (f"'{EXCLUDED_IPS_ENVIRONMENT_VARIABLE}'", environment_entries),
