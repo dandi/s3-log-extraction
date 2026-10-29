@@ -11,14 +11,18 @@ import os
 import pathlib
 import re
 import shutil
+import urllib.parse
 
 import pytest
+import requests
 import yaml
 from conftest import write_by_region_summary
 
 import s3_log_extraction
 
-_AUTH_ERROR_PATTERNS = ("401", "403", "Unknown token", "Unauthorized", "not authorized")
+# The statuses MaxMind answers a download with when the account ID or license key is wrong, lacks GeoLite2 download
+# permission, or has not accepted the EULA
+_MAXMIND_REJECTION_STATUS_CODES = (401, 403)
 
 # The status MaxMind answers with once the account's daily download allowance is spent. Pinned here rather than
 # imported so that these tests keep their own statement of what the limit looks like.
@@ -28,10 +32,26 @@ _DOWNLOAD_QUOTA_EXHAUSTED_STATUS_CODE = 429
 _REGION_LABEL_PATTERN = re.compile(r"^[A-Z]{3}(/[A-Z0-9]{1,3})?$")
 
 
-def _is_auth_error(exc: Exception) -> bool:
-    """Return True if *exc* looks like an API authentication/authorization failure."""
-    exc_str = str(exc).lower()
-    return any(pattern.lower() in exc_str for pattern in _AUTH_ERROR_PATTERNS)
+def _is_maxmind_rejection(exc: Exception) -> bool:
+    """
+    Return True only if *exc* is MaxMind itself refusing the configured credentials.
+
+    The check reads the response the error carries rather than its text. The same tests also fetch the published
+    service range listings, whose own refusals, such as a 403 from the Azure download page, used to be reported as
+    rejected MaxMind credentials because their message happened to contain "403".
+    """
+    response = getattr(exc, "response", None)
+    if response is None:
+        return False
+
+    requested_urls = [response.url, *(earlier_response.url for earlier_response in response.history)]
+    requested_hostnames = [urllib.parse.urlsplit(url).hostname or "" for url in requested_urls if url]
+    # Matched on the domain boundary, so that a lookalike host such as "notmaxmind.com" does not count
+    answered_by_maxmind = any(
+        hostname == "maxmind.com" or hostname.endswith(".maxmind.com") for hostname in requested_hostnames
+    )
+    is_rejection = answered_by_maxmind and response.status_code in _MAXMIND_REJECTION_STATUS_CODES
+    return is_rejection
 
 
 def _assert_maxmind_credentials_are_set() -> None:
@@ -57,12 +77,76 @@ def _skip_if_download_quota_is_spent(exc: Exception) -> None:
 
 
 def _fail_if_maxmind_rejected(exc: Exception) -> None:
-    if _is_auth_error(exc):
+    if _is_maxmind_rejection(exc):
         pytest.fail(
             f"MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY are set but were rejected by MaxMind ({exc}). "
             "Please verify that the GitHub secrets contain a valid account ID and a license key with GeoLite2 "
             "download permission from https://www.maxmind.com/en/accounts/current/license-key"
         )
+
+
+def _http_error(*, url: str, status_code: int, history_urls: tuple[str, ...] = ()) -> requests.HTTPError:
+    response = requests.Response()
+    response.url = url
+    response.status_code = status_code
+    for history_url in history_urls:
+        earlier_response = requests.Response()
+        earlier_response.url = history_url
+        response.history.append(earlier_response)
+    return requests.HTTPError(f"{status_code} Client Error for url: {url}", response=response)
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        pytest.param(
+            _http_error(url="https://download.maxmind.com/geoip/databases/GeoLite2-City/download", status_code=401),
+            True,
+            id="maxmind_unauthorized",
+        ),
+        pytest.param(
+            _http_error(url="https://download.maxmind.com/geoip/databases/GeoLite2-City/download", status_code=403),
+            True,
+            id="maxmind_forbidden",
+        ),
+        pytest.param(
+            _http_error(
+                url="https://storage.example.com/geolite2.tar.gz",
+                status_code=403,
+                history_urls=("https://download.maxmind.com/geoip/databases/GeoLite2-City/download",),
+            ),
+            True,
+            id="maxmind_redirect_forbidden",
+        ),
+        pytest.param(
+            _http_error(url="https://download.maxmind.com/geoip/databases/GeoLite2-City/download", status_code=429),
+            False,
+            id="maxmind_quota_spent",
+        ),
+        pytest.param(
+            _http_error(url="https://download.notmaxmind.com/geolite2.tar.gz", status_code=403),
+            False,
+            id="lookalike_host_forbidden",
+        ),
+        pytest.param(
+            _http_error(url="https://www.microsoft.com/en-us/download/details.aspx?id=56519", status_code=403),
+            False,
+            id="azure_listing_forbidden",
+        ),
+        pytest.param(
+            s3_log_extraction.ip_utils.ServiceNetworksWarning(
+                "The published IP ranges of Azure are unavailable for the rest of this run. "
+                "HTTPError: 403 Client Error: Forbidden for url: "
+                "https://www.microsoft.com/en-us/download/details.aspx?id=56519"
+            ),
+            False,
+            id="service_networks_warning_mentioning_403",
+        ),
+    ],
+)
+def test_is_maxmind_rejection(exc: Exception, expected: bool) -> None:
+    assert _is_maxmind_rejection(exc) == expected
 
 
 @pytest.fixture(scope="session")
