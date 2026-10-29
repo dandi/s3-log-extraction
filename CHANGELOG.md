@@ -2,10 +2,6 @@
 
 ## Upcoming
 
-### 🏠 Internal
-
-- The remote tests no longer report rejected MaxMind credentials when another service, such as the Azure download page, answers with a 403. Only a refusal from MaxMind itself is reported that way. ([#328](https://github.com/dandi/s3-log-extraction/pull/328))
-
 ## v1.15.0
 
 ### ⚠️ Breaking
