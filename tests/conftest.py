@@ -7,6 +7,7 @@ import pathlib
 import pytest
 import yaml
 
+import s3_log_extraction
 from s3_log_extraction.ip_utils import MappingRegionResolver
 from s3_log_extraction.utils import read_text_from_file
 
@@ -23,6 +24,30 @@ def pytest_configure(config: pytest.Config) -> None:
     coverage starts, which leaves every module-level line uncovered.
     """
     config.addinivalue_line("filterwarnings", "error::s3_log_extraction.ip_utils.ServiceNetworksWarning")
+
+
+@pytest.fixture(autouse=True)
+def default_listings_cache_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> pathlib.Path:
+    """
+    Keep the copies of the published IP range listings that a fetch saves out of the developer's own cache directory.
+
+    A fetch given no cache directory saves its copies, and reads them back, under the returned directory instead of
+    the configured one. A copy left there by a real run would otherwise stand in for a listing a test breaks on
+    purpose. A directory of its own is used rather than ``tmp_path``, so that tests inspecting their ``tmp_path`` do
+    not find it there.
+    """
+    default_cache_directory = tmp_path_factory.mktemp("default_cache_directory")
+    get_cache_subdirectory = s3_log_extraction.ip_utils._ip_utils.get_cache_subdirectory
+
+    def _get_cache_subdirectory(*, cache_directory: str | pathlib.Path | None = None, name: str) -> pathlib.Path:
+        return get_cache_subdirectory(
+            cache_directory=cache_directory if cache_directory is not None else default_cache_directory, name=name
+        )
+
+    monkeypatch.setattr(s3_log_extraction.ip_utils._ip_utils, "get_cache_subdirectory", _get_cache_subdirectory)
+    return default_cache_directory
 
 
 @pytest.fixture

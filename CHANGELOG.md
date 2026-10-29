@@ -2,6 +2,14 @@
 
 ## Upcoming
 
+### 🐛 Bug Fix
+
+- The Azure IP ranges are now found directly on Microsoft's download server, by the dates of recent weekly files, instead of through a download page whose bot protection at times turns away CI and cloud machines. The page is only read when no dated file turns up. ([#329](https://github.com/dandi/s3-log-extraction/pull/329))
+
+### 🚀 Enhancement
+
+- The last listing obtained from each published IP range source is saved in the `service_networks` folder of the cache directory. A source that cannot be reached is replaced by its saved copy, with a warning, for up to 30 days, so a brief outage no longer changes the region labels. `fetch_service_networks` takes the cache directory to use. ([#329](https://github.com/dandi/s3-log-extraction/pull/329))
+
 ## v1.15.0
 
 ### ⚠️ Breaking

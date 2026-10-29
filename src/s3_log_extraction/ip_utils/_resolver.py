@@ -43,17 +43,34 @@ class RegionResolver(typing.Protocol):
     def resolve(self, ip_address: str, /) -> str: ...
 
 
-def fetch_service_networks() -> ServiceNetworks:
+def fetch_service_networks(cache_directory: str | pathlib.Path | None = None, /) -> ServiceNetworks:
     """
     Fetch the published IP ranges of every known cloud service and VPN listing (GitHub, AWS, GCP, Azure, VPN).
 
-    A listing that cannot be obtained does not fail the fetch. It is reported with a ``ServiceNetworksWarning`` and
-    left empty, so that the ranges of the other services are still used.
+    Every listing obtained is saved in the ``service_networks`` subdirectory of the cache directory. A listing that
+    cannot be obtained does not fail the fetch. It is reported with a ``ServiceNetworksWarning``, and its saved copy
+    is used when that copy is at most 30 days old. Without one the listing is left empty, so that the ranges of the
+    other services are still used.
+
+    Parameters
+    ----------
+    cache_directory : str | pathlib.Path | None
+        The cache directory to save the listings in and read the saved copies from.
+        If ``None``, the default cache directory will be used.
+
+    Returns
+    -------
+    dict of str to list of tuple
+        The published ranges of each known service, keyed by service name in order of precedence, as
+        ``(cidr_address, subregion)`` pairs.
     """
-    return {
-        service_name: list(_get_cidr_address_ranges_and_subregions(service_name=service_name))
+    service_networks = {
+        service_name: list(
+            _get_cidr_address_ranges_and_subregions(service_name=service_name, cache_directory=cache_directory)
+        )
         for service_name in _KNOWN_SERVICES
     }
+    return service_networks
 
 
 def _freeze_service_networks(
@@ -160,7 +177,7 @@ class IpRegionResolver:
     def service_networks(self) -> ServiceNetworks:
         """The published ranges of every known service, fetched on first access."""
         if self._service_networks is None:
-            self._service_networks = fetch_service_networks()
+            self._service_networks = fetch_service_networks(self._cache_directory)
         return self._service_networks
 
     def _get_service_tables(self) -> tuple[tuple[str, _PrefixTables], ...]:

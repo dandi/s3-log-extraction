@@ -225,13 +225,19 @@ def test_resolver_pickles_with_service_networks_but_without_reader(tmp_path: pat
 
 
 @pytest.mark.ai_generated
-def test_resolver_fetches_service_networks_on_first_use() -> None:
-    """Without given ranges, the published listings are fetched once, on the first address that needs them."""
+def test_resolver_fetches_service_networks_on_first_use(tmp_path: pathlib.Path) -> None:
+    """
+    Without given ranges, the published listings are fetched once, on the first address that needs them.
+
+    They are fetched with the resolver's own cache directory, where the copies of the listings are saved.
+    """
     with unittest.mock.patch(
         "s3_log_extraction.ip_utils._resolver._get_cidr_address_ranges_and_subregions",
-        side_effect=lambda *, service_name: [("203.0.113.0/24", "us-east-1")] if service_name == "AWS" else [],
+        side_effect=lambda *, service_name, cache_directory: (
+            [("203.0.113.0/24", "us-east-1")] if service_name == "AWS" else []
+        ),
     ) as mock_ranges:
-        resolver = IpRegionResolver(geolite2_reader=_make_reader(city_responses={}))
+        resolver = IpRegionResolver(cache_directory=tmp_path, geolite2_reader=_make_reader(city_responses={}))
         mock_ranges.assert_not_called()
 
         assert resolver.resolve("203.0.113.7") == "AWS/us-east-1"
@@ -244,6 +250,7 @@ def test_resolver_fetches_service_networks_on_first_use() -> None:
         "GitHub",
         "VPN",
     ]
+    assert {call.kwargs["cache_directory"] for call in mock_ranges.call_args_list} == {tmp_path}
 
 
 @pytest.mark.ai_generated
@@ -361,7 +368,7 @@ def test_resolver_prefers_github_over_azure(ip_address: str, expected_region: st
     }
     with unittest.mock.patch(
         "s3_log_extraction.ip_utils._resolver._get_cidr_address_ranges_and_subregions",
-        side_effect=lambda *, service_name: published_ranges.get(service_name, []),
+        side_effect=lambda *, service_name, cache_directory: published_ranges.get(service_name, []),
     ):
         resolver = IpRegionResolver(geolite2_reader=_make_reader(city_responses={}))
 
