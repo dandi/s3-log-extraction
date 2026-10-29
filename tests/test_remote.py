@@ -45,8 +45,10 @@ def _is_maxmind_rejection(exc: Exception) -> bool:
         return False
 
     requested_urls = [response.url, *(earlier_response.url for earlier_response in response.history)]
+    requested_hostnames = [urllib.parse.urlsplit(url).hostname or "" for url in requested_urls if url]
+    # Matched on the domain boundary, so that a lookalike host such as "notmaxmind.com" does not count
     answered_by_maxmind = any(
-        (urllib.parse.urlsplit(url).hostname or "").endswith("maxmind.com") for url in requested_urls if url
+        hostname == "maxmind.com" or hostname.endswith(".maxmind.com") for hostname in requested_hostnames
     )
     is_rejection = answered_by_maxmind and response.status_code in _MAXMIND_REJECTION_STATUS_CODES
     return is_rejection
@@ -121,6 +123,11 @@ def _http_error(*, url: str, status_code: int, history_urls: tuple[str, ...] = (
             _http_error(url="https://download.maxmind.com/geoip/databases/GeoLite2-City/download", status_code=429),
             False,
             id="maxmind_quota_spent",
+        ),
+        pytest.param(
+            _http_error(url="https://download.notmaxmind.com/geolite2.tar.gz", status_code=403),
+            False,
+            id="lookalike_host_forbidden",
         ),
         pytest.param(
             _http_error(url="https://www.microsoft.com/en-us/download/details.aspx?id=56519", status_code=403),
