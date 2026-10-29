@@ -68,7 +68,9 @@ def update_region_code_coordinates(
                 if geolite2_reader is None:
                     geolite2_reader = open_geolite2_database(cache_directory=cache_directory)
                 coordinates = _get_service_coordinates_from_geolite2(
-                    country_and_region_code=country_and_region_code, geolite2_reader=geolite2_reader
+                    country_and_region_code=country_and_region_code,
+                    geolite2_reader=geolite2_reader,
+                    cache_directory=cache_directory,
                 )
             else:
                 coordinates = get_region_coordinates(country_and_region_code)
@@ -101,7 +103,9 @@ def update_region_code_coordinates(
 
 
 @functools.cache
-def _get_subregion_to_cidr_address(service_name: str) -> dict[str, str]:
+def _get_subregion_to_cidr_address(
+    *, service_name: str, cache_directory: str | pathlib.Path | None = None
+) -> dict[str, str]:
     """
     Map each subregion of a cloud service to one of its published CIDR ranges.
 
@@ -111,7 +115,9 @@ def _get_subregion_to_cidr_address(service_name: str) -> dict[str, str]:
 
     The returned mapping is shared between callers and must not be mutated.
     """
-    cidr_addresses_and_subregions = _get_cidr_address_ranges_and_subregions(service_name=service_name)
+    cidr_addresses_and_subregions = _get_cidr_address_ranges_and_subregions(
+        service_name=service_name, cache_directory=cache_directory
+    )
     return {
         listed_subregion: listed_cidr_address for listed_cidr_address, listed_subregion in cidr_addresses_and_subregions
     }
@@ -121,6 +127,7 @@ def _get_service_coordinates_from_geolite2(
     *,
     country_and_region_code: str,
     geolite2_reader: "geoip2.database.Reader",
+    cache_directory: str | pathlib.Path | None = None,
 ) -> dict[str, float] | None:
     """
     Locate a cloud service region (e.g. ``"AWS/us-east-1"``) by geolocating the first IP of one of its CIDR ranges.
@@ -133,7 +140,9 @@ def _get_service_coordinates_from_geolite2(
     if not subregion:
         return None
 
-    subregion_to_cidr_address = _get_subregion_to_cidr_address(service_name)
+    subregion_to_cidr_address = _get_subregion_to_cidr_address(
+        service_name=service_name, cache_directory=cache_directory
+    )
     if subregion not in subregion_to_cidr_address:
         return None
 
