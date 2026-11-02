@@ -2,8 +2,10 @@ import datetime
 import functools
 import ipaddress
 import json
+import os
 import pathlib
 import re
+import urllib.parse
 import warnings
 
 from ..config import get_cache_subdirectory
@@ -29,6 +31,11 @@ _SAVED_LISTING_MAX_AGE_IN_DAYS = 30
 _SAVED_LISTINGS_SUBDIRECTORY_NAME = "service_networks"
 
 _REQUEST_TIMEOUT_IN_SECONDS = 60
+
+# The GitHub API allows 60 unauthenticated requests an hour per IP address, which the addresses that hosted CI runners
+# share are often past. A token in this variable raises the limit, and it is sent to the GitHub API alone.
+_GITHUB_API_ACCESS_ENVIRONMENT_VARIABLE = "GITHUB_TOKEN"
+_GITHUB_API_HOSTNAME = "api.github.com"
 
 
 class ServiceNetworksWarning(UserWarning):
@@ -78,10 +85,20 @@ def _write_ips_to_file(file_path: pathlib.Path, ips: list[str], use_encryption: 
 
 
 def _request_published_listing(url: str, /) -> "requests.Response":
-    """Request a published listing, raising on an error status so that an error page is never read as a listing."""
+    """
+    Request a published listing, raising on an error status so that an error page is never read as a listing.
+
+    A token set in ``GITHUB_TOKEN`` is sent with a request to the GitHub API, and with no other, to raise its rate
+    limit.
+    """
     import requests
 
-    response = requests.get(url=url, timeout=_REQUEST_TIMEOUT_IN_SECONDS)
+    headers = {}
+    github_token = os.environ.get(_GITHUB_API_ACCESS_ENVIRONMENT_VARIABLE, "").strip()
+    if github_token and urllib.parse.urlsplit(url).hostname == _GITHUB_API_HOSTNAME:
+        headers["Authorization"] = f"Bearer {github_token}"
+
+    response = requests.get(url=url, timeout=_REQUEST_TIMEOUT_IN_SECONDS, headers=headers)
     response.raise_for_status()
     return response
 

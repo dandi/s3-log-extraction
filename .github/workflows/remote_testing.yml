@@ -26,6 +26,9 @@ env:
   S3_LOG_EXTRACTION_PASSWORD: ${{ secrets.S3_LOG_EXTRACTION_PASSWORD }}
   MAXMIND_ACCOUNT_ID: ${{ secrets.MAXMIND_ACCOUNT_ID }}
   MAXMIND_LICENSE_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
+  # Unauthenticated requests to the GitHub API are rate limited per IP address, and the hosted runners share
+  # addresses whose allowance is often already spent, so the GitHub IP ranges are requested with the job's token
+  GITHUB_TOKEN: ${{ github.token }}
 
 jobs:
 

@@ -125,8 +125,16 @@ def url_to_payload() -> dict[str, dict | str | requests.RequestException]:
 
 
 @pytest.fixture
+def request_headers() -> dict[str, dict[str, str]]:
+    """The headers sent with each URL requested, filled in by `mocked_service_listings`."""
+    return {}
+
+
+@pytest.fixture
 def mocked_service_listings(
-    monkeypatch: pytest.MonkeyPatch, url_to_payload: dict[str, dict | str | requests.RequestException]
+    monkeypatch: pytest.MonkeyPatch,
+    url_to_payload: dict[str, dict | str | requests.RequestException],
+    request_headers: dict[str, dict[str, str]],
 ) -> list[str]:
     """Serve the published listings from fixtures rather than over the network, and report the URLs requested."""
     requested_urls = []
@@ -134,8 +142,9 @@ def mocked_service_listings(
     s3_log_extraction.ip_utils._ip_utils._get_cidr_address_ranges_and_subregions.cache_clear()
 
     # The timeout is required, so that a request made without one fails here
-    def _fake_get(url: str, timeout: float) -> _FakeResponse:
+    def _fake_get(url: str, timeout: float, headers: dict[str, str]) -> _FakeResponse:
         requested_urls.append(url)
+        request_headers[url] = headers
         payload = url_to_payload.get(
             url, requests.HTTPError("404 Client Error: Not Found", response=types.SimpleNamespace(status_code=404))
         )
@@ -189,6 +198,36 @@ def test_fetch_service_networks_is_cached(mocked_service_listings: list[str]) ->
     fetch_service_networks()
 
     assert len(mocked_service_listings) == request_count_after_first_fetch
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("environment_value", "expected_github_headers"),
+    [
+        pytest.param(None, {}, id="unset"),
+        pytest.param("  ", {}, id="blank"),
+        pytest.param("value-for-tests", {"Authorization": "Bearer value-for-tests"}, id="set"),
+    ],
+)
+def test_github_token_is_sent_to_the_github_api_only(
+    monkeypatch: pytest.MonkeyPatch,
+    mocked_service_listings: list[str],
+    request_headers: dict[str, dict[str, str]],
+    environment_value: str | None,
+    expected_github_headers: dict[str, str],
+) -> None:
+    """A token in GITHUB_TOKEN raises the rate limit of the GitHub API, and is never sent to any other source."""
+    if environment_value is None:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_TOKEN", environment_value)
+
+    fetch_service_networks()
+
+    github_meta_url = _SERVICE_NAME_TO_URLS["GitHub"][0]
+    assert request_headers[github_meta_url] == expected_github_headers
+    other_headers = [headers for url, headers in request_headers.items() if url != github_meta_url]
+    assert other_headers == [{}] * len(other_headers)
 
 
 @pytest.mark.ai_generated
