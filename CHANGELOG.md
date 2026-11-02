@@ -4,6 +4,8 @@
 
 ### 🐛 Bug Fix
 
+- A token set in the `GITHUB_TOKEN` environment variable is now sent with the request for the GitHub IP ranges, and with no other request, so that the GitHub API's limit of 60 unauthenticated requests an hour per IP address no longer leaves those ranges out on shared CI machines. ([#330](https://github.com/dandi/s3-log-extraction/pull/330))
+
 - The Azure IP ranges are now found directly on Microsoft's download server, by the dates of recent weekly files, instead of through a download page whose bot protection at times turns away CI and cloud machines. The page is only read when no dated file turns up. ([#329](https://github.com/dandi/s3-log-extraction/pull/329))
 
 ### 🚀 Enhancement
